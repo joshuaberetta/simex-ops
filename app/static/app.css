@@ -137,3 +137,7 @@ pre.mailtext { white-space: pre-wrap; font: 14px/1.5 system-ui, sans-serif; marg
 .crit { display: flex; margin-bottom: 6px; }
 .crit .wide { flex: 1; min-width: 200px; }
 .scale { display: flex; gap: 4px; margin-top: 4px; }
+
+details.eng { margin: 18px 0; }
+details.eng summary { list-style: revert; }
+h2.inline-h { display: inline; }

@@ -14,7 +14,7 @@ from email.utils import parseaddr
 from sqlalchemy import func
 
 from . import config, mailer
-from .db import (InboundAttachment, InboundEmail, Message, Person, SessionLocal, audit, utcnow)
+from .db import (EmailEvent, InboundAttachment, InboundEmail, Message, Person, SessionLocal, audit, utcnow)
 
 log = logging.getLogger("simex.inbound")
 MAX_ATTACHMENT = 25 * 1024 * 1024
@@ -119,14 +119,44 @@ def record_event(s, event):
             return None  # webhook retried
         return _new_inbound(s, rid, data).id
     if kind.startswith("email.") and data.get("email_id"):
-        # Delivery events for emails we sent: delivered, bounced, complained, delivery_delayed...
         m = s.query(Message).filter_by(resend_id=data["email_id"]).first()
         if m:
-            m.delivery, m.delivery_at = kind.split(".", 1)[1], utcnow()
-            if m.delivery in ("bounced", "complained"):
-                audit(s, f"email_{m.delivery}", f"{', '.join(m.to)}: {m.subject[:80]}")
+            record_engagement(s, m, kind.split(".", 1)[1], data, event.get("created_at"))
         s.commit()
     return None
+
+
+DELIVERY_STATES = {"sent", "delivered", "delivery_delayed", "bounced", "complained", "failed", "suppressed"}
+
+
+def _when(value):
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None) if value else utcnow()
+    except (ValueError, AttributeError):
+        return utcnow()
+
+
+def record_engagement(s, m, what, data, created_at=None):
+    """Delivery state, opens and clicks for one of our emails."""
+    click = data.get("click") or {}
+    at = _when(click.get("timestamp") or created_at or data.get("created_at"))
+    s.add(EmailEvent(message_id=m.id, type=what, at=at, link=click.get("link"),
+                     user_agent=(click.get("userAgent") or click.get("user_agent") or "")[:400] or None))
+    if what in DELIVERY_STATES:
+        # Don't let a late "delivered" hide a bounce.
+        if not (m.delivery in ("bounced", "complained") and what in ("delivered", "delivery_delayed", "sent")):
+            m.delivery, m.delivery_at = what, at
+        if what in ("bounced", "complained"):
+            audit(s, f"email_{what}", f"{', '.join(m.to)}: {m.subject[:80]}")
+    elif what == "opened":
+        m.open_count = (m.open_count or 0) + 1
+        m.opened_at = min(m.opened_at, at) if m.opened_at else at
+    elif what == "clicked":
+        m.click_count = (m.click_count or 0) + 1
+        m.clicked_at = min(m.clicked_at, at) if m.clicked_at else at
+        # A click proves an open, even with tracking pixels blocked.
+        if not m.opened_at:
+            m.opened_at, m.open_count = at, max(m.open_count or 0, 1)
 
 
 def _new_inbound(s, rid, data):

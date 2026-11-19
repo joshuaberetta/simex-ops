@@ -18,12 +18,14 @@
 
 <h2>Teams</h2>
 <table class="list">
-  <thead><tr><th>Team</th><th>Replies</th><th>Expected injects answered</th><th>Late / missing</th><th>Median first reply</th><th>Score</th></tr></thead>
-  {% for t in teams %}{% set ts = team_sum[t.id] %}
+  <thead><tr><th>Team</th><th>Replies</th><th>Expected injects answered</th><th>Late / missing</th><th>Median first reply</th><th>Score</th><th>Emails opened</th><th>Clicked</th></tr></thead>
+  {% for t in teams %}{% set ts = team_sum[t.id] %}{% set et = eng_team[t.id] %}
   <tr><td><a href="/replies?kind={{ kind }}&team={{ t.id }}">{{ t.name }}</a></td><td>{{ ts.replies }}</td>
     <td>{{ ts.answered }} / {{ ts.expected }}</td><td>{{ ts.late or '' }}</td>
     <td>{% if ts.minutes %}{{ (ts.minutes|sort)[(ts.minutes|length) // 2] }} min{% endif %}</td>
-    <td>{% if ts.max %}{{ '%g'|format(ts.score) }} / {{ '%g'|format(ts.max) }} <span class="muted">({{ (100 * ts.score / ts.max)|round|int }}%)</span>{% endif %}</td></tr>
+    <td>{% if ts.max %}{{ '%g'|format(ts.score) }} / {{ '%g'|format(ts.max) }} <span class="muted">({{ (100 * ts.score / ts.max)|round|int }}%)</span>{% endif %}</td>
+    <td>{% if et.sent %}{{ et.opened }} / {{ et.sent }} <span class="muted">({{ (100 * et.opened / et.sent)|round|int }}%)</span>{% endif %}</td>
+    <td>{% if et.sent %}{{ et.clicked }}{% endif %}</td></tr>
   {% endfor %}
 </table>
 
@@ -50,6 +52,26 @@
 </div>
 <p class="muted small">Rows: injects marked "reply expected" (set on the inject page, with a rubric) and any inject that got a reply. Click a cell to read the team's replies and grade them.</p>
 {% else %}<p class="muted">Nothing yet. Mark injects that need a response ("Replies &amp; rubric" on the inject page); replies appear here as they arrive.</p>{% endif %}
+
+<details class="eng" {{ 'open' if eng_rows and not matrix }}>
+<summary><h2 class="inline-h">Opens &amp; clicks <span class="muted small">{{ eng_rows|length }} injects sent</span></h2></summary>
+{% if eng_rows %}
+<div class="scroll">
+<table class="list matrix">
+  <thead><tr><th>Inject</th>{% for t in teams %}<th>{{ t.name }}</th>{% endfor %}<th>Shared email (Bcc / custom)</th></tr></thead>
+  {% for inj, cells, shared in eng_rows %}
+  <tr><td><a href="/injects/{{ inj.id }}">{{ inj.mel_id }}</a> <span class="small">{{ (inj.subject or '')[:50] }}</span></td>
+    {% for ms in cells %}<td class="cell {{ 'replied' if ms and ms|selectattr('opened_at')|list else ('missing' if ms and ms|selectattr('delivery', 'in', ['bounced', 'complained'])|list else '') }}">
+      {% for m in ms %}<a href="/log/{{ m.id }}">{% if m.delivery in ('bounced', 'complained') %}<span class="err">{{ m.delivery }}</span>{% elif m.opened_at %}opened {{ m.opened_at|local('%H:%M') }}{% if m.open_count and m.open_count > 1 %} ×{{ m.open_count }}{% endif %}{% elif m.delivery == 'delivered' %}<span class="muted">delivered</span>{% else %}<span class="muted">sent</span>{% endif %}{% if m.click_count %} · {{ m.click_count }} click{{ '' if m.click_count == 1 else 's' }}{% endif %}</a>{% endfor %}
+      {% if not ms %}<span class="muted">—</span>{% endif %}</td>{% endfor %}
+    <td class="small">{% for m in shared %}<a href="/log/{{ m.id }}">{{ m.target }}: {% if m.opened_at %}opened ×{{ m.open_count or 1 }}{% else %}{{ m.delivery or 'sent' }}{% endif %}{% if m.click_count %} · {{ m.click_count }} clicks{% endif %}</a><br>{% endfor %}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+<p class="muted small">From Resend's open and click tracking. Opens are a signal, not proof: they are missed when a client blocks images and can be faked by mail apps that pre-load images (Apple Mail). A click always counts as an open. One shared email goes to many people, so its opens can't be split by team.</p>
+{% else %}<p class="muted">No emails sent yet.</p>{% endif %}
+</details>
 
 <div class="bar"><h2>Inbox</h2>
 <form method="get" class="filters">

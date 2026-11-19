@@ -15,7 +15,9 @@
   <tr><td class="nowrap"><a href="/log/{{ m.id }}">{{ m.created_at|local('%d %b %H:%M:%S') }}</a></td><td>{{ m.kind }}</td>
     <td>{% if m.inject %}<a href="/injects/{{ m.inject.id }}">{{ m.inject.mel_id }}</a>{% endif %}</td><td>{{ m.target }}</td>
     <td>{{ m.to|join(', ') }}{% if m.bcc %} <span class="muted">+{{ m.bcc|length }} bcc</span>{% endif %}</td><td>{{ m.subject }}</td>
-    <td><span class="status {{ m.status }}">{{ m.status }}</span>{% if m.error %}<div class="err">{{ m.error[:140] }}</div>{% endif %}</td></tr>
+    <td><span class="status {{ m.status }}">{{ m.status }}</span>{% if m.error %}<div class="err">{{ m.error[:140] }}</div>{% endif %}
+      {% if m.delivery %}<div class="{{ 'err' if m.delivery in ('bounced', 'complained') else 'muted' }}">{{ m.delivery }}</div>{% endif %}
+      {% if m.opened_at %}<div class="muted">opened{% if m.click_count %} · {{ m.click_count }} click{{ '' if m.click_count == 1 else 's' }}{% endif %}</div>{% endif %}</td></tr>
   {% else %}<tr><td colspan="7" class="muted">Nothing sent yet.</td></tr>{% endfor %}
 </table>
 </section>

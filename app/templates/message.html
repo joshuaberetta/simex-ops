@@ -15,6 +15,10 @@
   <dt>Subject</dt><dd>{{ m.subject }}</dd>
   {% if atts %}<dt>Files</dt><dd>{% for id, fn in atts %}<a href="/attachments/{{ id }}">{{ fn }}</a>{{ ', ' if not loop.last }}{% endfor %}</dd>{% endif %}
   {% if m.resend_id %}<dt>Resend id</dt><dd><code>{{ m.resend_id }}</code></dd>{% endif %}
+  {% if m.delivery %}<dt>Delivery</dt><dd>{{ m.delivery }} {{ m.delivery_at|local('%d %b %H:%M') if m.delivery_at }}</dd>{% endif %}
+  {% if m.opened_at %}<dt>Opened</dt><dd>first {{ m.opened_at|local('%d %b %H:%M:%S') }} · {{ m.open_count or 1 }} time(s)</dd>{% endif %}
+  {% if m.clicked_at %}<dt>Clicked</dt><dd>first {{ m.clicked_at|local('%d %b %H:%M:%S') }} · {{ m.click_count }} click(s)</dd>{% endif %}
+  {% if events %}<dt>Events</dt><dd>{% for e in events %}{{ e.at|local('%H:%M:%S') }} {{ e.type }}{% if e.link %} <a href="{{ e.link }}" rel="noreferrer noopener" target="_blank">{{ e.link[:80] }}</a>{% endif %}<br>{% endfor %}</dd>{% endif %}
   {% if m.error %}<dt>Error</dt><dd class="err">{{ m.error }}</dd>{% endif %}
 </dl>
 <iframe class="mail tall" sandbox srcdoc="{{ m.html }}"></iframe>

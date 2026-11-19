@@ -369,3 +369,41 @@ def test_answer_as_persona(client):
     assert payload["to"] == ["real-a@kobotoolbox.org"] and payload["headers"]["In-Reply-To"] == "<orig@mail>"
     assert payload["from"].endswith("<undac-a-tl@simex.kobolabs.dev>") and payload["subject"] == "Re: Update"
     assert payload["reply_to"].startswith("undac-a-tl+")
+
+
+def test_open_and_click_tracking(client):
+    msgs = send_live_1_15(client)
+    m = msgs["Team A"]
+    for ev in [{"type": "email.delivered", "data": {"email_id": m.resend_id}},
+               {"type": "email.opened", "data": {"email_id": m.resend_id}, "created_at": "2099-01-01T08:00:00Z"},
+               {"type": "email.opened", "data": {"email_id": m.resend_id}, "created_at": "2099-01-01T08:05:00Z"},
+               {"type": "email.clicked", "data": {"email_id": m.resend_id, "click": {
+                   "link": "https://example.org/report", "timestamp": "2099-01-01T08:06:00Z", "userAgent": "UA"}}},
+               {"type": "email.delivered", "data": {"email_id": m.resend_id}}]:
+        assert webhook(client, ev).status_code == 200
+    with SessionLocal() as s:
+        x = s.get(Message, m.id)
+        assert (x.delivery, x.open_count, x.click_count) == ("delivered", 2, 1)
+        assert x.opened_at.isoformat() == "2099-01-01T08:00:00"
+    page = client.get("/replies").text
+    assert "1 / 1" in page and "opened" in page and "1 click" in page
+    assert "https://example.org/report" in client.get(f"/log/{m.id}").text
+
+
+def test_bounce_not_hidden_by_late_delivered(client):
+    msgs = send_live_1_15(client)
+    m = msgs["Team C"]
+    webhook(client, {"type": "email.bounced", "data": {"email_id": m.resend_id}})
+    webhook(client, {"type": "email.delivered", "data": {"email_id": m.resend_id}})
+    with SessionLocal() as s:
+        assert s.get(Message, m.id).delivery == "bounced"
+
+
+def test_add_missing_columns(tmp_path):
+    import sqlalchemy as sa
+    eng = sa.create_engine(f"sqlite:///{tmp_path}/old.db")
+    with eng.begin() as c:
+        c.execute(sa.text("CREATE TABLE messages (id INTEGER PRIMARY KEY, kind VARCHAR(10))"))
+    db.add_missing_columns(eng)
+    cols = {c["name"] for c in sa.inspect(eng).get_columns("messages")}
+    assert {"opened_at", "click_count", "delivery", "reply_token"} <= cols

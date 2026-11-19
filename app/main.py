@@ -22,7 +22,7 @@ from sqlalchemy import func
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import backup, config, db, importer, inbound, mailer, render, scheduler, seed, settings
-from .db import (DELIVERY_MODES, STATUSES, Attachment, Audit, Grade, ImportBatch, InboundAttachment, InboundEmail,
+from .db import (DELIVERY_MODES, STATUSES, Attachment, Audit, EmailEvent, Grade, ImportBatch, InboundAttachment, InboundEmail,
                  Inject, Message, Person, RubricCriterion, SessionLocal, Sender, Team, TestRun, TestRunItem, audit,
                  utcnow)
 
@@ -844,7 +844,8 @@ def message_page(request: Request, mid: int):
             raise HTTPException(404)
         _ = m.inject
         atts = s.query(Attachment.id, Attachment.filename).filter(Attachment.id.in_(m.attachment_ids or [])).all()
-    return page(request, "message.html", tab="log", m=m, atts=atts)
+        events = s.query(EmailEvent).filter_by(message_id=mid).order_by(EmailEvent.at).all()
+    return page(request, "message.html", tab="log", m=m, atts=atts, events=events)
 
 
 # --- settings -------------------------------------------------------------------------------------
@@ -995,6 +996,28 @@ def _grade_total(g):
     return sum(float(v) for v in (g.scores or {}).values() if v not in (None, ""))
 
 
+def _engagement(s, kinds, teams):
+    """Opens and clicks of sent emails: per (inject, team), per inject for shared (Bcc /
+    custom) emails, and per team. Open tracking undercounts (images blocked) and
+    overcounts (Apple Mail prefetches), so it is a signal, not proof of reading."""
+    msgs = (s.query(Message).filter(Message.status == "sent", Message.kind.in_(kinds), Message.inject_id.is_not(None))
+            .order_by(Message.sent_at).all())
+    cells, shared, per_team, inject_ids = {}, {}, {t.id: {"sent": 0, "opened": 0, "clicked": 0} for t in teams}, []
+    for m in msgs:
+        if m.inject_id not in inject_ids:
+            inject_ids.append(m.inject_id)
+        bucket = cells.setdefault((m.inject_id, m.team_id), []) if m.team_id else shared.setdefault(m.inject_id, [])
+        bucket.append(m)
+        if m.team_id in per_team:
+            pt = per_team[m.team_id]
+            pt["sent"] += 1
+            pt["opened"] += bool(m.opened_at)
+            pt["clicked"] += bool(m.clicked_at)
+    injects = {i.id: i for i in s.query(Inject).filter(Inject.id.in_(inject_ids))} if inject_ids else {}
+    rows = [(injects[i], [cells.get((i, t.id), []) for t in teams], shared.get(i, [])) for i in inject_ids if i in injects]
+    return rows, per_team
+
+
 @app.get("/replies", response_class=HTMLResponse)
 def replies_page(request: Request, kind: str = "live", team: int = 0, inject: int = 0, status: str = "",
                  matched: str = ""):
@@ -1054,7 +1077,8 @@ def replies_page(request: Request, kind: str = "live", team: int = 0, inject: in
         new_count = sum(1 for e in all_in if e.status == "new")
         unmatched = sum(1 for e in all_in if e.match == "none" and e.status != "ignored")
         injects_all = s.query(Inject.id, Inject.mel_id).order_by(Inject.seq).all()
-    return page(request, "replies.html", tab="replies", kind=kind, teams=teams, matrix=matrix, team_sum=team_sum,
+        eng_rows, eng_team = _engagement(s, kinds, teams)
+    return page(request, "replies.html", eng_rows=eng_rows, eng_team=eng_team, tab="replies", kind=kind, teams=teams, matrix=matrix, team_sum=team_sum,
                 inbox=inbox[:300], new_count=new_count, unmatched=unmatched, team=team, inject=inject,
                 status=status, matched=matched, injects_all=injects_all,
                 webhook_ready=bool(config.RESEND_WEBHOOK_SECRET),

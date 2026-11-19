@@ -4,7 +4,7 @@ timezone (config.TZ). Tables are created at startup (no migrations yet)."""
 from datetime import datetime, timezone
 
 from sqlalchemy import (JSON, Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint,
-                        create_engine, event)
+                        create_engine, event, inspect, text)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
 from . import config
@@ -179,10 +179,26 @@ class Message(Base):
     # Replies come back to <persona>+<reply_token>@MAIL_DOMAIN and are matched on the token.
     reply_token: Mapped[str | None] = mapped_column(String(20), unique=True)
     delivery: Mapped[str | None] = mapped_column(String(30))  # last Resend event: delivered, bounced...
+    # Engagement from Resend open/click tracking (first time and counts; details in EmailEvent).
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime)
+    open_count: Mapped[int | None] = mapped_column(Integer)
+    clicked_at: Mapped[datetime | None] = mapped_column(DateTime)
+    click_count: Mapped[int | None] = mapped_column(Integer)
     extra_headers: Mapped[dict | None] = mapped_column(JSON)  # e.g. In-Reply-To for ExCon replies
     inbound_id: Mapped[int | None] = mapped_column(Integer)  # ExCon reply: the email it answers
     delivery_at: Mapped[datetime | None] = mapped_column(DateTime)
     inject: Mapped[Inject | None] = relationship()
+
+
+class EmailEvent(Base):
+    """Every Resend event about an email we sent (delivered, opened, clicked, bounced...)."""
+    __tablename__ = "email_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    message_id: Mapped[int] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE"), index=True)
+    type: Mapped[str] = mapped_column(String(30))
+    at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    link: Mapped[str | None] = mapped_column(Text)  # clicked URL
+    user_agent: Mapped[str | None] = mapped_column(String(400))
 
 
 class InboundEmail(Base):
@@ -286,7 +302,24 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
 def init(bind=None):
-    Base.metadata.create_all(bind or engine)
+    bind = bind or engine
+    Base.metadata.create_all(bind)
+    add_missing_columns(bind)
+
+
+def add_missing_columns(bind):
+    """create_all() makes new tables but never new columns on existing ones. Until there
+    are real migrations, add any nullable column the models have and the database lacks."""
+    insp = inspect(bind)
+    with bind.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if not insp.has_table(table.name):
+                continue
+            have = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name not in have and col.nullable:
+                    ddl = col.type.compile(dialect=bind.dialect)
+                    conn.execute(text(f'ALTER TABLE {table.name} ADD COLUMN "{col.name}" {ddl}'))
 
 
 def audit(s, action, detail=None):

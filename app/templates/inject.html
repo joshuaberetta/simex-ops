@@ -151,7 +151,7 @@
 <div class="card">
   <h3>Emails sent for this inject</h3>
   <table class="list small">
-    {% for m in msgs %}<tr><td><a href="/log/{{ m.id }}">{{ m.created_at|local('%d %b %H:%M') }}</a></td><td>{{ m.kind }}</td><td>{{ m.target }}</td><td><span class="status {{ m.status }}">{{ m.status }}</span></td></tr>{% endfor %}
+    {% for m in msgs %}<tr><td><a href="/log/{{ m.id }}">{{ m.created_at|local('%d %b %H:%M') }}</a></td><td>{{ m.kind }}</td><td>{{ m.target }}</td><td><span class="status {{ m.status }}">{{ m.status }}</span></td><td class="muted">{{ m.delivery or '' }}{% if m.opened_at %} · opened{% endif %}{% if m.click_count %} · {{ m.click_count }} clicks{% endif %}</td></tr>{% endfor %}
   </table>
 </div>
 {% endif %}
