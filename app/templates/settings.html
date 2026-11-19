@@ -36,6 +36,17 @@
   {% endif %}
 </div>
 <div class="card">
+  <h3>Backup</h3>
+  <p class="small">The database has no automatic backups. Download one before and after each exercise day.
+  It contains everything, including attachments.</p>
+  <a class="btn small" href="/settings/backup">Download backup</a>
+  <form method="post" action="/settings/restore" enctype="multipart/form-data" class="form" style="margin-top:12px">
+    <label>Restore (replaces injects, senders, people and settings; clears logs) <input type="file" name="file" accept=".json"></label>
+    <label>Type <b>RESTORE</b> <input name="confirm" autocomplete="off"></label>
+    <button class="btn small danger">Restore</button>
+  </form>
+</div>
+<div class="card">
   <h3>Resend</h3>
   <p class="small">Mailer: <b>{{ mailer_name }}</b>{% if not resend_configured %} (no RESEND_API_KEY: emails are logged, not sent){% endif %}. Sending domain: <b>{{ MAIL_DOMAIN }}</b>.</p>
   <button class="btn small" data-domain-check>Check domain status</button>

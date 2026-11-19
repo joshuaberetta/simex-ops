@@ -87,8 +87,12 @@ Environment: `DATABASE_URL` (default SQLite), `APP_USERNAME`, `APP_PASSWORD`, `S
 
 ## Deployment (DigitalOcean App Platform)
 
-- **App**: `simex-ops`, region fra, one instance. The spec is in `.do/app.yaml` and the database
-  is the managed Postgres cluster `simex-ops-db`. A push to `main` deploys.
+- **App**: `simex-ops`, region fra, one instance. The spec is in `.do/app.yaml` and a push to
+  `main` deploys.
+- **Database**: an App Platform dev Postgres. The account is at its managed-cluster limit, and
+  the dev database has **no automatic backups**. Use Settings → Download backup (everything,
+  attachments included, as one JSON file) before and after each exercise day. Restore is on the
+  same page: it replaces the configuration, clears the logs, and always comes back disarmed.
 - **Updating the spec**: secrets are not in the file. Run
   `.venv/bin/python .do/render_spec.py <app-id>`, then
   `doctl apps update <app-id> --spec .do/app.rendered.yaml`, then delete the rendered file.

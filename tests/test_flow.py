@@ -230,3 +230,16 @@ def test_xlsx_and_json_import_agree():
     strip = lambda rs: [{k: v for k, v in r.items() if k != "seq"} for r in rs]  # noqa: E731
     assert strip(a) == strip(b)
     assert len(a) == 103
+
+
+def test_backup_roundtrip(client):
+    do_import(client, SAMPLE)
+    client.post("/injects/1/attachments", files={"files": ("plan.pdf", b"%PDF-1 test", "application/pdf")})
+    data = client.get("/settings/backup").json()
+    client.post("/injects/1/delete", data={"confirm": "1-15"})
+    r = client.post("/settings/restore", data={"confirm": "RESTORE"},
+                    files={"file": ("b.json", json.dumps(data).encode(), "application/json")})
+    assert "Restored" in r.text
+    with SessionLocal() as s:
+        inj = s.query(Inject).filter_by(mel_id="1-15").one()
+        assert inj.attachments[0].data == b"%PDF-1 test"

@@ -5,8 +5,8 @@
 #   .venv/bin/python .do/render_spec.py <app-id>    # writes .do/app.rendered.yaml (git-ignored)
 #   doctl apps update <app-id> --spec .do/app.rendered.yaml && rm .do/app.rendered.yaml
 #
-# The database must exist before the first deploy:
-#   doctl databases create simex-ops-db --engine pg --version 17 --region fra1 --size db-s-1vcpu-1gb --num-nodes 1
+# The database is an App Platform dev database (the account is at its managed-cluster
+# limit). It has no automatic backups: download one from Settings > Backup.
 name: simex-ops
 region: fra
 alerts:
@@ -20,8 +20,7 @@ domains:
 databases:
   - name: db
     engine: PG
-    production: true
-    cluster_name: simex-ops-db
+    production: false
 services:
   - name: web
     github: { repo: joshuaberetta/simex-ops, branch: main, deploy_on_push: true }

@@ -4,11 +4,13 @@ values (EV[...]) copied in, so `doctl apps update` doesn't wipe them.
     .venv/bin/python .do/render_spec.py <app-id>        # existing app
     .venv/bin/python .do/render_spec.py --new           # first create: prompts for secrets
 
-Uses doctl. SECRET_KEY is generated if the app has none.
+Uses doctl. SECRET_KEY is generated if the app has none. A secret set in the environment
+(e.g. RESEND_API_KEY=... python .do/render_spec.py <app-id>) replaces the app's value.
 """
 
 import getpass
 import json
+import os
 import re
 import secrets
 import subprocess
@@ -36,7 +38,9 @@ def main():
         sys.exit(__doc__)
     vals = {} if sys.argv[1] == "--new" else current(sys.argv[1])
     for k in SECRETS:
-        if k not in vals:
+        if os.environ.get(k):
+            vals[k] = os.environ[k]
+        elif k not in vals:
             if k == "SECRET_KEY":
                 vals[k] = secrets.token_urlsafe(48)
             else:

@@ -2,6 +2,7 @@
 
 import csv
 import hmac
+import json
 import io
 import logging
 import mimetypes
@@ -19,7 +20,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import config, db, importer, mailer, render, scheduler, seed, settings
+from . import backup, config, db, importer, mailer, render, scheduler, seed, settings
 from .db import (DELIVERY_MODES, STATUSES, Attachment, Audit, ImportBatch, Inject, Message, Person, SessionLocal,
                  Sender, Team, TestRun, TestRunItem, audit, utcnow)
 
@@ -913,3 +914,33 @@ def settings_domain():
         return JSONResponse(mailer.get().domain_status(config.MAIL_DOMAIN))
     except Exception as e:
         return JSONResponse({"error": f"{type(e).__name__}: {e}"})
+
+
+@app.get("/settings/backup")
+def settings_backup():
+    with SessionLocal() as s:
+        data = backup.export(s)
+        audit(s, "backup_download")
+        s.commit()
+    name = f"simex-ops-backup-{fmt(utcnow(), '%Y%m%d-%H%M')}.json"
+    return Response(json.dumps(data), media_type="application/json",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@app.post("/settings/restore")
+async def settings_restore(request: Request):
+    form = await request.form()
+    up = form.get("file")
+    if form.get("confirm") != "RESTORE" or not getattr(up, "filename", None):
+        flash(request, "Choose a backup file and type RESTORE.", "error")
+        return back("/settings")
+    try:
+        data = json.loads((await up.read()).decode("utf-8"))
+        with SessionLocal() as s:
+            counts = backup.restore(s, data)
+            s.commit()
+    except (ValueError, KeyError, TypeError) as e:
+        flash(request, f"Restore failed, nothing changed: {e}", "error")
+        return back("/settings")
+    flash(request, "Restored: " + ", ".join(f"{v} {k}" for k, v in counts.items()) + ". Live sending is disarmed.", "warn")
+    return back("/settings")
