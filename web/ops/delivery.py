@@ -19,7 +19,7 @@ from django.db import IntegrityError, connection, transaction
 from django.db.models import F
 from django.utils import timezone
 
-from . import conf, mailer, render
+from . import conf, mailer, push, render
 from .models import (Attachment, Inject, Mail, MailAttachment, Message, Person, Team, TestRun, TestRunItem,
                      audit)
 
@@ -71,6 +71,7 @@ def _put_mail(m):
     for a in Attachment.objects.filter(id__in=m.attachment_ids or []):
         MailAttachment.objects.create(mail=mail, attachment=a, filename=a.filename, content_type=a.content_type,
                                       size=a.size)
+    push.notify_mail(mail)
     return mail
 
 

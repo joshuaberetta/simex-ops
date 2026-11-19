@@ -358,9 +358,56 @@
   };
   if (soundBtn) soundBtn.onclick = async () => {
     N.setEnabled(!N.enabled()); paintSound();
-    if (N.enabled()) { await N.ask(); N.beep(); paintBanner(); }
+    if (N.enabled()) { await N.ask(); N.beep(); paintBanner(); pushOn(); } else pushOff();
   };
   paintSound();
+
+  // Push (Web Push via the service worker): new mail is notified even with SIMEX Mail closed, e.g.
+  // on an iPhone once it is on the home screen. While this device is subscribed the page leaves
+  // system notifications to the service worker (no doubles) and keeps the chime and the snackbar.
+  const PUSH = "simex-push";
+  const pushable = !CFG.readonly && !!CFG.vapid && "serviceWorker" in navigator && "PushManager" in window;
+  const swReady = pushable ? navigator.serviceWorker.register("/inbox/sw.js", { scope: "/inbox/" }).catch(() => null)
+    : Promise.resolve(null);
+  const b64 = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)),
+                                     (c) => c.charCodeAt(0));
+  const sameKey = (sub, key) => {
+    const k = sub.options && sub.options.applicationServerKey;
+    return !k || new Uint8Array(k).join() === key.join();
+  };
+  async function pushOn() {
+    const reg = await swReady;
+    if (!reg || !N.enabled() || N.permission() !== "granted") return;
+    try {
+      const key = b64(CFG.vapid);
+      let sub = await reg.pushManager.getSubscription();
+      if (sub && !sameKey(sub, key)) { await sub.unsubscribe(); sub = null; }  // the server key changed
+      sub = sub || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+      const j = sub.toJSON();
+      const r = await post(`${BASE}/push/`, { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth });
+      if (r.ok) localStorage.setItem(PUSH, "1");
+    } catch (e) { localStorage.removeItem(PUSH); }
+  }
+  async function pushOff() {
+    localStorage.removeItem(PUSH);
+    const reg = await swReady;
+    const sub = reg && await reg.pushManager.getSubscription();
+    if (sub) { await post(`${BASE}/push/`, { endpoint: sub.endpoint, off: "1" }); await sub.unsubscribe(); }
+  }
+  const pushing = () => pushable && localStorage.getItem(PUSH) === "1" && N.permission() === "granted";
+  if (pushable) {
+    pushOn();  // keeps the server's copy current (new login on this device, restored backup, new key)
+    navigator.serviceWorker.addEventListener("message", (e) => { if (e.data && e.data.type === "simex-push") poll(); });
+  }
+
+  // iPhone/iPad in Safari: notifications only work from the home-screen app, so say how to add it.
+  const install = $("#gm-install");
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
+  if (install && CFG.vapid && !CFG.readonly && ios && !standalone && localStorage.getItem("simex-install-asked") !== "1") {
+    install.hidden = false;
+    $("[data-install-ok]", install).onclick = () => { localStorage.setItem("simex-install-asked", "1"); install.hidden = true; };
+  }
 
   // Ask once for desktop notifications (it needs a click), unless muted or already decided.
   const banner = $("#gm-alerts");
@@ -369,7 +416,9 @@
     banner.hidden = CFG.readonly || !N.enabled() || N.permission() !== "default" || localStorage.getItem("simex-alerts-asked") === "1";
   }
   if (banner) {
-    $("[data-alerts-on]", banner).onclick = async () => { await N.ask(); N.beep(); localStorage.setItem("simex-alerts-asked", "1"); paintBanner(); };
+    $("[data-alerts-on]", banner).onclick = async () => {
+      await N.ask(); N.beep(); localStorage.setItem("simex-alerts-asked", "1"); paintBanner(); pushOn();
+    };
     $("[data-alerts-later]", banner).onclick = () => { localStorage.setItem("simex-alerts-asked", "1"); paintBanner(); };
     paintBanner();
   }
@@ -386,6 +435,7 @@
       const inboxLink = $('[data-folder="inbox"]'); if (inboxLink) inboxLink.classList.toggle("bold", n > 0);
       N.title(n);
       N.favicon(n, "#0b57d0");
+      if (!CFG.readonly && navigator.setAppBadge) (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {});
       const fresh = latest !== null ? (j.new || []).filter((m) => m.id > latest) : [];
       if (fresh.length) {
         const m = fresh[0];
@@ -393,7 +443,7 @@
         snack(`New message from ${m.from}: ${m.subject}${more}`, { label: "Open", run: () => { location.href = `${BASE}/t/${m.thread}/`; } }, true);
         if (!CFG.readonly) {
           N.alert({ title: `${m.from}${more}`, body: m.subject, url: `${location.origin}${BASE}/t/${m.thread}/`, tag: `mail-${m.id}`,
-                    flashText: `New message from ${m.from}` });
+                    flashText: `New message from ${m.from}`, desktop: !pushing() });
         }
         if (CFG.folder === "inbox" && bulk && !$$('input[name="threads"]:checked').length && (!win || win.hidden)) {
           setTimeout(() => {  // show the new row; the alert comes back after the reload

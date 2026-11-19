@@ -340,6 +340,54 @@ def test_mail_host_serves_only_simex_mail(mail_host, excon):
     assert excon.get(f"/inbox/as/{team.id}/", HTTP_HOST="mail.x.test").url == f"https://ops.x.test/inbox/as/{team.id}/"
 
 
+# --- push notifications ---------------------------------------------------------------------------------
+
+APPLE = "https://web.push.apple.com/QGuQyavXut"
+
+
+def test_push_subscribe_and_new_mail_is_pushed_to_the_team(excon, settings, django_capture_on_commit_callbacks):
+    from ops import push
+    from ops.models import PushSubscription
+    settings.VAPID_PRIVATE_KEY = "Uq1-1K7JXzT4Bo8SzbsxJAX5BMAI0uBkN6lSV4jL8A8"
+    sent = []
+    push.set_sender(lambda info, data: sent.append((info["endpoint"], json.loads(data))) or 201)
+    push.RUN_INLINE = True
+    try:
+        pa, pb = participant("a"), participant("b")
+        assert pa.get("/inbox/").context["simex_js"]["vapid"].startswith("B")  # the derived public key
+        keys = {"p256dh": "BNc", "auth": "x1"}
+        assert pa.post("/inbox/push/", {"endpoint": "https://evil.example/x", **keys}).status_code == 400
+        assert pa.post("/inbox/push/", {"endpoint": APPLE, **keys}).json() == {"ok": True}
+        assert pb.post("/inbox/push/", {"endpoint": "https://fcm.googleapis.com/fcm/send/b", **keys}).status_code == 200
+        team = Team.objects.get(code="a")
+        assert excon.post(f"/inbox/as/{team.id}/push/", {"endpoint": APPLE, **keys}).status_code == 403
+        do_import(excon, SAMPLE)
+        arm()
+        with django_capture_on_commit_callbacks(execute=True):
+            deliver_now("1-15")
+        mine = [d for e, d in sent if e == APPLE]
+        mail = Mail.objects.get(team=team)
+        assert mine == [{"title": mail.from_name, "body": "Update for Team A", "url": f"/inbox/t/{mail.thread}/",
+                         "tag": f"mail-{mail.id}"}]
+        assert PushSubscription.objects.get(endpoint=APPLE).last_ok_at
+        push.set_sender(lambda info, data: 410)  # unsubscribed on the device: dropped
+        push.send_team(team.id, {"title": "x"})
+        assert not PushSubscription.objects.filter(endpoint=APPLE).exists()
+        assert pb.post("/inbox/push/", {"endpoint": "https://fcm.googleapis.com/fcm/send/b", "off": "1"}).status_code == 200
+        assert not PushSubscription.objects.exists()
+    finally:
+        push.set_sender(None)
+        push.RUN_INLINE = False
+
+
+def test_service_worker_and_manifest_are_public():
+    c = Client()
+    r = c.get("/inbox/sw.js")
+    assert r.status_code == 200 and r["Content-Type"].startswith("application/javascript") and b"showNotification" in r.content
+    m = c.get("/inbox/manifest.webmanifest").json()
+    assert m["display"] == "standalone" and m["start_url"] == "/inbox/"
+
+
 # --- email channel ------------------------------------------------------------------------------------
 
 def test_email_channel_live_and_reply_webhook(excon):

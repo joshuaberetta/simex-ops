@@ -18,6 +18,7 @@ mail_patterns = [
     path("poll/", p.poll),
     path("file/<int:fid>/", p.mail_file),
     path("help/", p.guide),
+    path("push/", p.push_subscribe),
 ]
 
 urlpatterns = [
@@ -26,6 +27,8 @@ urlpatterns = [
     path("login/", p.ThrottledLogin.as_view()),
     path("logout/", auth_views.LogoutView.as_view(next_page="/login/")),
     path("webhooks/resend", p.resend_webhook),
+    path("inbox/sw.js", p.service_worker),
+    path("inbox/manifest.webmanifest", p.manifest),
     path("inbox/as/<int:as_team>/", include(mail_patterns)),
     path("inbox/", include(mail_patterns)),
     # ExCon

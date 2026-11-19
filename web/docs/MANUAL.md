@@ -95,7 +95,8 @@ Bulk: tick injects in the list and use **Schedule / Back to draft / Cancel / Shi
 Even if you plan to use email, make SIMEX Mail ready so you can switch in a minute:
 1. **People & logins:** check every participant is in the right team and create their logins (one by one or by pasting the roster). Passwords are shown once: print the **credentials sheet** and keep it with ExCon.
 2. Sign in once as a test participant (or use **Team inboxes → View as team**) to see what teams would see.
-3. Note the address to give teams: **https://ops.simex.kobolabs.dev** (they land in their mailbox after signing in).
+3. Note the address to give teams: **https://mail.simex.kobolabs.dev** (they land in their mailbox after signing in).
+4. Tell teams with iPhones to add SIMEX Mail to their home screen (Safari → **Share** → **Add to Home Screen**), open it from there and tap **Turn on alerts**: only then do they get notifications with SIMEX Mail closed. SIMEX Mail shows iPhone users this hint itself. Other phones and computers get them once alerts are on.
 
 ### 3.7 Rehearse (at least once) — section 4.
 
@@ -148,7 +149,7 @@ To rehearse the whole loop, sign in as your Test team login (another browser or 
 
 Write rubrics as observable behaviour ("acknowledged within 30 min", "named the cluster lead"), 2–4 points each. Nothing is copied from the MEL's expected outcomes.
 
-**Alerts without refreshing.** Every ExCon page checks for news every 10 seconds. A new reply, an AI flag (*needs ExCon attention*, *safety*), or an inject that fails or goes overdue shows a toast at the bottom right (click it to open the reply), plays a chime, updates the **Replies** badge and the tab title and icon, and shows a desktop notification while the tab is in the background. **🔔 Alerts** in the status bar turns this on or off; click it once on each computer to allow desktop notifications. Open tabs share what has been seen, so an alert comes once however many ExCon pages are open. Participants get the same kind of alerts in SIMEX Mail (a chime, a blue bar, the tab badge and a desktop notification once they click **Turn on alerts**).
+**Alerts without refreshing.** Every ExCon page checks for news every 10 seconds. A new reply, an AI flag (*needs ExCon attention*, *safety*), or an inject that fails or goes overdue shows a toast at the bottom right (click it to open the reply), plays a chime, updates the **Replies** badge and the tab title and icon, and shows a desktop notification while the tab is in the background. **🔔 Alerts** in the status bar turns this on or off; click it once on each computer to allow desktop notifications. Open tabs share what has been seen, so an alert comes once however many ExCon pages are open. Participants get the same kind of alerts in SIMEX Mail (a chime, a blue bar, the tab badge and a desktop notification once they click **Turn on alerts**). Their notifications are also *pushed*: a device that turned on alerts is told about each new message even with SIMEX Mail closed (on an iPhone, only from the home-screen app). They show the sender and subject, nothing more. Pushes need the `VAPID_PRIVATE_KEY` secret; without it, alerts only work while SIMEX Mail is open.
 
 ### 5.5 End of each day
 **Settings → Disarm** (unless injects run overnight), **Download backup**, deal with overdue or failed injects.

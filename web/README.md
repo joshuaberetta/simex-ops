@@ -11,7 +11,7 @@ The Django version of SIMEX ops, **the app in production at https://ops.simex.ko
 | Replies | Resend inbound webhook, matched by reply token or a guess | In-app replies matched **exactly**; email as before |
 | ExCon view of teams | — | **View as team** (read-only, nothing marked read) |
 | Engagement | Resend opens/clicks | In-app **read** (first read, times opened) and attachment downloads; email opens/clicks/bounces as before |
-| Users | One shared login | Django auth: ExCon = staff or group `excon`; participants see only `/inbox/` for their team, on its own host (`MAIL_URL`, https://mail.simex.kobolabs.dev, with a webmail-style sign-in) |
+| Users | One shared login | Django auth: ExCon = staff or group `excon`; participants see only `/inbox/` for their team, on its own host (`MAIL_URL`, https://mail.simex.kobolabs.dev, with a webmail-style sign-in), installable on a phone's home screen with push notifications for new mail (`ops/push.py`, `VAPID_PRIVATE_KEY` from `manage.py vapid_keys`) |
 | Scheduler | Thread in the web process | Separate worker (`manage.py run_scheduler`) |
 | Schema | `create_all` | Django migrations |
 

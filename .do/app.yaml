@@ -18,6 +18,9 @@
 # the scheduler worker (which makes the calls) and the web both see it. To use Bedrock instead,
 # replace it with AWS_BEARER_TOKEN_BEDROCK (secret) and AWS_REGION, here and in render_spec.py.
 #
+# Push notifications for SIMEX Mail: VAPID_PRIVATE_KEY (from `python manage.py vapid_keys`),
+# app-level so the scheduler (which delivers injects) can push too.
+#
 # Two components share the image: web (gunicorn, migrations at start) and scheduler (a
 # worker running `manage.py run_scheduler`). Exactly one scheduler instance.
 name: simex-ops
@@ -41,6 +44,7 @@ envs:
   - { key: RESEND_API_KEY, scope: RUN_TIME, type: SECRET }
   - { key: RESEND_WEBHOOK_SECRET, scope: RUN_TIME, type: SECRET }
   - { key: ANTHROPIC_API_KEY, scope: RUN_TIME, type: SECRET }
+  - { key: VAPID_PRIVATE_KEY, scope: RUN_TIME, type: SECRET }
   - { key: APP_USERNAME, scope: RUN_TIME, value: "undac" }
   - { key: PUBLIC_URL, scope: RUN_TIME, value: "https://ops.simex.kobolabs.dev" }
   - { key: MAIL_URL, scope: RUN_TIME, value: "https://mail.simex.kobolabs.dev" }

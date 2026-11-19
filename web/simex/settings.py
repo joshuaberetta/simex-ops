@@ -46,6 +46,11 @@ MAILER = env("MAILER", "resend" if RESEND_API_KEY else "log")
 RESEND_MIN_INTERVAL = float(env("RESEND_MIN_INTERVAL", "0.6"))
 TICK_SECONDS = float(env("TICK_SECONDS", "10"))
 
+# Push notifications for new SIMEX Mail (optional, ops/push.py): a VAPID key pair, made with
+# `manage.py vapid_keys`. Only the private key is set; the public key is derived from it.
+VAPID_PRIVATE_KEY = env("VAPID_PRIVATE_KEY")
+VAPID_SUBJECT = env("VAPID_SUBJECT", f"mailto:excon@{MAIL_DOMAIN}")
+
 # Claude analysis of replies (optional, ops/ai.py): "anthropic" (ANTHROPIC_API_KEY), "bedrock"
 # (AWS credentials: AWS_BEARER_TOKEN_BEDROCK, or a profile / SSO session locally) or "off".
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY")

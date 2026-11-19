@@ -18,7 +18,8 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-SECRETS = ["DATABASE_URL", "APP_PASSWORD", "SECRET_KEY", "RESEND_API_KEY", "RESEND_WEBHOOK_SECRET", "ANTHROPIC_API_KEY"]
+SECRETS = ["DATABASE_URL", "APP_PASSWORD", "SECRET_KEY", "RESEND_API_KEY", "RESEND_WEBHOOK_SECRET", "ANTHROPIC_API_KEY",
+           "VAPID_PRIVATE_KEY"]
 
 
 def current(app_id):

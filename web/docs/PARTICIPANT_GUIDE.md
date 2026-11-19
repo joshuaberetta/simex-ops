@@ -6,6 +6,8 @@ SIMEX Mail is your team's mailbox for the exercise. Everything here is **exercis
 - **One mailbox per team.** Everyone in your team sees the same mail. What you send appears in everyone's **Sent**, with your name on it.
 - Keep the page open during the exercise. New mail appears on its own; the tab title shows the number of unread conversations, e.g. **Inbox (3)**.
 - **Alerts for new mail:** when a message arrives you hear a chime and see a blue bar at the bottom of the page (click **Open**), the tab shows the number of unread conversations and a red badge, and its title blinks while you are in another tab. On your first visit, click **Turn on alerts** in the blue banner so your browser can also show a notification on your screen when this tab is in the background. Keep the SIMEX Mail tab open all day. The **bell** at the top right mutes or unmutes alerts. If your browser has blocked notifications, allow them for this site in its address-bar settings.
+- **Notifications with SIMEX Mail closed:** once you have turned on alerts, new mail is announced on your computer or phone even when SIMEX Mail isn't open (Chrome, Edge, Firefox, Android).
+- **On an iPhone or iPad,** notifications only work from the home screen: in Safari tap **Share** (the square with an arrow), then **Add to Home Screen**, then **Add**. Open **SIMEX Mail** from your home screen, sign in, and tap **Turn on alerts**, then **Allow**. You then get a notification for every new message, like a mail app. Focus / Do Not Disturb can hide them.
 
 ## Reading
 - **Inbox** lists conversations, newest first. **Bold** = unread. A number after the sender = messages in the conversation. A paperclip = attachments.

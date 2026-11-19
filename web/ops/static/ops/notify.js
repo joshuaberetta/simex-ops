@@ -86,9 +86,9 @@
   }
 
   // "New activity": everything at once, for one or more new items.
-  function alert({ title: t, body, url, tag, flashText }) {
+  function alert({ title: t, body, url, tag, flashText, desktop: showDesktop = true }) {
     if (enabled()) beep();
-    desktop(t, body, url, tag);
+    if (showDesktop) desktop(t, body, url, tag);
     flash(flashText || t);
   }
 

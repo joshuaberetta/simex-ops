@@ -264,6 +264,18 @@ class Mail(models.Model):
         super().save(*args, **kwargs)
 
 
+class PushSubscription(models.Model):
+    """A participant's device that gets a push notification for new mail (Web Push: a phone's
+    home-screen app or a browser). Not in backups: devices subscribe again on their next visit."""
+    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="push_subscriptions")
+    endpoint = models.URLField(max_length=1000, unique=True)
+    p256dh = models.CharField(max_length=200)
+    auth = models.CharField(max_length=100)
+    user_agent = models.CharField(max_length=400, blank=True, default="")
+    created_at = models.DateTimeField(default=timezone.now)
+    last_ok_at = models.DateTimeField(null=True, blank=True)
+
+
 class MailAttachment(models.Model):
     """A file on a Mail: either a link to an inject Attachment (no copy) or its own data."""
     mail = models.ForeignKey(Mail, on_delete=models.CASCADE, related_name="files")

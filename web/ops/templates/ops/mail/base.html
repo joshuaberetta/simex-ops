@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Inbox{% endblock %} - {{ team.name }} - SIMEX Mail</title>
 <link rel="stylesheet" href="{% static 'ops/mail.css' %}">
+<link rel="manifest" href="/inbox/manifest.webmanifest">
+<link rel="apple-touch-icon" href="{% static 'ops/icon-180.png' %}">
+<meta name="apple-mobile-web-app-title" content="SIMEX Mail">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#f6f8fc">
 </head>
 <body class="gm{% if readonly %} readonly{% endif %}">
 <header class="gm-top">
@@ -38,6 +43,10 @@
   {% icon "bell" 20 %} <span><b>Don't miss a message.</b> Turn on alerts to get a notification and a sound when new mail arrives, even when this tab is in the background.</span>
   <button type="button" class="gm-pill-btn primary" data-alerts-on>Turn on alerts</button>
   <button type="button" class="gm-pill-btn" data-alerts-later>Not now</button>
+</div>
+<div class="gm-alerts" id="gm-install" hidden>
+  {% icon "bell" 20 %} <span><b>Get new-mail notifications on this device.</b> Tap <b>Share</b> <svg class="gm-share" width="16" height="16" viewBox="0 0 24 24" aria-label="(the square with an arrow)"><path fill="currentColor" d="M12 2l4 4-1.4 1.4L13 5.8V15h-2V5.8L9.4 7.4 8 6zM5 10h3v2H6v8h12v-8h-2v-2h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1z"/></svg>, then <b>Add to Home Screen</b>, and open SIMEX Mail from your home screen. Then tap <b>Turn on alerts</b> there.</span>
+  <button type="button" class="gm-pill-btn" data-install-ok>OK</button>
 </div>
 <div class="gm-body">
   <nav class="gm-side">

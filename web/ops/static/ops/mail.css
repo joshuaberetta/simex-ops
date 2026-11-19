@@ -306,6 +306,7 @@ body.readonly .gm-hover, body.readonly .gm-tb-selected { display: none !importan
 .gm-alerts { display: flex; align-items: center; gap: 12px; margin: 0 16px 8px; padding: 10px 16px; border-radius: 12px; background: #d3e3fd; color: #041e49; font-size: 14px; }
 .gm-alerts span { flex: 1; }
 .gm-alerts svg { flex: none; }
+.gm-alerts .gm-share { display: inline; vertical-align: -3px; }
 .gm-alerts[hidden] { display: none; }
 .gm-pill-btn.primary { background: #0b57d0; border-color: #0b57d0; color: #fff; }
 .gm-icon-btn[data-sound].on { color: #0b57d0; }

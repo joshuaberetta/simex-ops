@@ -23,9 +23,9 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import conf, inbound, render as rnd
+from . import conf, inbound, push, render as rnd
 from .access import is_excon, login_required_any, participant_of
-from .models import Mail, MailAttachment, Sender, Team, audit
+from .models import Mail, MailAttachment, PushSubscription, Sender, Team, audit
 
 PAGE = 50
 FOLDERS = [("inbox", "Inbox"), ("starred", "Starred"), ("sent", "Sent"), ("drafts", "Drafts"), ("all", "All mail"),
@@ -226,7 +226,8 @@ def _ctx(v, **extra):
     c.update(extra)
     c["simex_js"] = {"base": v.base, "readonly": v.readonly, "book": address_book(v.team), "team": v.team.name,
                      "maxMb": int(conf.get("max_upload_mb") or 10), "folder": c.get("folder", ""),
-                     "unread": c["inbox_unread"]}
+                     "unread": c["inbox_unread"],
+                     "vapid": "" if v.readonly else push.public_key()}
     return c
 
 
@@ -447,6 +448,7 @@ def send(request, v):
             for a in sent.files.all():
                 MailAttachment.objects.create(mail=copy, attachment=a.attachment, filename=a.filename, size=a.size,
                                               content_type=a.content_type, data=a.data)
+            push.notify_mail(copy)
             audit("team_to_team", f"{v.team.name} -> {t.name}: {subject[:80]}", request.user.get_username())
     Mail.objects.filter(pk=P.get("draft_id") or 0, team=v.team, folder="drafts").delete()
     if ajax:
@@ -483,6 +485,51 @@ def poll(request, as_team=None):
     return JsonResponse({"unread": qs.filter(archived=False, read_at__isnull=True).values("thread").distinct().count(),
                          "latest": latest.id if latest else 0, "new": new,
                          "subject": latest.subject if latest else "", "from": latest.from_name if latest else ""})
+
+
+# --- push notifications & the home-screen app ------------------------------------------------------
+
+# Push services the browsers use; the server only ever posts to these (no arbitrary URLs).
+PUSH_HOSTS = (".push.apple.com", "fcm.googleapis.com", ".push.services.mozilla.com", ".notify.windows.com")
+
+
+@mailbox_view
+@require_POST
+def push_subscribe(request, v):
+    """Save this device's push subscription for the signed-in participant ("off": remove it)."""
+    P = request.POST
+    endpoint = (P.get("endpoint") or "").strip()
+    host = endpoint.split("://", 1)[-1].split("/")[0].lower()
+    if not endpoint.startswith("https://") or not any(host == h.lstrip(".") or host.endswith(h) for h in PUSH_HOSTS):
+        return JsonResponse({"error": "Unknown push service."}, status=400)
+    if P.get("off"):
+        PushSubscription.objects.filter(endpoint=endpoint, person=v.person).delete()
+        return JsonResponse({"ok": True})
+    if not (P.get("p256dh") and P.get("auth")):
+        return JsonResponse({"error": "Incomplete subscription."}, status=400)
+    PushSubscription.objects.update_or_create(endpoint=endpoint, defaults={
+        "person": v.person, "p256dh": P["p256dh"][:200], "auth": P["auth"][:100],
+        "user_agent": request.META.get("HTTP_USER_AGENT", "")[:400]})
+    return JsonResponse({"ok": True})
+
+
+def service_worker(request):
+    """The service worker (scope /inbox/): shows pushed mail, opens it when tapped."""
+    from django.templatetags.static import static
+    resp = render(request, "ops/mail/sw.js", {"icon": static("ops/icon-192.png")}, content_type="application/javascript")
+    resp["Cache-Control"] = "no-cache"
+    return resp
+
+
+def manifest(request):
+    """Web app manifest: "Add to Home Screen" opens SIMEX Mail full screen, like an app."""
+    from django.templatetags.static import static
+    icons = [{"src": static(f"ops/icon-{n}.png"), "sizes": f"{n}x{n}", "type": "image/png", "purpose": "any"}
+             for n in (192, 512)]
+    icons.append({"src": static("ops/icon-512.png"), "sizes": "512x512", "type": "image/png", "purpose": "maskable"})
+    return JsonResponse({"name": "SIMEX Mail", "short_name": "SIMEX Mail", "id": "/inbox/", "start_url": "/inbox/",
+                         "scope": "/", "display": "standalone", "background_color": "#f6f8fc",
+                         "theme_color": "#f6f8fc", "icons": icons}, content_type="application/manifest+json")
 
 
 @login_required_any
