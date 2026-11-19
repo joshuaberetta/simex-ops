@@ -20,7 +20,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from . import backup, conf, delivery, importer, inbound, mailer, render as rnd
+from . import legacy_import, backup, conf, delivery, importer, inbound, mailer, render as rnd
 from .access import excon_required
 from .models import (CHANNELS, DELIVERY_MODES, STATUSES, Attachment, Audit, Grade, ImportBatch, Inject, Mail,
                      Message, Person, Response, ResponseAttachment, RubricCriterion, Sender, Team, TestRun,
@@ -224,7 +224,7 @@ def inject_send(request, iid):
         messages.error(request, f"Type the inject id ({inj.mel_id}) to confirm a live send.")
         return redirect(f"/injects/{iid}/")
     err = delivery.start_live(inj, retry_failed=request.POST.get("retry") == "1", user=_u(request))
-    if not err and inj.channel == "inapp":
+    if not err and inj.effective_channel == "inapp":
         delivery.process_live(inj.id)  # in-app is instant: deliver now rather than on the next tick
         inj.refresh_from_db()
         messages.success(request, f"Delivered: {inj.status}.")
@@ -240,7 +240,7 @@ def inject_send(request, iid):
 def inject_test(request, iid):
     inj = get_object_or_404(Inject, pk=iid)
     address = (request.POST.get("address") or "").strip()
-    if inj.channel == "email":
+    if inj.effective_channel == "email":
         if not rnd.EMAIL.match(address):
             messages.error(request, "Enter a valid test address.")
             return redirect(f"/injects/{iid}/")
@@ -248,7 +248,7 @@ def inject_test(request, iid):
     msgs, warnings = delivery.send_oneoff(inj, address, all_targets=request.POST.get("all") == "1", user=_u(request))
     if not msgs:
         messages.error(request, "Nothing to send: " + "; ".join(warnings))
-    where = "the Test team inbox" if inj.channel == "inapp" else address
+    where = "the Test team inbox" if inj.effective_channel == "inapp" else address
     for m in msgs:
         if m.status == "sent":
             messages.success(request, f"Test delivered to {where} ({m.target}).")
@@ -695,7 +695,7 @@ def _tests_create(request):
     if not chosen:
         messages.error(request, "No injects selected for the test run.")
         return redirect("/tests/")
-    if any(i.channel == "email" for i in chosen) and not redirect_to:
+    if any(i.effective_channel == "email" for i in chosen) and not redirect_to:
         messages.error(request, "Some injects go by email: give a test address pattern.")
         return redirect("/tests/")
     try:
@@ -858,7 +858,7 @@ def replies_page(request):
         "injects_all": Inject.objects.order_by("seq").values_list("id", "mel_id"),
         "webhook_ready": bool(settings.RESEND_WEBHOOK_SECRET),
         "webhook_url": settings.PUBLIC_URL.rstrip("/") + "/webhooks/resend",
-        "uses_email": Inject.objects.filter(channel="email").exists(),
+        "uses_email": conf.get("channel_mode") != "inapp" or Inject.objects.filter(channel="email").exists(),
         "eng_rows": eng_rows, "eng_teams": eng_teams, "eng_team_sum": eng_team_sum})
 
 
@@ -1105,6 +1105,26 @@ def settings_arm(request):
 
 @excon_required
 @require_POST
+def settings_channel(request):
+    mode = request.POST.get("mode")
+    if mode not in conf.CHANNEL_MODES:
+        messages.error(request, "Unknown delivery channel.")
+        return redirect("/settings/#channel")
+    old = conf.get("channel_mode")
+    if mode != old and (request.POST.get("confirm") or "").strip().upper() != "SWITCH":
+        messages.error(request, "Type SWITCH to change how injects are delivered.")
+        return redirect("/settings/#channel")
+    conf.put("channel_mode", mode)
+    audit("channel_mode", f"{old} -> {mode}", _u(request))
+    msg = f"Injects are now delivered by: {conf.CHANNEL_MODES[mode]}."
+    if mode == "inapp":
+        msg += " Participants need their SIMEX Mail logins (People & logins)."
+    messages.warning(request, msg)
+    return redirect("/settings/#channel")
+
+
+@excon_required
+@require_POST
 def settings_pause(request):
     paused = request.POST.get("paused") == "1"
     conf.put("paused", "1" if paused else "0")
@@ -1138,7 +1158,11 @@ def settings_restore(request):
         messages.error(request, "Choose a backup file and type RESTORE.")
         return redirect("/settings/")
     try:
-        counts = backup.restore(json.loads(up.read().decode("utf-8")))
+        data = json.loads(up.read().decode("utf-8"))
+        if data.get("format") == legacy_import.FORMAT:
+            counts = legacy_import.import_backup(data)  # a backup from the first (email-only) app
+        else:
+            counts = backup.restore(data)
     except Exception as e:
         messages.error(request, f"Restore failed, nothing changed: {e}")
         return redirect("/settings/")

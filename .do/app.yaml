@@ -1,46 +1,55 @@
-# DigitalOcean App Platform: https://ops.simex.kobolabs.dev
+# DigitalOcean App Platform: https://ops.simex.kobolabs.dev (the Django app in web/).
+# Delivers injects by email (Resend) or, as the backup, in the in-app SIMEX Mail inboxes
+# (Settings > Delivery channel). Personas send from and receive at @simex.kobolabs.dev.
+# The first, FastAPI version of the app is in app/ with its spec in .do/app-fastapi.yaml
+# (rollback: render that spec and `doctl apps update`).
 #
-# Secrets (APP_PASSWORD, SECRET_KEY, RESEND_API_KEY) have no value here on purpose. An
-# update replaces the whole spec, so never apply this file directly:
-#   .venv/bin/python .do/render_spec.py <app-id>    # writes .do/app.rendered.yaml (git-ignored)
-#   doctl apps update <app-id> --spec .do/app.rendered.yaml && rm .do/app.rendered.yaml
+# Update:  .venv/bin/python .do/render_spec.py <app-id>   (copies the app's encrypted secrets)
+#          doctl apps update <app-id> --spec .do/app.rendered.yaml && rm .do/app.rendered.yaml
 #
-# Database: its own database and user (simex_ops, owner of the database and its public
-# schema; CONNECT revoked from PUBLIC) on the existing fra1 cluster risa-dash-db. It is not
-# attached in a databases: block, because App Platform counts that against the account's
-# (exhausted) database limit. DATABASE_URL is a secret instead, and the app was added to the
-# cluster's trusted sources by hand:
-#   doctl databases firewalls append <cluster-id> --rule app:<app-id>
-# DO backs the cluster up daily; Settings > Backup downloads the app's data on demand.
+# Secrets have no value here on purpose (an update replaces the whole spec). Render a copy
+# with the values before `doctl apps create/update --spec`, and delete it afterwards.
+#
+# Database: its own database and user (simex_ops) on the existing cluster risa-dash-db (the account
+# is at its database limit), given as the DATABASE_URL secret, with the app added to the
+# cluster's trusted sources:  doctl databases firewalls append <cluster-id> --rule app:<app-id>
+#
+# Two components share the image: web (gunicorn, migrations at start) and scheduler (a
+# worker running `manage.py run_scheduler`). Exactly one scheduler instance.
 name: simex-ops
 region: fra
 alerts:
   - rule: DEPLOYMENT_FAILED
   - rule: DOMAIN_FAILED
-# DNS for kobolabs.dev is managed by DigitalOcean; keep this block or the domain detaches.
 domains:
-  # The app lives on ops.: simex.kobolabs.dev itself carries the MX record for replies
-  # (a name can't have both a CNAME and an MX).
+  # The app lives on ops.: simex.kobolabs.dev itself carries the MX record for replies.
   - domain: ops.simex.kobolabs.dev
     type: PRIMARY
     zone: kobolabs.dev
+envs:
+  - { key: DATABASE_URL, scope: RUN_TIME, type: SECRET }
+  - { key: SECRET_KEY, scope: RUN_AND_BUILD_TIME, type: SECRET }
+  - { key: APP_PASSWORD, scope: RUN_TIME, type: SECRET }
+  - { key: RESEND_API_KEY, scope: RUN_TIME, type: SECRET }
+  - { key: RESEND_WEBHOOK_SECRET, scope: RUN_TIME, type: SECRET }
+  - { key: APP_USERNAME, scope: RUN_TIME, value: "undac" }
+  - { key: PUBLIC_URL, scope: RUN_TIME, value: "https://ops.simex.kobolabs.dev" }
+  - { key: MAIL_DOMAIN, scope: RUN_TIME, value: "simex.kobolabs.dev" }
+  - { key: EXERCISE_TZ, scope: RUN_TIME, value: "Africa/Nairobi" }
 services:
   - name: web
     github: { repo: joshuaberetta/simex-ops, branch: main, deploy_on_push: true }
-    dockerfile_path: Dockerfile
+    source_dir: web
+    dockerfile_path: web/Dockerfile
     http_port: 8080
     instance_size_slug: apps-s-1vcpu-1gb
-    # Exactly one instance: the scheduler runs in-process. Two would both send (the
-    # database claim prevents most duplicates, but don't rely on it).
     instance_count: 1
-    health_check: { http_path: /healthz, initial_delay_seconds: 10, period_seconds: 10, failure_threshold: 6 }
-    envs:
-      - { key: DATABASE_URL, scope: RUN_TIME, type: SECRET }
-      - { key: PUBLIC_URL, scope: RUN_TIME, value: "https://ops.simex.kobolabs.dev" }
-      - { key: MAIL_DOMAIN, scope: RUN_TIME, value: "simex.kobolabs.dev" }
-      - { key: EXERCISE_TZ, scope: RUN_TIME, value: "Africa/Nairobi" }
-      - { key: APP_USERNAME, scope: RUN_TIME, value: "undac" }
-      - { key: APP_PASSWORD, scope: RUN_TIME, type: SECRET }
-      - { key: SECRET_KEY, scope: RUN_TIME, type: SECRET }
-      - { key: RESEND_API_KEY, scope: RUN_TIME, type: SECRET }
-      - { key: RESEND_WEBHOOK_SECRET, scope: RUN_TIME, type: SECRET }
+    health_check: { http_path: /healthz, initial_delay_seconds: 20, period_seconds: 10, failure_threshold: 6 }
+workers:
+  - name: scheduler
+    github: { repo: joshuaberetta/simex-ops, branch: main, deploy_on_push: true }
+    source_dir: web
+    dockerfile_path: web/Dockerfile
+    run_command: python manage.py run_scheduler
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    instance_count: 1

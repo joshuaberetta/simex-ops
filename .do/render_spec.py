@@ -26,10 +26,12 @@ def current(app_id):
                          capture_output=True, text=True).stdout
     spec = json.loads(out)
     vals = {}
-    for svc in spec.get("services", []):
-        for e in svc.get("envs", []):
-            if e.get("type") == "SECRET" and e.get("value"):
-                vals[e["key"]] = e["value"]
+    envs = list(spec.get("envs", []))
+    for comp in spec.get("services", []) + spec.get("workers", []) + spec.get("jobs", []):
+        envs += comp.get("envs", [])
+    for e in envs:
+        if e.get("type") == "SECRET" and e.get("value"):
+            vals.setdefault(e["key"], e["value"])
     return vals
 
 
@@ -45,14 +47,16 @@ def main():
                 vals[k] = secrets.token_urlsafe(48)
             else:
                 vals[k] = getpass.getpass(f"{k} (empty to leave unset): ")
-    text = (HERE / "app.yaml").read_text()
+    text = (HERE / (os.environ.get("SPEC") or "app.yaml")).read_text()
     for k, v in vals.items():
         if not v:
             continue
-        text = re.sub(r"\{ key: %s, scope: RUN_TIME, type: SECRET \}" % k,
-                      lambda m: '{ key: %s, scope: RUN_TIME, type: SECRET, value: "%s" }' % (k, v.replace('"', '\\"')),
+        text = re.sub(r"\{ key: %s, scope: (\w+), type: SECRET \}" % k,
+                      lambda m: '{ key: %s, scope: %s, type: SECRET, value: "%s" }' % (k, m.group(1), v.replace('"', '\\"')),
                       text)
     out = HERE / "app.rendered.yaml"
+    if "type: SECRET }" in text:
+        print("warning: some secrets have no value:", re.findall(r"key: (\w+), scope: \w+, type: SECRET \}", text))
     out.write_text(text)
     out.chmod(0o600)
     print(f"wrote {out} (contains secrets; delete after use)")

@@ -14,7 +14,7 @@ def env(key, default=None):
     return v if v not in (None, "") else default
 
 
-PUBLIC_URL = env("PUBLIC_URL", "http://127.0.0.1:8000")  # production: https://inbox.simex.kobolabs.dev
+PUBLIC_URL = env("PUBLIC_URL", "http://127.0.0.1:8000")  # production: https://ops.simex.kobolabs.dev
 PRODUCTION = PUBLIC_URL.startswith("https://")
 SECRET_KEY = env("SECRET_KEY") or ("" if PRODUCTION else "dev-only-secret")
 if not SECRET_KEY:

@@ -113,6 +113,11 @@ class Inject(models.Model):
     def __str__(self):
         return self.mel_id
 
+    @property
+    def effective_channel(self):
+        from . import conf
+        return conf.channel_for(self)
+
 
 class Attachment(models.Model):
     inject = models.ForeignKey(Inject, on_delete=models.CASCADE, related_name="attachments")

@@ -25,6 +25,18 @@
 </form>
 </section>
 <section class="col-side">
+<div class="card" id="channel">
+  <h3>Delivery channel</h3>
+  <p class="small">How injects reach the teams. <b>Email (Resend)</b> is the main flow. Switch to <b>SIMEX Mail</b> if email has problems
+  (deliverability, quota, venue network blocking mail): every inject not yet sent then goes to the teams' in-app inboxes instead, and they
+  read and answer there. Replies to emails already sent keep arriving on the Replies tab.</p>
+  <form method="post" action="/settings/channel/" class="form">{% csrf_token %}
+    {% for k, v in CHANNEL_MODES.items %}<label class="chk"><input type="radio" name="mode" value="{{ k }}" {% if k == channel_mode %}checked{% endif %}> {{ v }}</label><br>{% endfor %}
+    <label>Type <b>SWITCH</b> to change <input name="confirm" autocomplete="off"></label>
+    <button class="btn {% if channel_mode == 'inapp' %}{% else %}danger{% endif %}">Apply</button>
+  </form>
+  <p class="hint">Before switching to SIMEX Mail: create participant logins (People &amp; logins → paste roster, print the credentials sheet) and give teams the address of this site.</p>
+</div>
 <div class="card {% if cfg.live_armed == '1' %}live-card{% endif %}">
   <h3>Live sending</h3>
   {% if cfg.live_armed == '1' %}
@@ -42,7 +54,7 @@
   <p class="small">Everything, including attachments, inboxes and logins, as one JSON file. Download one before and after each exercise day.</p>
   <a class="btn small" href="/settings/backup/">Download backup</a>
   <form method="post" action="/settings/restore/" enctype="multipart/form-data" class="form" style="margin-top:12px">{% csrf_token %}
-    <label>Restore (replaces everything, including logins) <input type="file" name="file" accept=".json"></label>
+    <label>Restore: a backup of this app replaces everything, including logins; a backup from the first email-only app is merged in (settings, senders, roster, injects, rubrics) <input type="file" name="file" accept=".json"></label>
     <label>Type <b>RESTORE</b> <input name="confirm" autocomplete="off"></label>
     <button class="btn small danger">Restore</button>
   </form>

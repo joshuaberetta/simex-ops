@@ -38,6 +38,8 @@
 <div class="statusbar">
   <span class="clock" data-tz="{{ TIME_ZONE|default:'Africa/Nairobi' }}">{% now "D d M H:i" %}</span> <span class="muted">Africa/Nairobi</span>
   {% if cfg.live_armed == '1' %}<span class="pill live">LIVE ARMED</span>{% else %}<span class="pill safe">Live disarmed</span>{% endif %}
+  <a href="/settings/#channel" class="pill {% if channel_mode == 'inapp' %}warn{% else %}safe{% endif %}" title="How injects are delivered">via {% if channel_mode == 'inapp' %}SIMEX Mail{% elif channel_mode == 'email' %}email{% else %}per-inject channel{% endif %}</a>
+  {% if channel_mode != 'inapp' and mailer_name != 'resend' %}<span class="pill warn">Mailer: {{ mailer_name }} (emails are not really sent)</span>{% endif %}
   {% if cfg.paused == '1' %}<span class="pill paused">ALL SENDING PAUSED</span>{% endif %}
   <span class="muted">Scheduler: {% if scheduler_age is None %}never ran{% elif scheduler_age < 120 %}{{ scheduler_age }}s ago{% else %}<b class="err">{{ scheduler_age }}s ago: is the worker running?</b>{% endif %}</span>
   {% if next_inject %}<span>Next: <a href="/injects/{{ next_inject.id }}/">{{ next_inject.mel_id }}</a> {{ next_inject.send_at|date:"D d M H:i" }}</span>{% endif %}

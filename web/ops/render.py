@@ -161,7 +161,7 @@ def _sender_checks(inj, warnings):
 
 def build(inj, cfg):
     """Every delivery of an inject on its channel, or [] with warnings explaining why not."""
-    return build_inapp(inj, cfg) if inj.channel == "inapp" else build_email(inj, cfg)
+    return build_inapp(inj, cfg) if inj.effective_channel == "inapp" else build_email(inj, cfg)
 
 
 def _identity(inj, sender, ctx):

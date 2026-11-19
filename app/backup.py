@@ -6,10 +6,11 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, LargeBinary, text
 
-from .db import Attachment, Audit, Inject, Message, Person, Sender, Setting, Team, TestRun, TestRunItem, audit
+from .db import (Attachment, Audit, Grade, Inject, Message, Person, RubricCriterion, Sender, Setting, Team, TestRun,
+                 TestRunItem, audit)
 
 # Restored in this order (foreign keys); logs are exported but not restored.
-RESTORE = [Setting, Sender, Team, Person, Inject, Attachment]
+RESTORE = [Setting, Sender, Team, Person, Inject, Attachment, RubricCriterion, Grade]
 EXPORT = RESTORE + [TestRun, TestRunItem, Message, Audit]
 
 

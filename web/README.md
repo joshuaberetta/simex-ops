@@ -1,6 +1,6 @@
 # SIMEX inbox (Django)
 
-The Django version of SIMEX ops, on branch `django-inbox`, intended for **https://inbox.simex.kobolabs.dev**. It keeps every feature of the FastAPI app (`../app/`) and adds **in-app team mailboxes** as the default way to deliver injects, so an exercise can run without email at all. Operator manual: [`docs/MANUAL.md`](docs/MANUAL.md) (served at `/help/`); participant guide: [`docs/PARTICIPANT_GUIDE.md`](docs/PARTICIPANT_GUIDE.md) (at `/inbox/help/`).
+The Django version of SIMEX ops, **the app in production at https://ops.simex.kobolabs.dev** (spec `../.do/app.yaml`). It keeps every feature of the first, FastAPI app (`../app/`) and adds **in-app team mailboxes (SIMEX Mail)**. Settings → Delivery channel chooses email (Resend, the main flow), SIMEX Mail (the backup if email has problems) or per inject. Operator manual: [`docs/MANUAL.md`](docs/MANUAL.md) (served at `/help/`); participant guide: [`docs/PARTICIPANT_GUIDE.md`](docs/PARTICIPANT_GUIDE.md) (at `/inbox/help/`).
 
 ## What is different from the FastAPI app
 
@@ -28,7 +28,7 @@ The Django version of SIMEX ops, on branch `django-inbox`, intended for **https:
 ## Run locally
 
 ```
-cd django
+cd web
 uv venv -p 3.12 .venv && uv pip install -p .venv -r requirements.txt pytest pytest-django
 .venv/bin/python manage.py migrate && .venv/bin/python manage.py seed_simex      # ExCon login undac / nairobi2026 (APP_PASSWORD), teams A-D, Test team
 .venv/bin/python manage.py runserver                                            # http://127.0.0.1:8000

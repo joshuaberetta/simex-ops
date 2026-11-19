@@ -439,3 +439,69 @@ def test_xlsx_and_json_import_agree():
     b = importer.parse_upload("injects.json", JSON.read_bytes())
     strip = lambda rs: [{k: v for k, v in r.items() if k != "seq"} for r in rs]  # noqa: E731
     assert strip(a) == strip(b) and len(a) == 103
+
+
+# --- global delivery channel switch -------------------------------------------------------------
+
+def _roster():
+    for t in Team.objects.filter(is_test=False):
+        Person.objects.create(name=f"Real {t.code}", email=f"real-{t.code}@kobotoolbox.org", team=t)
+
+
+def test_channel_switch_email_then_inapp(excon):
+    conf.put("channel_mode", "email")  # production default
+    do_import(excon, SAMPLE)
+    _roster()
+    arm()
+    deliver_now("1-15")
+    assert Mail.objects.filter(folder="inbox").count() == 0
+    assert Message.objects.filter(kind="live", channel="email", status="sent").count() == 4
+    assert len(mailer.get().sent) == 4
+    # Email trouble: switch everything to SIMEX Mail; the next inject goes to the inboxes.
+    r = excon.post("/settings/channel/", {"mode": "inapp", "confirm": "SWITCH"})
+    assert r.status_code == 302 and conf.get("channel_mode") == "inapp"
+    deliver_now("3-13")
+    assert Mail.objects.filter(folder="inbox").count() == 4  # all-Bcc copies into every team inbox
+    assert len(mailer.get().sent) == 4  # no more email
+    assert b"via SIMEX Mail" in excon.get("/injects/").content
+
+
+def test_channel_switch_needs_confirmation(excon):
+    conf.put("channel_mode", "email")
+    excon.post("/settings/channel/", {"mode": "inapp", "confirm": "nope"})
+    assert conf.get("channel_mode") == "email"
+
+
+def test_participant_cannot_switch_channel(excon):
+    p = participant("a")
+    r = p.post("/settings/channel/", {"mode": "inapp", "confirm": "SWITCH"})
+    assert r.status_code in (302, 403) and conf.get("channel_mode") == "per_inject"
+
+
+def test_import_backup_from_email_app(excon):
+    import base64
+    data = {"format": "simex-ops-backup-1", "tables": {
+        "settings": [{"key": "footer", "value": "OLD FOOTER"}, {"key": "live_armed", "value": "1"}],
+        "senders": [{"id": 1, "local_part": "cnn", "display_name": "CNN Breaking", "reply_to": None, "active": True}],
+        "teams": [{"id": 7, "code": "a", "name": "Team Alpha", "email": None, "sort": 0, "active": True}],
+        "people": [{"id": 3, "name": "Real Person", "email": "real@kobotoolbox.org", "team_id": 7, "role": "tl", "active": True}],
+        "injects": [{"id": 11, "mel_id": "1-15", "seq": 4, "status": "scheduled", "send_at": "2026-11-23T06:00:00",
+                     "sender_local": "cnn", "delivery": "each_team", "team_ids": [7], "subject": "S", "body": "B",
+                     "footer_mode": "default", "expects_reply": True, "reply_due_minutes": 30}],
+        "attachments": [{"id": 5, "inject_id": 11, "filename": "plan.pdf", "content_type": "application/pdf",
+                         "data": base64.b64encode(b"%PDF").decode()}],
+        "rubric": [{"id": 9, "inject_id": 11, "label": "Accuracy", "max_points": 3, "sort": 0}],
+        "grades": [{"id": 1, "inject_id": 11, "team_id": 7, "scores": {"9": 2}, "comment": "ok"}],
+    }}
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    r = excon.post("/settings/restore/", {"confirm": "RESTORE", "file": SimpleUploadedFile("b.json", json.dumps(data).encode())})
+    assert r.status_code == 302
+    inj = Inject.objects.get(mel_id="1-15")
+    team = Team.objects.get(code="a")
+    assert team.name == "Team Alpha" and inj.team_ids == [team.id] and inj.attachments.get().data == b"%PDF"
+    assert inj.send_at.isoformat() == "2026-11-23T06:00:00+00:00" and inj.expects_reply
+    crit = RubricCriterion.objects.get(inject=inj)
+    assert Grade.objects.get(inject=inj, team=team).scores == {str(crit.id): 2}
+    assert Person.objects.get(email="real@kobotoolbox.org").team == team
+    assert not Person.objects.filter(email__endswith="placeholder.invalid").exists()
+    assert conf.get("footer") == "OLD FOOTER" and conf.get("live_armed") == "0"

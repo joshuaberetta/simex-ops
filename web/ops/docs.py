@@ -1,4 +1,4 @@
-"""The ExCon manual and the participant guide (django/docs/*.md), rendered with Markdown."""
+"""The ExCon manual and the participant guide (web/docs/*.md), rendered with Markdown."""
 
 import re
 from functools import lru_cache

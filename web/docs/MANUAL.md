@@ -1,6 +1,6 @@
-# SIMEX inbox: operator manual
+# SIMEX ops: operator manual
 
-For ExCon members who deliver the SIMEX injects, watch the team mailboxes, answer in character and grade the responses. The app is at **https://inbox.simex.kobolabs.dev**. ExCon signs in as `undac` (or their own staff login); participants sign in with the team logins you hand out. All times are **Nairobi time**.
+For ExCon members who deliver the SIMEX injects, watch the team mailboxes, answer in character and grade the responses. The app is at **https://ops.simex.kobolabs.dev**. ExCon signs in as `undac` (or their own staff login); participants sign in with the team logins you hand out. All times are **Nairobi time**.
 
 Read section 7, "Safety controls", before your first shift.
 
@@ -9,9 +9,10 @@ Read section 7, "Safety controls", before your first shift.
 ## 1. How it works in one minute
 
 - **Injects.** Each email inject from the MEL is one row on the **Injects** tab, with a send time, a persona as sender (e.g. `ccdpr@simex.kobolabs.dev`), recipients, a subject, a body and attachments.
-- **Delivery.** Each inject has a **channel**:
-  - **In-app** (the default): it lands in the teams' mailboxes inside this site, *SIMEX Mail*, a webmail client participants open in their browser. No real email is involved.
-  - **Email**: it is sent through Resend to the participants' real addresses, as in the email-only version.
+- **Delivery.** One switch in **Settings → Delivery channel** decides how injects reach the teams (the status bar shows it: *via email* / *via SIMEX Mail*):
+  - **Email (Resend)**, the main flow: injects go to the participants' real addresses from the personas (`ccdpr@simex.kobolabs.dev`), and their replies come back into the app.
+  - **SIMEX Mail**, the backup: injects land in the teams' mailboxes inside this site, a webmail client participants open in their browser. No real email is involved. Use it if email has problems (see 5.6).
+  - **Per inject**: each inject's own channel field decides (mixing both).
 - **When.** At each inject's time the scheduler delivers it, but only if **live sending is armed** and nothing is paused. One inject usually becomes one message per team.
 - **Answers.** Participants reply to (or write to) personas from SIMEX Mail. Every answer appears on the **Replies** tab, matched exactly to the inject and team it answers. You read it, answer in character, and grade it against the inject's rubric.
 - **Nothing reaches participants by accident:**
@@ -30,7 +31,7 @@ Read section 7, "Safety controls", before your first shift.
 | **Senders** | The personas: username (`cnn`), display name ("CNN Breaking News"). They are also the participants' address book. |
 | **People & logins** | Teams, participants, and their logins (create, reset password, disable, printable credential sheet). |
 | **Log** | Every delivery the app made, with content and status, plus the activity log of every action. |
-| **Settings** | Footer, subject prefix, team-to-team messaging, attachment limit, email-channel options, grace period, **live sending switch**, backup and restore. |
+| **Settings** | **Delivery channel**, footer, subject prefix, team-to-team messaging, attachment limit, email options, grace period, **live sending switch**, backup and restore. |
 | **Help** | This manual. |
 
 The status bar under the tabs shows the Nairobi clock, **Live disarmed** (green) or **LIVE ARMED** (red), **ALL SENDING PAUSED** when paused, when the scheduler last ran (red if it stopped), the next inject due, counts of overdue and failed injects, and the **Pause all sending** button.
@@ -79,7 +80,7 @@ Active senders are the participants' **address book**: they can write to any of 
 ### 3.5 Go through the injects
 Filter **Injects** by day and open each one:
 - **Send at:** the real (Nairobi) time; the MEL's scenario time is separate.
-- **Channel:** *In-app inbox* or *Email (Resend)*. Use email only where the exercise really needs participants' own mailboxes.
+- **Channel:** set for all injects by Settings → Delivery channel; the inject page shows which one applies. Only in *Per inject* mode can you choose here.
 - **Sender username / name**, **Recipients** (*one per team*, *one per participant* — lands in that person's team mailbox addressed to them —, *everyone*), teams to leave out.
 - **Subject and body:** plain text; `{team}`, `{team_name}`, `{name}`, `{first_name}` are filled per message.
 - **Preview** (right): exactly what each team gets. **Clear every orange warning.**
@@ -87,9 +88,15 @@ Filter **Injects** by day and open each one:
 
 Bulk: tick injects in the list and use **Schedule / Back to draft / Cancel / Shift by N min / Channel: In-app | Email**.
 
-### 3.6 Rehearse (at least once) — section 4.
+### 3.6 Prepare the backup channel
+Even if you plan to use email, make SIMEX Mail ready so you can switch in a minute:
+1. **People & logins:** check every participant is in the right team and create their logins (one by one or by pasting the roster). Passwords are shown once: print the **credentials sheet** and keep it with ExCon.
+2. Sign in once as a test participant (or use **Team inboxes → View as team**) to see what teams would see.
+3. Note the address to give teams: **https://ops.simex.kobolabs.dev** (they land in their mailbox after signing in).
 
-### 3.7 Take a backup
+### 3.7 Rehearse (at least once) — section 4.
+
+### 3.8 Take a backup
 **Settings → Download backup.** One file with everything: injects, attachments, mailboxes, logins, grades.
 
 ---
@@ -114,7 +121,7 @@ To rehearse the whole loop, sign in as your Test team login (another browser or 
 ### 5.1 Start of each day
 1. Status bar: the scheduler ran seconds ago (if it says "is the worker running?", see 8).
 2. **Injects** for today: everything that should go out is **scheduled**; shift times if the exercise runs late.
-3. Hand out (or re-check) logins; teams sign in at **https://inbox.simex.kobolabs.dev** and keep the tab open.
+3. If you deliver by SIMEX Mail: hand out (or re-check) logins; teams sign in at **https://ops.simex.kobolabs.dev** and keep the tab open.
 4. **Settings → Live sending:** type `SEND LIVE`, **Arm live sending**.
 
 ### 5.2 Watching deliveries
@@ -140,6 +147,16 @@ Write rubrics as observable behaviour ("acknowledged within 30 min", "named the 
 **Settings → Disarm** (unless injects run overnight), **Download backup**, deal with overdue or failed injects.
 
 ---
+
+### 5.6 Switching to SIMEX Mail when email has problems
+Switch when teams don't receive emails (spam folders, bounces, the venue network blocking mail, Resend down or out of quota) and it can't be fixed quickly.
+1. **Pause all sending** (top right) while you decide, so nothing half-goes.
+2. **Settings → Delivery channel → SIMEX Mail**, type `SWITCH`, **Apply**. The status bar now says *via SIMEX Mail*.
+3. Tell the teams (in person or by phone): open **https://ops.simex.kobolabs.dev** and sign in with the login on their credentials sheet.
+4. Re-deliver what they missed: open the injects that went out by email but didn't arrive, **Back to draft** if they show *sent*, then **Send now** — they now land in the team mailboxes. (Or select them in the list and **Schedule** with a new time.)
+5. **Resume sending.** Everything not yet sent goes to the mailboxes from now on.
+
+Replies to emails sent earlier keep arriving on the Replies tab. To go back to email, switch the channel back the same way. **Per inject** mode lets you mix: e.g. personal emails (attestations) by email, everything else in-app.
 
 ## 6. After the exercise
 Export grades and a final backup, disarm, and disable the participant logins (People & logins) once the debrief no longer needs them.
@@ -167,7 +184,8 @@ Export grades and a final backup, disarm, and disable the participant logins (Pe
 | Inject **failed / partial** | Open it, read the error, fix it, "only retry the failed deliveries". |
 | A reply is "unmatched" or a "guess" | Open it and set the inject and team under **Match**. |
 | Email channel: "Mailer: log" | `RESEND_API_KEY` is missing; email injects are only logged. In-app is unaffected. |
-| Need to undo a big mistake | Settings → Restore a backup (type RESTORE). It replaces everything, including logins. |
+| Emails aren't arriving / bouncing | Log → the email → delivery status. If it can't be fixed quickly, switch to SIMEX Mail (5.6). |
+| Need to undo a big mistake | Settings → Restore a backup (type RESTORE). A backup of this app replaces everything, including logins. A backup from the first (email-only) version of the app is merged in instead: settings, senders, roster, injects with attachments, rubrics and grades. |
 
 ## 9. Quick reference: a day of the exercise
 1. Status bar OK (scheduler recent).

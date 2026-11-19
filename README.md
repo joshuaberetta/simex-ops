@@ -1,11 +1,21 @@
 # SIMEX ops
 
-Web app for UNDAC SIMEX exercise control at **https://ops.simex.kobolabs.dev**. Personas send from and receive at `@simex.kobolabs.dev`. The first tab schedules
-and sends the email injects through [Resend](https://resend.com). The other tabs (test runs,
-senders, people, log, settings) support it, and more tools can be added as tabs later.
+Web app for UNDAC SIMEX exercise control at **https://ops.simex.kobolabs.dev**: schedules and delivers the injects, collects the teams' replies, and grades them.
 
-It is the hosted companion of the local knowledge base in `~/code/undac-simex`. Exercise content
-never goes into this repo. It reaches the app only through the import page.
+**Two delivery channels, one switch** (Settings → Delivery channel):
+- **Email (Resend)**, the main flow. Personas send from and receive at `@simex.kobolabs.dev`.
+- **SIMEX Mail**, the backup if email has problems: in-app team mailboxes with a webmail-style client and participant logins. No mail server is involved.
+
+| Where | What |
+|---|---|
+| `web/` | **The app in production** (Django): both channels, participant logins, "view as team", scheduler worker. Read `web/README.md`; the operator manual is `web/docs/MANUAL.md` (in the app under Help), the participant guide `web/docs/PARTICIPANT_GUIDE.md`. Spec: `.do/app.yaml` (web + scheduler worker). |
+| `app/` | The first version (FastAPI, email only), kept for rollback. Spec: `.do/app-fastapi.yaml`; its manual is `docs/MANUAL.md`. Its backup file can be loaded into the Django app (Settings → Restore merges it in). |
+
+Exercise content never goes into this repo; it reaches the app only through the import page.
+
+---
+
+The rest of this file describes the first (FastAPI) version in `app/`.
 
 **Operator manual:** [docs/MANUAL.md](docs/MANUAL.md), also in the app under **Help**.
 

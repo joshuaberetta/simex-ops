@@ -1,4 +1,6 @@
-# SIMEX ops: operator manual for the email injects
+# SIMEX ops (first version, FastAPI): operator manual for the email injects
+
+> This manual is for the first, email-only version in `app/`. The app in production is the Django version in `web/`; its manual is `web/docs/MANUAL.md` (Help tab in the app).
 
 For ExCon members who schedule and send the SIMEX email injects, follow the replies and grade them. The app is at **https://ops.simex.kobolabs.dev** (login `undac`). All times in the app are **Nairobi time**.
 

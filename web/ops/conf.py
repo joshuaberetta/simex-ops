@@ -14,7 +14,11 @@ DEFAULTS = {
     "paused": "0",
     "team_to_team": "0",  # participants may write to other teams' inboxes
     "max_upload_mb": "10",  # participants' attachments
+    # How injects are delivered: "email" (Resend, the main flow), "inapp" (SIMEX Mail, the
+    # backup if email has problems) or "per_inject" (each inject's own channel field).
+    "channel_mode": "email",
 }
+CHANNEL_MODES = {"email": "Email (Resend)", "inapp": "SIMEX Mail (in-app inboxes)", "per_inject": "Per inject"}
 
 
 def get(key):
@@ -37,3 +41,9 @@ def put(key, value):
 
 def flag(key):
     return get(key) == "1"
+
+
+def channel_for(inj):
+    """The channel an inject is delivered by right now (the global switch wins)."""
+    mode = get("channel_mode")
+    return inj.channel if mode == "per_inject" else ("inapp" if mode == "inapp" else "email")

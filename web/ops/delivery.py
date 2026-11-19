@@ -268,7 +268,7 @@ def send_oneoff(inj, address="", all_targets=False, user=""):
         m = new_message(inj, d, "oneoff", f"oneoff-{inj.id}-{uuid.uuid4().hex}")
         m.save()
         msgs.append(m)
-    audit("send_test", f"{inj.mel_id} -> {'Test team' if inj.channel == 'inapp' else address} ({len(msgs)})", user)
+    audit("send_test", f"{inj.mel_id} -> {'Test team' if inj.effective_channel == 'inapp' else address} ({len(msgs)})", user)
     deliver(msgs, respect_pause=False)
     return msgs, warnings
 

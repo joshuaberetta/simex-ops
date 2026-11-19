@@ -70,6 +70,7 @@ urlpatterns = [
     path("settings/", x.settings_page),
     path("settings/arm/", x.settings_arm),
     path("settings/pause/", x.settings_pause),
+    path("settings/channel/", x.settings_channel),
     path("settings/domain/", x.settings_domain),
     path("settings/backup/", x.settings_backup),
     path("settings/restore/", x.settings_restore),

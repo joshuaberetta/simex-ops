@@ -4,7 +4,7 @@ from django.conf import settings
 from django.db.models import Count
 from django.utils import timezone
 
-from . import conf
+from . import conf, mailer
 from .access import is_excon, participant_of
 from .models import Inject, Mail, Response
 
@@ -22,7 +22,8 @@ def status(request):
         except ValueError:
             tick = None
         return {
-            "excon": True, "cfg": cfg, "status_counts": counts, "MAIL_DOMAIN": settings.MAIL_DOMAIN,
+            "excon": True, "cfg": cfg, "channel_mode": cfg.get("channel_mode", "email"), "mailer_name": mailer.get().name,
+            "CHANNEL_MODES": conf.CHANNEL_MODES, "status_counts": counts, "MAIL_DOMAIN": settings.MAIL_DOMAIN,
             "failed_count": counts.get("failed", 0) + counts.get("partial", 0),
             "next_inject": Inject.objects.filter(status="scheduled", send_at__isnull=False).order_by("send_at").first(),
             "new_responses": Response.objects.filter(status="new", kind="live").count(),

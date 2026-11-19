@@ -28,7 +28,8 @@
   </div>
   <div class="row">
     <label>Channel
-      <select name="channel">{% for k, v in CHANNELS.items %}<option value="{{ k }}" {% if k == inj.channel %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+      {% if channel_mode == 'per_inject' %}<select name="channel">{% for k, v in CHANNELS.items %}<option value="{{ k }}" {% if k == inj.channel %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+      {% else %}<input type="hidden" name="channel" value="{{ inj.channel }}"><span class="pill {% if channel_mode == 'inapp' %}warn{% else %}safe{% endif %}">{% if channel_mode == 'inapp' %}SIMEX Mail{% else %}Email{% endif %}</span> <span class="hint">set for all injects in <a href="/settings/#channel">Settings</a></span>{% endif %}
       <span class="hint">In-app: lands in the team inboxes on this site. Email: sent through Resend.</span>
     </label>
     <label>Sender username
@@ -46,7 +47,7 @@
       {% for t in teams %}{% if t.active %}<label class="chk"><input type="checkbox" name="team_ids" value="{{ t.id }}" {% if t.id in selected_teams %}checked{% endif %}> {{ t.name }}</label>{% endif %}{% endfor %}
     </fieldset>
   </div>
-  <details class="emailonly" {% if inj.channel == 'email' %}open{% endif %}><summary class="small">Email options (reply-to, extra recipients)</summary>
+  <details class="emailonly" {% if inj.effective_channel == 'email' %}open{% endif %}><summary class="small">Email options (reply-to, extra recipients)</summary>
   <div class="row">
     <label>Reply-to <input name="reply_to" value="{{ inj.reply_to|default:'' }}" placeholder="empty = replies come into the app"></label>
     <label>Extra To <input name="to_extra" value="{{ inj.to_extra|default:'' }}" placeholder="addresses, comma-separated"></label>
@@ -112,12 +113,12 @@
 <div class="card">
   <h3>Test</h3>
   <form method="post" action="/injects/{{ inj.id }}/test/" class="form">{% csrf_token %}
-    {% if inj.channel == 'email' %}
+    {% if inj.effective_channel == 'email' %}
     <label>Send a copy to <input type="email" name="address" value="{{ cfg.test_address }}" required></label>
     {% endif %}
     <label class="chk"><input type="checkbox" name="all" value="1"> one per recipient group ({{ drafts|length }})</label>
     <button class="btn">Send test</button>
-    <p class="hint">{% if inj.channel == 'email' %}Subject starts with [TEST] and a banner lists the real recipients.{% else %}Lands in the <a href="/inboxes/?team={{ test_team_id }}">Test team inbox</a> with [TEST] in the subject.{% endif %} Does not change the inject's status.</p>
+    <p class="hint">{% if inj.effective_channel == 'email' %}Subject starts with [TEST] and a banner lists the real recipients.{% else %}Lands in the <a href="/inboxes/?team={{ test_team_id }}">Test team inbox</a> with [TEST] in the subject.{% endif %} Does not change the inject's status.</p>
   </form>
 </div>
 
@@ -132,7 +133,7 @@
 </div>
 
 <div class="card">
-  <h3>Preview <span class="muted">{{ drafts|length }} {% if inj.channel == 'inapp' %}inbox item{% else %}email{% endif %}{{ drafts|length|pluralize }}</span></h3>
+  <h3>Preview <span class="muted">{{ drafts|length }} {% if inj.effective_channel == 'inapp' %}inbox item{% else %}email{% endif %}{{ drafts|length|pluralize }}</span></h3>
   {% for w in warnings %}<p class="warn small">{{ w }}</p>{% endfor %}
   {% for d in drafts %}
   <details {% if forloop.first %}open{% endif %}>

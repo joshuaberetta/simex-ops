@@ -15,6 +15,9 @@ def _setup(db, settings):
     from ops import mailer
     mailer.set_mailer(mailer.LogMailer())
     call_command("seed_simex", verbosity=0)
+    # Most tests exercise each inject's own channel; the global switch has its own tests.
+    from ops import conf
+    conf.put("channel_mode", "per_inject")
 
 
 @pytest.fixture
