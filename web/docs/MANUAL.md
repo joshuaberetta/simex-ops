@@ -52,6 +52,10 @@ The status bar under the tabs shows the Nairobi clock, **Live disarmed** (green)
 
 Only participant-facing fields are imported. Expected outcomes, story, theme, key figures and the ExCon description never enter the app. Re-importing updates what changed in the MEL, keeps your edits (unless you tick "Overwrite my local edits") and never touches what was already delivered.
 
+**When the MEL changes** (as often as you like, also during the exercise): download the sheet again and repeat steps 2–3. Injects are matched by **Inject #**, so ask the MEL authors never to renumber or reuse one (a renumbered inject arrives as a new one, and the old one stays).
+- A changed **send time** also fixes the status: a draft that had no time becomes **scheduled**, an **overdue** inject moved to a later time is **scheduled** again, and an inject whose time was removed goes back to **draft**. The check page shows these as e.g. *overdue → scheduled*. A draft you unscheduled yourself stays a draft.
+- Injects that are **no longer in the file** are listed under *Not in this file*. They are still sent unless you tick **Cancel the … unsent inject(s) that are no longer in this file** before applying. Injects you created here (not imported) and injects already sent are never cancelled.
+
 ### 3.2 Teams, participants and logins
 **People & logins.** A new app has placeholder teams A–D (with placeholder people, no logins) and the **Test team**.
 

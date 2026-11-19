@@ -220,8 +220,30 @@ def set_value(inj, field, value):
     setattr(inj, field, value)
 
 
+LOCKED = {"sending", "sent", "partial"}  # never rewrite what has (partly) gone out
+DROPPABLE = {"draft", "scheduled", "overdue"}  # not in the file any more -> may be cancelled
+
+
+def status_after(status, old_send_at, new_send_at, now):
+    """Status once an import has changed send_at (naive UTC ISO strings): a draft that only
+    lacked a time gets scheduled, an overdue inject moved to a later time is scheduled again,
+    and an inject whose time was removed goes back to draft."""
+    if not new_send_at:
+        return "draft" if status in ("scheduled", "overdue") else status
+    future = datetime.datetime.fromisoformat(new_send_at).replace(tzinfo=timezone.utc) > now
+    if future and (status == "overdue" or (status == "draft" and not old_send_at)):
+        return "scheduled"
+    return status
+
+
+def _droppable(inj):
+    """Came from an import (not created by hand) and has not gone out."""
+    return inj.imported is not None and inj.status in DROPPABLE
+
+
 def plan(records):
     """What an import would do: per inject, new / unchanged / update / conflict."""
+    now = datetime.datetime.now(timezone.utc)
     existing = {i.mel_id: i for i in Inject.objects.all()}
     rows = []
     for r in records:
@@ -242,18 +264,22 @@ def plan(records):
         action = "unchanged" if not changes else ("conflict" if any(c["local_edit"] for c in changes) else "update")
         if changes and all(c["field"] == "seq" for c in changes):
             action = "unchanged"  # only moved within the sheet
+        new_status = None
+        sa = next((c for c in changes if c["field"] == "send_at"), None)
+        if sa and inj.status not in LOCKED:
+            after = status_after(inj.status, sa["current"], sa["new"], now)
+            new_status = after if after != inj.status else None
         rows.append({"mel_id": r["mel_id"], "action": action, "subject": inj.subject, "changes": changes,
-                     "status": inj.status})
-    missing = [{"mel_id": i.mel_id, "subject": i.subject, "status": i.status} for i in existing.values()]
+                     "status": inj.status, "new_status": new_status})
+    missing = [{"mel_id": i.mel_id, "subject": i.subject, "status": i.status, "droppable": _droppable(i)}
+               for i in existing.values()]
     return rows, missing
 
 
-LOCKED = {"sending", "sent", "partial"}  # never rewrite what has (partly) gone out
-
-
-def apply(records, overwrite_local=False, user=""):
+def apply(records, overwrite_local=False, cancel_missing=False, user=""):
+    now = datetime.datetime.now(timezone.utc)
     existing = {i.mel_id: i for i in Inject.objects.all()}
-    counts = {"new": 0, "updated": 0, "kept_local": 0, "skipped_sent": 0}
+    counts = {"new": 0, "updated": 0, "kept_local": 0, "skipped_sent": 0, "rescheduled": 0, "cancelled": 0}
     for r in records:
         inj = existing.get(r["mel_id"])
         if not inj:
@@ -276,6 +302,12 @@ def apply(records, overwrite_local=False, user=""):
             if new != cur and (not local_edit or overwrite_local):
                 set_value(inj, f, new)
                 changed = True
+                if f == "send_at":
+                    after = status_after(inj.status, cur, new, now)
+                    if after != inj.status:
+                        audit("import_status", f"{inj.mel_id}: {inj.status} -> {after}", user)
+                        inj.status = after
+                        counts["rescheduled"] += 1
             elif new != cur:
                 counts["kept_local"] += 1
             snap[f] = new
@@ -283,6 +315,14 @@ def apply(records, overwrite_local=False, user=""):
         inj.save()
         if changed:
             counts["updated"] += 1
+    if cancel_missing:
+        ids = {r["mel_id"] for r in records}
+        for inj in existing.values():
+            if inj.mel_id not in ids and _droppable(inj):
+                inj.status = "cancelled"
+                inj.save()
+                audit("import_cancel", f"{inj.mel_id}: not in the file", user)
+                counts["cancelled"] += 1
     ensure_senders(records)
     audit("import", json.dumps(counts), user)
     return counts

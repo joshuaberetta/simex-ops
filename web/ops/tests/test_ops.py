@@ -96,6 +96,43 @@ def test_reimport_keeps_local_edits(excon):
     assert Inject.objects.get(mel_id="1-15").subject == "MEL v2"
 
 
+def _at(days):
+    d = timezone.localtime() + timedelta(days=days)
+    return {"send_date": d.strftime("%Y-%m-%dT00:00:00"), "send_time": "09:00"}
+
+
+def test_reimport_send_time_fixes_status(excon):
+    items = [{**SAMPLE[0], **_at(2)}, {**SAMPLE[1], "send_date": None}, {**SAMPLE[1], "inject_id": "3-14", **_at(3)},
+             {**SAMPLE[1], "inject_id": "3-15", **_at(4)}]
+    do_import(excon, items)
+    assert Inject.objects.get(mel_id="3-13").status == "draft"  # no time yet
+    Inject.objects.filter(mel_id="1-15").update(status="overdue")
+    Inject.objects.filter(mel_id="3-15").update(status="draft")  # unscheduled by hand
+    items[0].update(_at(5))
+    items[1].update(_at(1))
+    items[2]["send_date"] = None
+    items[3].update(_at(6))
+    r = excon.post("/import/", {"file": _upload(json.dumps(items).encode())})
+    assert "overdue → <b>scheduled</b>" in r.content.decode()
+    do_import(excon, items)
+    st = dict(Inject.objects.values_list("mel_id", "status"))
+    assert st == {"1-15": "scheduled", "3-13": "scheduled", "3-14": "draft", "3-15": "draft"}
+
+
+def test_reimport_can_cancel_injects_dropped_from_file(excon):
+    do_import(excon, SAMPLE)
+    Inject.objects.create(mel_id="X-1", subject="Made here", status="scheduled", send_at=timezone.now() + timedelta(days=1))
+    r = excon.post("/import/", {"file": _upload(json.dumps(SAMPLE[1:]).encode())})
+    assert "Cancel the <b>1</b> unsent" in r.content.decode()
+    do_import(excon, SAMPLE[1:])
+    assert Inject.objects.get(mel_id="1-15").status == "scheduled"  # kept unless asked
+    r = excon.post("/import/", {"file": _upload(json.dumps(SAMPLE[1:]).encode())})
+    bid = re.search(rb"/import/(\d+)/apply/", r.content).group(1).decode()
+    excon.post(f"/import/{bid}/apply/", {"cancel_missing": "1"})
+    st = dict(Inject.objects.values_list("mel_id", "status"))
+    assert st == {"1-15": "cancelled", "3-13": "scheduled", "X-1": "scheduled"}
+
+
 # --- in-app delivery & isolation -------------------------------------------------------------------
 
 def test_inapp_live_delivery_needs_arming_and_is_idempotent(excon):

@@ -340,6 +340,7 @@ def import_page(request):
         batch = ImportBatch.objects.create(filename=up.name, payload=records)
         rows, missing = importer.plan(records)
         summary = {k: sum(1 for r in rows if r["action"] == k) for k in ("new", "update", "conflict", "unchanged")}
+        summary["droppable"] = sum(1 for m in missing if m["droppable"])
         return render(request, "ops/import_plan.html", {"tab": "injects", "batch": batch, "rows": rows,
                                                         "missing": missing, "summary": summary})
     batches = ImportBatch.objects.order_by("-id")[:10]
@@ -353,11 +354,14 @@ def import_apply(request, bid):
     if not batch or batch.applied:
         messages.error(request, "That import was already applied or has expired.")
         return redirect("/import/")
-    counts = importer.apply(batch.payload, overwrite_local=request.POST.get("overwrite") == "1", user=_u(request))
+    counts = importer.apply(batch.payload, overwrite_local=request.POST.get("overwrite") == "1",
+                            cancel_missing=request.POST.get("cancel_missing") == "1", user=_u(request))
     batch.applied = True
     batch.save()
     messages.success(request, f"Imported: {counts['new']} new, {counts['updated']} updated, {counts['kept_local']} "
-                              f"local edits kept, {counts['skipped_sent']} already sent (left alone).")
+                              f"local edits kept, {counts['skipped_sent']} already sent (left alone), "
+                              f"{counts['rescheduled']} status changed by a new send time, "
+                              f"{counts['cancelled']} cancelled (not in the file).")
     return redirect("/injects/")
 
 
