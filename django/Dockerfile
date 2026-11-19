@@ -6,7 +6,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 # Collected with production settings so the hashed-name manifest matches what runs.
 RUN PUBLIC_URL=https://build.invalid SECRET_KEY=build-only python manage.py collectstatic --noinput \
- && useradd --system --uid 10001 simex && chown -R simex /srv
+ && useradd --system --create-home --uid 10001 simex && chown -R simex /srv
 USER simex
 EXPOSE 8080
 # web: migrate, make sure the ExCon login exists, then serve. The scheduler runs as a
