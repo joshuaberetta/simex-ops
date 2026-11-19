@@ -243,3 +243,13 @@ def test_backup_roundtrip(client):
     with SessionLocal() as s:
         inj = s.query(Inject).filter_by(mel_id="1-15").one()
         assert inj.attachments[0].data == b"%PDF-1 test"
+
+
+def test_attachments_are_sent(client):
+    do_import(client, SAMPLE)
+    client.post("/injects/1/attachments", files={"files": ("1-15 Plan.pdf", b"%PDF-1 plan", "application/pdf")})
+    client.post("/injects/1/test", data={"address": "me@kobotoolbox.org"})
+    payload, _ = mailer.get().sent[0]
+    import base64
+    assert payload["attachments"] == [{"filename": "1-15 Plan.pdf",
+                                       "content": base64.b64encode(b"%PDF-1 plan").decode()}]

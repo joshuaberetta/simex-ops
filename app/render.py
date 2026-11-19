@@ -156,6 +156,9 @@ def build(s, inj, cfg):
         d = Draft(target=target, from_addr=from_addr, reply_to=reply_to, to=_dedupe(to), cc=_dedupe(cc),
                   bcc=_dedupe(this_bcc), subject=subject, body=fill(inj.body or "", ctx), footer=footer,
                   attachment_ids=[a.id for a in inj.attachments])
+        total = sum(a.size for a in inj.attachments)
+        if total > 28 * 1024 * 1024:  # Resend: 40 MB per email after base64 (+33%)
+            d.warnings.append(f"Attachments total {total / 1e6:.0f} MB: over Resend's 40 MB per email once encoded.")
         if not LOCAL.match(local):
             d.warnings.append(f"Sender username '{local}' is not a valid email username.")
         if not d.to:
