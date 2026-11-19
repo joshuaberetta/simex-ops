@@ -374,3 +374,18 @@ body.readonly .gm-hover, body.readonly .gm-tb-selected { display: none !importan
 }
 @keyframes gm-pop { from { transform: translateY(20px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .gm-snackbar.loud { animation: none; } }
+
+/* phones and the home-screen app: visible height, clear of the home indicator and the status bar */
+body.gm { height: var(--app-h, 100%); }
+@media (max-width: 760px) {
+  .gm-fab { bottom: calc(20px + env(safe-area-inset-bottom)); }
+  .gm-snackbar { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); flex-wrap: wrap; gap: 8px 16px; }
+  .gm-thread { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+  .gm-list { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 760px) and (display-mode: standalone) {
+  /* the status bar blurs what is just below it: keep the search bar clear of it */
+  body.gm { padding-top: 12px; }
+  .gm-side { top: 68px; }
+  body.side-open .gm-scrim { inset: 68px 0 0 0; }
+}

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{% block title %}Inbox{% endblock %} - {{ team.name }} - SIMEX Mail</title>
 <link rel="stylesheet" href="{% static 'ops/mail.css' %}">
 <link rel="manifest" href="/inbox/manifest.webmanifest">
@@ -10,6 +10,14 @@
 <meta name="apple-mobile-web-app-title" content="SIMEX Mail">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#f6f8fc">
+<script>
+// iPhone home-screen app: 100% height there is the whole screen, status bar included, which pushed
+// the bottom (Compose, alerts) off screen. Size the page to what is actually visible instead.
+(function () {
+  var fit = function () { document.documentElement.style.setProperty("--app-h", window.innerHeight + "px"); };
+  fit(); window.addEventListener("resize", fit); window.addEventListener("orientationchange", fit);
+})();
+</script>
 </head>
 <body class="gm{% if readonly %} readonly{% endif %}">
 <header class="gm-top">
