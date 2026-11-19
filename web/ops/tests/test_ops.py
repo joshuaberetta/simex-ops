@@ -314,6 +314,32 @@ def test_bulk_roster_creates_logins(excon):
     assert c.get("/").url == "/inbox/"
 
 
+# --- mail host ---------------------------------------------------------------------------------------
+
+@pytest.fixture
+def mail_host(settings):
+    settings.PUBLIC_URL, settings.MAIL_URL, settings.MAIL_HOST = "https://ops.x.test", "https://mail.x.test", "mail.x.test"
+    settings.ALLOWED_HOSTS = ["ops.x.test", "mail.x.test", "testserver"]
+
+
+def test_mail_host_serves_only_simex_mail(mail_host, excon):
+    anon = Client(HTTP_HOST="mail.x.test")
+    r = anon.get("/login/")
+    assert r.status_code == 200 and b"to continue to SIMEX Mail" in r.content
+    assert b"to continue to SIMEX Mail" not in Client(HTTP_HOST="ops.x.test").get("/login/").content
+    r = anon.post("/login/", {"username": "nobody", "password": "x"})
+    assert b"Wrong username or password" in r.content and b'data-step="password"' in r.content
+    assert anon.get("/").url == "/login/"
+    assert anon.get("/injects/?day=1").url == "https://ops.x.test/injects/?day=1"
+    pa = participant("a")
+    assert pa.get("/inbox/?folder=sent", HTTP_HOST="ops.x.test").url == "https://mail.x.test/inbox/?folder=sent"
+    assert pa.get("/inbox/", HTTP_HOST="mail.x.test").status_code == 200
+    assert pa.get("/", HTTP_HOST="ops.x.test").url == "/inbox/"  # then on to the mail host
+    team = Team.objects.get(code="a")
+    assert excon.get(f"/inbox/as/{team.id}/", HTTP_HOST="ops.x.test").status_code == 200
+    assert excon.get(f"/inbox/as/{team.id}/", HTTP_HOST="mail.x.test").url == f"https://ops.x.test/inbox/as/{team.id}/"
+
+
 # --- email channel ------------------------------------------------------------------------------------
 
 def test_email_channel_live_and_reply_webhook(excon):

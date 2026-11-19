@@ -1,0 +1,72 @@
+/* SIMEX Mail sign-in, laid out like the webmail sign-in page participants know: a two-step card
+   (username, then password). System fonts only, no external assets. */
+:root {
+  --bg: #f0f4f9; --ink: #1f1f1f; --ink2: #444746; --line: #747775; --blue: #0b57d0; --blue-hover: #0842a0;
+  --red: #b3261e; --font: "Google Sans", Roboto, "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body.sl { margin: 0; background: var(--bg); color: var(--ink); font: 14px/20px var(--font); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; min-height: 100vh; padding: 24px 0; }
+[hidden] { display: none !important; }
+button { font: inherit; }
+
+.sl-card { background: #fff; border-radius: 28px; padding: 36px; width: 1040px; max-width: calc(100% - 32px);
+  display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; min-height: 384px; }
+.sl-head h1 { font-size: 36px; line-height: 44px; font-weight: 400; margin: 24px 0 0; }
+.sl-sub { font-size: 16px; line-height: 24px; margin: 16px 0 0; }
+.sl-logo { display: block; }
+
+.sl-chip { display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; padding: 4px 8px 4px 4px; border: 1px solid var(--line);
+  border-radius: 16px; background: #fff; color: var(--ink); font-size: 14px; font-weight: 500; cursor: pointer; max-width: 100%; }
+.sl-chip:hover { background: #f2f2f2; }
+.sl-chip-av { width: 24px; height: 24px; border-radius: 50%; background: #e8eaed; color: #5f6368; display: inline-flex;
+  align-items: center; justify-content: center; }
+.sl-chip [data-chip-name] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.sl-form { padding-top: 68px; display: flex; flex-direction: column; }
+.sl-field { position: relative; margin-top: 8px; }
+.sl-field input { width: 100%; height: 56px; padding: 16px 15px 0; padding-top: 0; border: 1px solid var(--line); border-radius: 4px;
+  font: 16px var(--font); color: var(--ink); background: #fff; outline: none; }
+.sl-field input:focus { border: 2px solid var(--blue); padding: 0 14px; }
+.sl-field label { position: absolute; left: 11px; top: 16px; padding: 0 4px; background: #fff; color: var(--ink2); font-size: 16px;
+  line-height: 24px; pointer-events: none; transition: transform .15s, font-size .15s, color .15s; transform-origin: left top; }
+.sl-field input:focus + label, .sl-field input:not(:placeholder-shown) + label { transform: translateY(-26px); font-size: 12px; }
+.sl-field input:focus + label { color: var(--blue); }
+.sl-field.invalid input { border: 2px solid var(--red); padding: 0 14px; }
+.sl-field.invalid label, .sl-field.invalid input:focus + label { color: var(--red); }
+.sl-error { display: flex; align-items: center; gap: 8px; color: var(--red); font-size: 12px; line-height: 16px; margin-top: 8px; }
+.sl-banner { font-size: 14px; margin: 0 0 8px; }
+
+.sl-link { align-self: flex-start; border: 0; background: none; padding: 0; margin-top: 12px; color: var(--blue); font-weight: 500;
+  cursor: pointer; border-radius: 4px; }
+.sl-link:hover { text-decoration: underline; }
+.sl-hint { background: #f0f4f9; border-radius: 8px; padding: 10px 12px; margin: 12px 0 0; color: var(--ink2); }
+.sl-note { color: var(--ink2); margin: 40px 0 0; }
+.sl-check { display: flex; align-items: center; gap: 12px; margin-top: 16px; cursor: pointer; }
+.sl-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--blue); }
+
+.sl-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: auto; padding-top: 40px; }
+.sl-actions .sl-link { margin: 0; padding: 10px 12px; align-self: center; border-radius: 20px; }
+.sl-actions .sl-link:hover { text-decoration: none; background: rgba(11,87,208,.08); }
+.sl-btn { height: 40px; padding: 0 24px; border: 0; border-radius: 20px; background: var(--blue); color: #fff; font-weight: 500; cursor: pointer; }
+.sl-btn:hover { background: var(--blue-hover); box-shadow: 0 1px 2px rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.15); }
+
+.sl-foot { width: 1040px; max-width: calc(100% - 32px); display: flex; justify-content: space-between; padding: 12px 8px 0; font-size: 12px;
+  color: var(--ink2); }
+.sl-foot-links { display: flex; gap: 32px; }
+
+/* two steps (script on); without script both fields show on one page */
+.js .sl-card[data-step="username"] .sl-only-password,
+.js .sl-card[data-step="password"] .sl-only-username { display: none; }
+html:not(.js) h1.sl-only-password, html:not(.js) .sl-chip, html:not(.js) .sl-actions .sl-link { display: none; }
+
+@media (max-width: 840px) {
+  .sl-card { grid-template-columns: 1fr; padding: 24px; min-height: 0; }
+  .sl-form { padding-top: 24px; }
+}
+@media (max-width: 600px) {
+  body.sl { background: #fff; justify-content: flex-start; }
+  .sl-card { max-width: 100%; border-radius: 0; }
+  .sl-foot { max-width: 100%; padding: 12px 24px; }
+}

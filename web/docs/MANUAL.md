@@ -1,6 +1,6 @@
 # SIMEX ops: operator manual
 
-For ExCon members who deliver the SIMEX injects, watch the team mailboxes, answer in character and grade the responses. The app is at **https://ops.simex.kobolabs.dev**. ExCon signs in as `undac` (or their own staff login); participants sign in with the team logins you hand out. All times are **Nairobi time**.
+For ExCon members who deliver the SIMEX injects, watch the team mailboxes, answer in character and grade the responses. The app is at **https://ops.simex.kobolabs.dev**; ExCon signs in there as `undac` (or their own staff login). Participants use SIMEX Mail at **https://mail.simex.kobolabs.dev** (a webmail-style sign-in page, then their team's mailbox) with the team logins you hand out. The two addresses share one sign-in: a participant who signs in at ops. is sent on to mail., and ExCon pages opened on mail. go back to ops. All times are **Nairobi time**.
 
 Read section 7, "Safety controls", before your first shift.
 
@@ -58,7 +58,7 @@ Only participant-facing fields are imported. Expected outcomes, story, theme, ke
    Jane Doe,jane@example.org,a,tl
    John Roe,,a
    ```
-2. The page then shows **New logins: shown once**: username and password for each new person. Click **Printable sheet** and print it (one slip per person), or copy it somewhere safe. Passwords are not stored readable; if one is lost, use **reset password** on that person.
+2. The page then shows **New logins: shown once**: username and password for each new person. Click **Printable sheet** and print it (one slip per person, with the SIMEX Mail address https://mail.simex.kobolabs.dev), or copy it somewhere safe. Passwords are not stored readable; if one is lost, use **reset password** on that person.
 3. Each team shares **one mailbox**: everyone in Team A sees Team A's mail, and what one member sends appears in everyone's *Sent*, with the sender's name.
 4. Give yourself a login in the **Test team** (Add person → team "Test team" → create login) to try SIMEX Mail as a participant.
 
@@ -124,7 +124,7 @@ To rehearse the whole loop, sign in as your Test team login (another browser or 
 ### 5.1 Start of each day
 1. Status bar: the scheduler ran seconds ago (if it says "is the worker running?", see 8).
 2. **Injects** for today: everything that should go out is **scheduled**; shift times if the exercise runs late.
-3. If you deliver by SIMEX Mail: hand out (or re-check) logins; teams sign in at **https://ops.simex.kobolabs.dev** and keep the tab open.
+3. If you deliver by SIMEX Mail: hand out (or re-check) logins; teams sign in at **https://mail.simex.kobolabs.dev** and keep the tab open.
 4. **Settings → Live sending:** type `SEND LIVE`, **Arm live sending**.
 
 ### 5.2 Watching deliveries
@@ -159,7 +159,7 @@ Write rubrics as observable behaviour ("acknowledged within 30 min", "named the 
 Switch when teams don't receive emails (spam folders, bounces, the venue network blocking mail, Resend down or out of quota) and it can't be fixed quickly.
 1. **Pause all sending** (top right) while you decide, so nothing half-goes.
 2. **Settings → Delivery channel → SIMEX Mail**, type `SWITCH`, **Apply**. The status bar now says *via SIMEX Mail*.
-3. Tell the teams (in person or by phone): open **https://ops.simex.kobolabs.dev** and sign in with the login on their credentials sheet.
+3. Tell the teams (in person or by phone): open **https://mail.simex.kobolabs.dev** and sign in with the login on their credentials sheet.
 4. Re-deliver what they missed: open the injects that went out by email but didn't arrive, **Back to draft** if they show *sent*, then **Send now** — they now land in the team mailboxes. (Or select them in the list and **Schedule** with a new time.)
 5. **Resume sending.** Everything not yet sent goes to the mailboxes from now on.
 

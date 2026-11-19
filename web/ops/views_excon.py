@@ -635,7 +635,7 @@ def people_bulk(request):
 def credentials_sheet(request):
     """Printable sheet of the credentials just shown (posted back from the page; not stored)."""
     rows = json.loads(request.POST.get("rows") or "[]")
-    return render(request, "ops/credentials.html", {"rows": rows, "url": settings.PUBLIC_URL})
+    return render(request, "ops/credentials.html", {"rows": rows, "url": settings.MAIL_URL or settings.PUBLIC_URL})
 
 
 # --- inbox monitor (ExCon view of any team's inbox) ---------------------------------------------------

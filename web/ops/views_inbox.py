@@ -35,9 +35,12 @@ FOLDERS = [("inbox", "Inbox"), ("starred", "Starred"), ("sent", "Sent"), ("draft
 # --- auth & misc -----------------------------------------------------------------------------------
 
 class ThrottledLogin(LoginView):
-    """Login with a simple per-IP limit (10 failures per 10 minutes)."""
-    template_name = "ops/login.html"
+    """Login with a simple per-IP limit (10 failures per 10 minutes). On the mail host it looks
+    like the webmail sign-in page."""
     redirect_authenticated_user = True
+
+    def get_template_names(self):
+        return ["ops/mail/login.html" if getattr(self.request, "mail_host", False) else "ops/login.html"]
 
     def _key(self):
         ip = (self.request.META.get("HTTP_X_FORWARDED_FOR") or self.request.META.get("REMOTE_ADDR") or "").split(",")[0]

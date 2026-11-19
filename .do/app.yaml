@@ -30,6 +30,10 @@ domains:
   - domain: ops.simex.kobolabs.dev
     type: PRIMARY
     zone: kobolabs.dev
+  # Participants' SIMEX Mail (same app; MAIL_URL below). Sessions are shared via simex.kobolabs.dev.
+  - domain: mail.simex.kobolabs.dev
+    type: ALIAS
+    zone: kobolabs.dev
 envs:
   - { key: DATABASE_URL, scope: RUN_TIME, type: SECRET }
   - { key: SECRET_KEY, scope: RUN_AND_BUILD_TIME, type: SECRET }
@@ -39,6 +43,7 @@ envs:
   - { key: ANTHROPIC_API_KEY, scope: RUN_TIME, type: SECRET }
   - { key: APP_USERNAME, scope: RUN_TIME, value: "undac" }
   - { key: PUBLIC_URL, scope: RUN_TIME, value: "https://ops.simex.kobolabs.dev" }
+  - { key: MAIL_URL, scope: RUN_TIME, value: "https://mail.simex.kobolabs.dev" }
   - { key: MAIL_DOMAIN, scope: RUN_TIME, value: "simex.kobolabs.dev" }
   - { key: EXERCISE_TZ, scope: RUN_TIME, value: "Africa/Nairobi" }
 services:

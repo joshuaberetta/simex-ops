@@ -20,9 +20,19 @@ SECRET_KEY = env("SECRET_KEY") or ("" if PRODUCTION else "dev-only-secret")
 if not SECRET_KEY:
     raise SystemExit("SECRET_KEY must be set in production.")
 DEBUG = env("DEBUG", "0" if PRODUCTION else "1") == "1"
-_host = PUBLIC_URL.split("://", 1)[-1].split("/")[0].split(":")[0]
-ALLOWED_HOSTS = [h for h in env("ALLOWED_HOSTS", f"{_host},localhost,127.0.0.1,testserver").split(",") if h]
-CSRF_TRUSTED_ORIGINS = [PUBLIC_URL.rstrip("/")]
+
+
+def _hostname(url):
+    return url.split("://", 1)[-1].split("/")[0].split(":")[0]
+
+
+# Participants' SIMEX Mail on its own host, served by this same app (production:
+# https://mail.simex.kobolabs.dev; ops.middleware.MailHost splits the paths). Unset: all on PUBLIC_URL.
+MAIL_URL = (env("MAIL_URL") or "").rstrip("/")
+MAIL_HOST = _hostname(MAIL_URL) if MAIL_URL else ""
+_host = _hostname(PUBLIC_URL)
+ALLOWED_HOSTS = [h for h in env("ALLOWED_HOSTS", f"{_host},{MAIL_HOST},localhost,127.0.0.1,testserver").split(",") if h]
+CSRF_TRUSTED_ORIGINS = [u for u in (PUBLIC_URL.rstrip("/"), MAIL_URL) if u]
 
 # The ExCon superuser created by `manage.py seed_simex` (and on every start in Docker).
 APP_USERNAME = env("APP_USERNAME", "undac")
@@ -61,6 +71,7 @@ MIDDLEWARE = [
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "ops.middleware.MailHost",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -104,6 +115,11 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
 
 SESSION_COOKIE_AGE = 14 * 24 * 3600
+# ops. and mail. share one session (cookie on their parent domain), so signing in on either works
+# for both. Its own cookie name, so host-only cookies from before can't shadow it.
+_parent = _host.split(".", 1)[-1]
+if MAIL_HOST and MAIL_HOST != _host and _parent.count(".") and MAIL_HOST.endswith("." + _parent):
+    SESSION_COOKIE_DOMAIN, SESSION_COOKIE_NAME = _parent, "simex_session"
 SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = PRODUCTION
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 X_FRAME_OPTIONS = "SAMEORIGIN"  # email previews are sandboxed iframes on our own pages

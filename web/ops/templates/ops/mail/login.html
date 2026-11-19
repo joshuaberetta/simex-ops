@@ -1,0 +1,101 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIMEX Mail</title>
+<link rel="stylesheet" href="{% static 'ops/mail-login.css' %}">
+<script>document.documentElement.className = "js";</script>
+</head>
+<body class="sl">
+<main class="sl-card" data-step="{% if form.errors %}password{% else %}username{% endif %}">
+  <div class="sl-head">
+    <svg class="sl-logo" width="48" height="36" viewBox="0 0 34 26" aria-label="SIMEX Mail"><rect x="1" y="2" width="32" height="22" rx="4" fill="#0b57d0"/><path d="M3 5l14 10L31 5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linejoin="round"/></svg>
+    <h1 class="sl-only-username">Sign in</h1>
+    <h1 class="sl-only-password">Welcome</h1>
+    <p class="sl-sub sl-only-username">to continue to SIMEX Mail</p>
+    <button type="button" class="sl-chip sl-only-password" data-back aria-label="Change username">
+      <span class="sl-chip-av" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-3.3 0-8 1.7-8 5v1h16v-1c0-3.3-4.7-5-8-5z"/></svg></span>
+      <span data-chip-name>{{ form.username.value|default:'' }}</span>
+      <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg>
+    </button>
+  </div>
+
+  <form method="post" class="sl-form" novalidate>{% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    {% for m in messages %}<div class="sl-error sl-banner">{{ m }}</div>{% endfor %}
+
+    <div class="sl-only-username">
+      <div class="sl-field">
+        <input id="id_username" name="username" placeholder=" " value="{{ form.username.value|default:'' }}"
+               autocomplete="username" autocapitalize="none" spellcheck="false" required{% if not form.errors %} autofocus{% endif %}>
+        <label for="id_username">Username</label>
+      </div>
+      <div class="sl-error" data-err-username hidden>{% include "ops/mail/_login_err.html" %}Enter your username</div>
+      <button type="button" class="sl-link" data-toggle="forgot-user">Forgot username?</button>
+      <p class="sl-hint" data-panel="forgot-user" hidden>Your username is on the login slip ExCon gave your team, for example <code>a.jane.doe</code>. Lost it? Ask ExCon.</p>
+      <p class="sl-note">Not your computer? Use a private browsing window to sign in.</p>
+    </div>
+
+    <div class="sl-only-password">
+      <div class="sl-field{% if form.errors %} invalid{% endif %}">
+        <input id="id_password" name="password" type="password" placeholder=" " autocomplete="current-password" required{% if form.errors %} autofocus{% endif %}>
+        <label for="id_password">Enter your password</label>
+      </div>
+      {% if form.errors %}<div class="sl-error">{% include "ops/mail/_login_err.html" %}Wrong username or password. Try again or ask ExCon to reset it.</div>{% endif %}
+      <div class="sl-error" data-err-password hidden>{% include "ops/mail/_login_err.html" %}Enter a password</div>
+      <label class="sl-check"><input type="checkbox" data-show-password> Show password</label>
+    </div>
+
+    <div class="sl-actions">
+      <button type="button" class="sl-link sl-only-username" data-toggle="no-account">Create account</button>
+      <button type="button" class="sl-link sl-only-password" data-toggle="forgot-password">Forgot password?</button>
+      <button class="sl-btn" data-next>Next</button>
+    </div>
+    <p class="sl-hint" data-panel="no-account" hidden>Accounts are created by ExCon. Ask them for your team's login.</p>
+    <p class="sl-hint" data-panel="forgot-password" hidden>ExCon can reset your password. Ask them for a new one.</p>
+  </form>
+</main>
+<footer class="sl-foot">
+  <span>English (United Kingdom)</span>
+  <span class="sl-foot-links"><span>Help</span><span>Privacy</span><span>Terms</span></span>
+</footer>
+<script>
+(function () {
+  var card = document.querySelector(".sl-card"), form = card.querySelector("form");
+  var user = form.querySelector("#id_username"), pass = form.querySelector("#id_password");
+  function step(s) {
+    card.dataset.step = s;
+    (s === "username" ? user : pass).focus();
+  }
+  function toggleErr(name, on) {
+    form.querySelector("[data-err-" + name + "]").hidden = !on;
+    (name === "username" ? user : pass).parentNode.classList.toggle("invalid", on);
+  }
+  form.addEventListener("submit", function (e) {
+    if (card.dataset.step === "username") {
+      e.preventDefault();
+      user.value = user.value.trim();
+      if (!user.value) return toggleErr("username", true);
+      toggleErr("username", false);
+      card.querySelector("[data-chip-name]").textContent = user.value;
+      step("password");
+    } else if (!pass.value) {
+      e.preventDefault();
+      toggleErr("password", true);
+    }
+  });
+  card.querySelector("[data-back]").addEventListener("click", function () { pass.value = ""; step("username"); });
+  form.querySelector("[data-show-password]").addEventListener("change", function () {
+    pass.type = this.checked ? "text" : "password";
+  });
+  form.querySelectorAll("[data-toggle]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var p = form.querySelector('[data-panel="' + b.dataset.toggle + '"]');
+      p.hidden = !p.hidden;
+    });
+  });
+})();
+</script>
+</body>
+</html>
