@@ -5,7 +5,7 @@ values (EV[...]) copied in, so `doctl apps update` doesn't wipe them.
     .venv/bin/python .do/render_spec.py --new           # first create: prompts for secrets
 
 Uses doctl. SECRET_KEY is generated if the app has none. A secret set in the environment
-(e.g. RESEND_API_KEY=... python .do/render_spec.py <app-id>) replaces the app's value.
+(e.g. ANTHROPIC_API_KEY=... python .do/render_spec.py <app-id>) replaces the app's value.
 """
 
 import getpass
@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-SECRETS = ["DATABASE_URL", "APP_PASSWORD", "SECRET_KEY", "RESEND_API_KEY", "RESEND_WEBHOOK_SECRET"]
+SECRETS = ["DATABASE_URL", "APP_PASSWORD", "SECRET_KEY", "RESEND_API_KEY", "RESEND_WEBHOOK_SECRET", "ANTHROPIC_API_KEY"]
 
 
 def current(app_id):
