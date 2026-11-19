@@ -89,7 +89,7 @@ Filter **Injects** by day and open each one:
 - **Preview** (right): exactly what each team gets. **Clear every orange warning.**
 - **Replies & rubric:** tick "teams are expected to reply", set "within (minutes)", add criteria with max points (or copy another inject's rubric).
 
-Bulk: tick injects in the list and use **Schedule / Back to draft / Cancel / Shift by N min / Channel: In-app | Email**.
+Bulk: tick injects in the list and use **Schedule / Back to draft / Cancel / Shift by N min / Channel: In-app | Email** (the Channel buttons appear only in *Per inject* mode; otherwise Settings decides for all injects).
 
 ### 3.6 Prepare the backup channel
 Even if you plan to use email, make SIMEX Mail ready so you can switch in a minute:

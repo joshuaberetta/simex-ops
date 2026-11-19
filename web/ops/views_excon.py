@@ -113,6 +113,9 @@ def injects_bulk(request):
         n += 1
     audit(f"bulk_{action}", f"{n} injects", _u(request))
     messages.success(request, f"{action.capitalize()}: {n} of {len(ids)} selected injects changed.")
+    if action in ("inapp", "email") and conf.get("channel_mode") != "per_inject":
+        messages.warning(request, f"Settings → Delivery channel is '{conf.CHANNEL_MODES[conf.get('channel_mode')]}', "
+                                  "which overrides each inject's channel. Choose Per inject there for this to apply.")
     return redirect(back_to)
 
 

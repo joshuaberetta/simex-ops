@@ -36,8 +36,9 @@
     Shift by <input type="number" name="minutes" value="30" step="5" class="narrow"> min
     <button class="btn small" name="action" value="shift" data-confirm="Move the selected injects' send times?">Shift</button>
     <span class="sep"></span>
-    Channel: <button class="btn small" name="action" value="inapp">In-app</button>
+    {% if channel_mode == 'per_inject' %}Channel: <button class="btn small" name="action" value="inapp">In-app</button>
     <button class="btn small" name="action" value="email" data-confirm="Send the selected injects by email instead?">Email</button>
+    {% else %}<span class="hint">Channel: {% if channel_mode == 'inapp' %}SIMEX Mail{% else %}email{% endif %} for all injects (<a href="/settings/#channel">Settings</a>)</span>{% endif %}
   </div>
   {% for label, items in groups %}
   <h2 class="day">{{ label }}</h2>
