@@ -1,0 +1,27 @@
+{% load ops %}<span class="gm-menu-wrap">
+  <button type="button" class="gm-icon-btn" data-menu title="Move to (v)" aria-label="Move to" data-key-move>{% icon "move" %}</button>
+  <div class="gm-menu gm-lmenu" hidden data-move-menu>
+    <div class="gm-lmenu-title">Move to:</div>
+    <input class="gm-lmenu-filter" placeholder="Search labels" aria-label="Search labels" data-label-filter autocomplete="off">
+    <div class="gm-lmenu-items">
+      {% if folder != 'inbox' %}<button type="button" data-move-to="inbox" data-name="inbox">Inbox</button>{% endif %}
+      {% for l in labels %}{% if l.key != folder %}<button type="button" data-move-to="{{ l.id }}" data-name="{{ l.name|lower }}">{{ l.name }}</button>{% endif %}{% endfor %}
+    </div>
+    <div class="gm-lmenu-foot"><button type="button" data-label-create="move">Create new</button></div>
+  </div>
+</span>
+<span class="gm-menu-wrap">
+  <button type="button" class="gm-icon-btn" data-menu title="Labels (l)" aria-label="Labels" data-key-label>{% icon "label" %}</button>
+  <div class="gm-menu gm-lmenu" hidden data-label-menu>
+    <div class="gm-lmenu-title">Label as:</div>
+    <input class="gm-lmenu-filter" placeholder="Search labels" aria-label="Search labels" data-label-filter autocomplete="off">
+    <div class="gm-lmenu-items">
+      {% for l in labels %}<label class="gm-lcheck" data-name="{{ l.name|lower }}"><input type="checkbox" value="{{ l.id }}"><span>{{ l.name }}</span></label>
+      {% empty %}<div class="gm-lmenu-empty">No labels yet</div>{% endfor %}
+    </div>
+    <div class="gm-lmenu-foot">
+      <button type="button" data-label-apply hidden>Apply</button>
+      <button type="button" data-label-create="label">Create new</button>
+    </div>
+  </div>
+</span>

@@ -340,6 +340,62 @@ def test_mail_host_serves_only_simex_mail(mail_host, excon):
     assert excon.get(f"/inbox/as/{team.id}/", HTTP_HOST="mail.x.test").url == f"https://ops.x.test/inbox/as/{team.id}/"
 
 
+# --- labels ----------------------------------------------------------------------------------------------
+
+def test_labels_like_gmail(excon):
+    from ops.models import MailLabel, ThreadLabel
+    do_import(excon, SAMPLE)
+    arm()
+    deliver_now("1-15")
+    deliver_now("3-13")
+    pa, pb = participant("a"), participant("b")
+    team = Team.objects.get(code="a")
+    update, news = Mail.objects.get(team=team, subject="Update for Team A"), Mail.objects.get(team=team, subject="News")
+    # create, with validation
+    assert pa.post("/inbox/labels/", {"op": "create", "name": "Trash"}).status_code == 400
+    lid = pa.post("/inbox/labels/", {"op": "create", "name": "  Logistics  "}).json()["id"]
+    assert pa.post("/inbox/labels/", {"op": "create", "name": "logistics"}).json()["error"].startswith("The label")
+    assert MailLabel.objects.get(pk=lid).name == "Logistics"
+    # label as: stays in the Inbox, shows on the row and in the label's folder
+    pa.post("/inbox/action/", {"action": "label_add", "threads": update.thread, "label": lid})
+    page = pa.get("/inbox/").content.decode()
+    assert '<span class="gm-label">Logistics</span>' in page and f"?folder=l{lid}" in page
+    folder = pa.get(f"/inbox/?folder=l{lid}").content.decode()
+    assert "Update for Team A" in folder and "News" not in folder and "<title>Logistics" in folder
+    assert pa.get(f"/inbox/t/{update.thread}/?folder=l{lid}").status_code == 200
+    # move to (from a new label): labelled and out of the Inbox
+    r = pa.post("/inbox/labels/", {"op": "create", "name": "Media", "threads": news.thread, "move": "1", "from": "inbox"}).json()
+    assert "News" not in pa.get("/inbox/").content.decode()
+    assert "News" in pa.get(f"/inbox/?folder=l{r['id']}").content.decode()
+    # moving from one label to another drops the first; back to the Inbox drops the label being viewed
+    pa.post("/inbox/action/", {"action": "move", "threads": news.thread, "to": lid, "from": f"l{r['id']}"})
+    assert set(ThreadLabel.objects.filter(thread=news.thread).values_list("label_id", flat=True)) == {lid}
+    pa.post("/inbox/action/", {"action": "move", "threads": news.thread, "to": "inbox", "from": f"l{lid}"})
+    assert "News" in pa.get("/inbox/").content.decode() and not ThreadLabel.objects.filter(thread=news.thread).exists()
+    # other teams can neither see nor use the label, nor label threads that aren't theirs
+    assert "Logistics" not in pb.get("/inbox/").content.decode()
+    assert "Logistics" not in pb.get(f"/inbox/?folder=l{lid}").content.decode()  # someone else's label: the Inbox
+    assert pb.post("/inbox/labels/", {"op": "rename", "id": lid, "name": "x"}).status_code == 404
+    b_lid = pb.post("/inbox/labels/", {"op": "create", "name": "B"}).json()["id"]
+    pb.post("/inbox/action/", {"action": "label_add", "threads": update.thread, "label": b_lid})
+    pb.post("/inbox/action/", {"action": "move", "threads": Mail.objects.get(team__code="b", subject="News").thread, "to": lid})
+    assert not ThreadLabel.objects.filter(label_id=b_lid).exists()
+    assert not Mail.objects.filter(team__code="b", archived=True).exists()
+    # read-only view as team shows labels but can't change them
+    assert "Logistics" in excon.get(f"/inbox/as/{team.id}/").content.decode()
+    assert excon.post(f"/inbox/as/{team.id}/labels/", {"op": "create", "name": "x"}).status_code == 403
+    # rename, colour, remove (the conversations stay)
+    pa.post("/inbox/labels/", {"op": "rename", "id": lid, "name": "Logs"})
+    pa.post("/inbox/labels/", {"op": "colour", "id": lid, "colour": "#16a766"})
+    assert MailLabel.objects.filter(pk=lid, name="Logs", colour="#16a766").exists()
+    pa.post("/inbox/labels/", {"op": "delete", "id": lid})
+    assert not MailLabel.objects.filter(pk=lid).exists() and Mail.objects.filter(pk=update.pk).exists()
+    # clearing the mailbox removes the team's labels
+    pa.post("/inbox/labels/", {"op": "create", "name": "Again"})
+    excon.post("/inboxes/clear/", {"team": team.id, "confirm": "CLEAR"})
+    assert not MailLabel.objects.filter(team=team).exists() and MailLabel.objects.filter(team__code="b").exists()
+
+
 # --- push notifications ---------------------------------------------------------------------------------
 
 APPLE = "https://web.push.apple.com/QGuQyavXut"

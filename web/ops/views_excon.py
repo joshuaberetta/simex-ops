@@ -24,8 +24,8 @@ from django.views.decorators.http import require_POST
 from . import ai, legacy_import, backup, conf, delivery, importer, inbound, mailer, render as rnd
 from .access import excon_required
 from .models import (CHANNELS, DELIVERY_MODES, STATUSES, AiGrade, Attachment, Audit, Grade, ImportBatch, Inject, Mail,
-                     Message, Person, ReplyAnalysis, Response, ResponseAttachment, RubricCriterion, Sender, Team, TestRun,
-                     TestRunItem, audit)
+                     MailLabel, Message, Person, ReplyAnalysis, Response, ResponseAttachment, RubricCriterion, Sender,
+                     Team, TestRun, TestRunItem, audit)
 
 MAX_ATTACHMENT = 30 * 1024 * 1024
 MAX_ZIP_TOTAL = 300 * 1024 * 1024
@@ -715,6 +715,7 @@ def inbox_clear(request):
         reps.delete()
         n_mails = Mail.objects.filter(team=team).count()
         Mail.objects.filter(team=team).delete()
+        MailLabel.objects.filter(team=team).delete()
         n_grades = Grade.objects.filter(team=team).delete()[0] + AiGrade.objects.filter(team=team).delete()[0]
     detail = f"{team.name}: {n_mails} mails, {n_reps} replies, {n_answers} answers, {n_grades} grades"
     audit("inbox_clear", detail, _u(request))

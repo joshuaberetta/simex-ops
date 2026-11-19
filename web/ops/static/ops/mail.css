@@ -68,6 +68,56 @@ body.side-collapsed .gm-side-foot { display: none; }
 body.side-collapsed .gm-compose-btn { padding: 0 16px; }
 body.side-collapsed .gm-folders a { padding: 0 0 0 16px; border-radius: 16px; margin: 0; width: 56px; }
 
+/* labels in the sidebar */
+.gm-labels-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 4px 4px 18px; font-size: 16px;
+  font-weight: 500; color: var(--ink); }
+.gm-lrow { position: relative; }
+.gm-licon { display: inline-flex; color: var(--ink2); }
+.gm-labels .gm-flabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-menu-wrap.gm-lmore { position: absolute; right: 4px; top: 2px; display: none; }
+.gm-lrow:hover .gm-lmore, .gm-lmore:focus-within { display: block; }
+.gm-lrow:hover .gm-count { visibility: hidden; }
+.gm-lmore .gm-menu { position: fixed; }  /* placed by mail.js: the sidebar scrolls and would clip it */
+.gm-side > .gm-compose-btn, .gm-side > .gm-folders, .gm-labels-head { flex: none; }
+.gm-folders a.drop-over { background: var(--blue-soft); outline: 2px dashed var(--blue); outline-offset: -2px; }
+.gm-swatches { display: grid; grid-template-columns: repeat(6, 24px); gap: 6px; padding: 4px 16px 10px; }
+.gm-menu .gm-swatch { width: 24px; height: 24px; padding: 0; border-radius: 4px; text-align: center; font-size: 13px; line-height: 24px;
+  border: 1px solid rgba(0,0,0,.1); }
+.gm-menu .gm-swatch:hover { background: inherit; box-shadow: 0 0 0 2px var(--ink2); }
+.gm-swatch.none { background: #ddd; color: #444; }
+.gm-swatch.on { box-shadow: 0 0 0 2px var(--ink); }
+body.side-collapsed .gm-labels-head, body.side-collapsed .gm-lmore { display: none; }
+
+/* Move to / Label as menus */
+.gm-lmenu { width: 260px; padding: 8px 0 0; }
+.gm-lmenu-title { padding: 0 16px 6px; color: var(--ink2); font-size: 13px; }
+.gm-lmenu-filter { display: block; width: calc(100% - 32px); margin: 0 16px 6px; border: 0; border-bottom: 1px solid var(--line);
+  padding: 4px 0; font: inherit; outline: none; }
+.gm-lmenu-filter:focus { border-bottom-color: var(--blue); }
+.gm-lmenu-items { max-height: 260px; overflow-y: auto; }
+.gm-lcheck { display: flex; align-items: center; gap: 12px; padding: 4px 16px; cursor: pointer; }
+.gm-lcheck:hover { background: var(--hover); }
+.gm-lcheck input { width: 16px; height: 16px; margin: 0; accent-color: var(--ink2); }
+.gm-lmenu-empty { padding: 4px 16px 8px; color: var(--muted); }
+.gm-lmenu-foot { border-top: 1px solid var(--line); margin-top: 6px; padding: 4px 0; }
+.gm-lmenu-foot [data-label-apply] { font-weight: 700; color: var(--blue); }
+.gm-label-x { border: 0; background: none; padding: 0 0 0 4px; cursor: pointer; color: inherit; font-size: 14px; line-height: 1; opacity: .7; }
+.gm-label-x:hover { opacity: 1; }
+
+/* dialog */
+.gm-dialog { border: 0; border-radius: 28px; padding: 24px; width: 400px; max-width: calc(100vw - 32px); box-shadow: var(--shadow); }
+.gm-dialog::backdrop { background: rgba(32,33,36,.5); }
+.gm-dialog h3 { margin: 0 0 16px; font-size: 22px; font-weight: 400; }
+.gm-dfield { display: block; color: var(--ink2); }
+.gm-dfield input { display: block; width: 100%; margin-top: 8px; height: 40px; padding: 0 12px; border: 1px solid #747775; border-radius: 4px;
+  font: 16px var(--font); }
+.gm-dfield input:focus { outline: 2px solid var(--blue); outline-offset: -1px; }
+.gm-derr { color: var(--red); font-size: 13px; margin-top: 8px; }
+.gm-dactions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+.gm-text-btn { border: 0; background: none; color: var(--blue); font-weight: 500; padding: 10px 12px; border-radius: 20px; cursor: pointer; }
+.gm-text-btn:hover { background: rgba(11,87,208,.08); }
+.gm-text-btn.primary { background: var(--blue); color: #fff; padding: 10px 24px; }
+
 /* toolbar */
 .gm-toolbar { display: flex; align-items: center; height: 48px; padding: 0 8px 0 12px; position: sticky; top: 0; background: #fff;
   z-index: 5; gap: 2px; }
@@ -281,6 +331,12 @@ body.readonly .gm-hover, body.readonly .gm-tb-selected { display: none !importan
   .gm-search > button { display: none; }
   .gm-top-right { flex: none; padding: 0; }
   .gm-avatar.big { margin: 0 4px; }
+  .gm-menu-wrap.gm-lmore { display: block; }
+  .gm-toolbar { padding: 0 4px; }
+  .gm-toolbar .gm-tb-sep, .gm-toolbar .gm-range { display: none; }
+  .gm-toolbar .gm-icon-btn { width: 36px; }
+  .gm-lmenu { position: fixed; top: 108px; left: 8px; right: 8px; width: auto; }
+  .gm-lrow .gm-count { display: none; }
   .gm-account-card { top: 46px; right: -4px; max-width: calc(100vw - 16px); }
   .gm-body { height: calc(100% - 56px); }
   body.side-open .gm-scrim { inset: 56px 0 0 0; }

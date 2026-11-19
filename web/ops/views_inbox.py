@@ -25,11 +25,14 @@ from django.views.decorators.http import require_POST
 
 from . import conf, inbound, push, render as rnd
 from .access import is_excon, login_required_any, participant_of
-from .models import Mail, MailAttachment, PushSubscription, Sender, Team, audit
+from .models import Mail, MailAttachment, MailLabel, PushSubscription, Sender, Team, ThreadLabel, audit
 
 PAGE = 50
 FOLDERS = [("inbox", "Inbox"), ("starred", "Starred"), ("sent", "Sent"), ("drafts", "Drafts"), ("all", "All mail"),
            ("trash", "Trash")]
+# The team's own labels show as folders "l<id>" (?folder=l12). Gmail's palette: background -> text.
+LABEL_COLOURS = {"#fb4c2f": "#fff", "#ffad47": "#462a00", "#fad165": "#4a3b00", "#16a766": "#fff", "#43d692": "#063d22",
+                 "#4a86e8": "#fff", "#a479e2": "#fff", "#f691b3": "#4d0f25", "#8e8e8e": "#fff", "#2a2b2e": "#fff"}
 
 
 # --- auth & misc -----------------------------------------------------------------------------------
@@ -152,9 +155,19 @@ def _label(entries):
 
 # --- list -----------------------------------------------------------------------------------------
 
+def label_of(team, folder):
+    """The team's MailLabel behind a folder key "l<id>", or None."""
+    if folder and folder[0] == "l" and folder[1:].isdigit():
+        return MailLabel.objects.filter(team=team, pk=int(folder[1:])).first()
+    return None
+
+
 def _folder_qs(team, folder, q=""):
     qs = Mail.objects.filter(team=team)
-    if folder == "trash":
+    label = label_of(team, folder)
+    if label:
+        qs = qs.filter(trashed_at__isnull=True, thread__in=label.threads.values("thread")).exclude(folder="drafts")
+    elif folder == "trash":
         qs = qs.filter(trashed_at__isnull=False)
     else:
         qs = qs.filter(trashed_at__isnull=True)
@@ -194,6 +207,11 @@ def conversations(team, folder, q=""):
               .only("id", "thread", "folder", "read_at", "from_name", "from_addr", "to_label", "starred", "trashed_at",
                     "subject")):
         all_in.setdefault(m.thread, []).append(m)
+    on, ids_on = {}, {}
+    for tl in ThreadLabel.objects.filter(label__team=team, thread__in=order).select_related("label"):
+        ids_on.setdefault(tl.thread, []).append(tl.label_id)
+        if folder != f"l{tl.label_id}":  # the label being viewed isn't repeated on every row
+            on.setdefault(tl.thread, []).append(_label_dict(tl.label))
     rows = []
     for t in order:
         latest = threads[t][0]
@@ -211,8 +229,26 @@ def conversations(team, folder, q=""):
         rows.append({"thread": t, "latest": latest, "count": len(conv), "subject": first.subject,
                      "unread": any(m.folder == "inbox" and m.read_at is None for m in conv),
                      "starred": any(m.starred for m in conv), "people": people,
-                     "has_files": any(m.files.all() for m in threads[t]), "draft": False})
+                     "has_files": any(m.files.all() for m in threads[t]), "draft": False,
+                     "labels": sorted(on.get(t, []), key=lambda x: x["name"].lower()), "all_labels": ids_on.get(t, [])})
     return rows
+
+
+def _label_dict(label, unread=0):
+    return {"id": label.id, "key": f"l{label.id}", "name": label.name, "colour": label.colour,
+            "fg": LABEL_COLOURS.get(label.colour, ""), "unread": unread}
+
+
+def labels(team):
+    """The sidebar: the team's labels with their unread conversations."""
+    unread = set(Mail.objects.filter(team=team, folder="inbox", read_at__isnull=True, trashed_at__isnull=True)
+                 .values_list("thread", flat=True))
+    by_label = {}
+    for lid, t in ThreadLabel.objects.filter(label__team=team).values_list("label_id", "thread"):
+        if t in unread:
+            by_label[lid] = by_label.get(lid, 0) + 1
+    return sorted((_label_dict(lab, by_label.get(lab.id, 0)) for lab in MailLabel.objects.filter(team=team)),
+                  key=lambda x: x["name"].lower())
 
 
 def _counts(team):
@@ -224,17 +260,22 @@ def _ctx(v, **extra):
     c = {"v": v, "team": v.team, "base": v.base, "readonly": v.readonly, "folders": FOLDERS, "me": v.person,
          "my_address": team_address(v.team), **_counts(v.team)}
     c.update(extra)
+    c["labels"] = labels(v.team)
+    folder = c.get("folder", "")
+    c["folder_name"] = dict(FOLDERS).get(folder) or next((lab["name"] for lab in c["labels"] if lab["key"] == folder), "")
+    c["label_colours"] = LABEL_COLOURS
     c["simex_js"] = {"base": v.base, "readonly": v.readonly, "book": address_book(v.team), "team": v.team.name,
                      "maxMb": int(conf.get("max_upload_mb") or 10), "folder": c.get("folder", ""),
                      "unread": c["inbox_unread"],
-                     "vapid": "" if v.readonly else push.public_key()}
+                     "vapid": "" if v.readonly else push.public_key(),
+                     "labels": [{"id": lab["id"], "name": lab["name"]} for lab in c["labels"]]}
     return c
 
 
 @mailbox_view
 def inbox(request, v):
     folder = request.GET.get("folder", "inbox")
-    if folder not in dict(FOLDERS):
+    if folder not in dict(FOLDERS) and not label_of(v.team, folder):
         folder = "inbox"
     q = (request.GET.get("q") or "").strip()
     rows = conversations(v.team, "all" if q and folder == "inbox" else folder, q)
@@ -252,6 +293,8 @@ def inbox(request, v):
 @mailbox_view
 def thread_view(request, v, thread):
     folder = request.GET.get("folder", "inbox")
+    if folder not in dict(FOLDERS) and not label_of(v.team, folder):
+        folder = "inbox"
     qs = Mail.objects.filter(team=v.team, thread=thread).exclude(folder="drafts")
     if folder != "trash":
         qs = qs.filter(trashed_at__isnull=True)
@@ -288,7 +331,9 @@ def thread_view(request, v, thread):
     return render(request, "ops/mail/thread.html", _ctx(
         v, folder=folder, mails=mails, subject=subject, thread=thread, prev_t=prev_t, next_t=next_t,
         pos=i + 1, total=len(keys), last=last, thread_js=thread_js,
-        in_inbox=any(m.folder == "inbox" and not m.archived for m in mails), starred=any(m.starred for m in mails)))
+        in_inbox=any(m.folder == "inbox" and not m.archived for m in mails), starred=any(m.starred for m in mails),
+        thread_labels=[_label_dict(tl.label) for tl in ThreadLabel.objects.filter(label__team=v.team, thread=thread)
+                       .select_related("label").order_by("label__name")]))
 
 
 def _key_for_sender(mail):
@@ -333,6 +378,9 @@ def action(request, v):
         qs.update(trashed_at=now)
     elif act == "restore":
         qs.update(trashed_at=None)
+    elif act in ("label_add", "label_remove", "move"):
+        _relabel(v, threads, act, [int(x) for x in request.POST.getlist("label") if x.isdigit()],
+                 request.POST.get("to", ""), request.POST.get("from", ""))
     elif act == "discard":
         ids = [int(x) for x in request.POST.getlist("draft_ids") if x.isdigit()]
         drafts = Mail.objects.filter(team=v.team, folder="drafts")
@@ -340,6 +388,70 @@ def action(request, v):
     if request.headers.get("x-requested-with") == "fetch":
         return JsonResponse({"ok": True})
     return redirect(request.POST.get("next") if (request.POST.get("next") or "").startswith("/inbox") else "/inbox/")
+
+
+def _relabel(v, threads, act, ids=(), to="", from_=""):
+    """label_add / label_remove the labels ids. move: to a label id or "inbox"; the conversations
+    leave the Inbox (or come back to it) and the label being viewed (from_ = "l<id>")."""
+    threads = list(Mail.objects.filter(team=v.team, thread__in=threads).values_list("thread", flat=True).distinct())
+    if act == "move":
+        to = str(to)
+        if to != "inbox" and not (to.isdigit() and MailLabel.objects.filter(team=v.team, pk=int(to)).exists()):
+            return
+        current = label_of(v.team, from_)
+        if current and str(current.id) != to:
+            ThreadLabel.objects.filter(label=current, thread__in=threads).delete()
+        qs = Mail.objects.filter(team=v.team, thread__in=threads, folder="inbox")
+        if to == "inbox":
+            qs.update(archived=False, trashed_at=None)
+            return
+        ids = [int(to)]
+        qs.update(archived=True)
+    for label in MailLabel.objects.filter(team=v.team, pk__in=ids):
+        if act == "label_remove":
+            ThreadLabel.objects.filter(label=label, thread__in=threads).delete()
+        else:
+            have = set(label.threads.filter(thread__in=threads).values_list("thread", flat=True))
+            ThreadLabel.objects.bulk_create([ThreadLabel(label=label, thread=t) for t in threads if t not in have])
+
+
+def _label_name(team, name, exclude=None):
+    """A clean, unused label name, or raise ValueError with the message to show."""
+    name = " ".join((name or "").split())[:60]
+    if not name:
+        raise ValueError("Enter a label name.")
+    if name.lower() in {label.lower() for _, label in FOLDERS} | {"inbox", "spam"}:
+        raise ValueError(f"\"{name}\" is already a folder. Choose another name.")
+    if MailLabel.objects.filter(team=team, name__iexact=name).exclude(pk=exclude).exists():
+        raise ValueError(f"The label \"{name}\" already exists.")
+    return name
+
+
+@mailbox_view
+@require_POST
+def labels_save(request, v):
+    """Create (op=create, optionally applied to threads), rename, recolour or delete a label."""
+    P, op = request.POST, request.POST.get("op")
+    label = None if op == "create" else get_object_or_404(MailLabel, pk=int(P.get("id") or 0), team=v.team)
+    try:
+        if op == "create":
+            label = MailLabel.objects.create(team=v.team, name=_label_name(v.team, P.get("name")))
+            if P.getlist("threads"):
+                _relabel(v, P.getlist("threads"), "move" if P.get("move") else "label_add", [label.id], label.id,
+                         P.get("from", ""))
+        elif op == "rename":
+            label.name = _label_name(v.team, P.get("name"), exclude=label.pk)
+            label.save(update_fields=["name"])
+        elif op == "colour":
+            label.colour = P.get("colour") if P.get("colour") in LABEL_COLOURS else ""
+            label.save(update_fields=["colour"])
+        elif op == "delete":
+            label.delete()  # its conversations stay where they are
+        else:
+            raise ValueError("Unknown action.")
+    except ValueError as e:
+        return JsonResponse({"error": str(e)}, status=400)
+    return JsonResponse({"ok": True, "id": label.pk})
 
 
 @mailbox_view

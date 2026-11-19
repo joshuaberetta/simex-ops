@@ -264,6 +264,32 @@ class Mail(models.Model):
         super().save(*args, **kwargs)
 
 
+class MailLabel(models.Model):
+    """A team's own label in SIMEX Mail (Gmail's "folders"): applied to whole conversations, which
+    may carry several. "Move to" a label = label it and take it out of the Inbox."""
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="mail_labels")
+    name = models.CharField(max_length=60)
+    colour = models.CharField(max_length=7, blank=True, default="")  # one of views_inbox.LABEL_COLOURS
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["name", "id"]
+        constraints = [models.UniqueConstraint(fields=["team", "name"], name="mail_label_unique_name")]
+
+    def __str__(self):
+        return self.name
+
+
+class ThreadLabel(models.Model):
+    """A label on a conversation (Mail.thread) of the label's team."""
+    label = models.ForeignKey(MailLabel, on_delete=models.CASCADE, related_name="threads")
+    thread = models.CharField(max_length=40, db_index=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["label", "thread"], name="thread_label_unique")]
+
+
 class PushSubscription(models.Model):
     """A participant's device that gets a push notification for new mail (Web Push: a phone's
     home-screen app or a browser). Not in backups: devices subscribe again on their next visit."""

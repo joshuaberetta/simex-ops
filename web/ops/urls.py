@@ -19,6 +19,7 @@ mail_patterns = [
     path("file/<int:fid>/", p.mail_file),
     path("help/", p.guide),
     path("push/", p.push_subscribe),
+    path("labels/", p.labels_save),
 ]
 
 urlpatterns = [

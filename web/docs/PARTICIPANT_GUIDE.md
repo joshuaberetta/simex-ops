@@ -17,6 +17,13 @@ SIMEX Mail is your team's mailbox for the exercise. Everything here is **exercis
 - Folders on the left: **Inbox**, **Starred**, **Sent**, **Drafts**, **All mail** (everything, including archived), **Trash**.
 - Tidy up with the icons that appear when you point at a conversation, or tick several and use the toolbar: **archive** (out of the Inbox, still in All mail), **delete** (to Trash, restorable), **mark as read / unread**, **star**.
 
+## Labels (your own folders)
+- **Create a label:** click **+** next to **Labels** on the left, type a name (e.g. "Logistics", "Media") and click **Create**. Labels belong to your team: everyone in the team sees the same ones.
+- **Move to** (folder icon): files the conversation under a label and takes it out of the Inbox, like moving it to a folder. **Labels** (tag icon): adds or removes labels and leaves the conversation where it is; a conversation can have several. Both work on an open conversation or on the ones you've ticked in the list, and both have **Create new** at the bottom.
+- You can also **drag** conversations from the list onto a label (or back onto **Inbox**).
+- Click a label on the left to see its conversations; the number next to it is how many are unread. New replies in a labelled conversation still arrive in your Inbox, with the label on them.
+- Remove a label from one conversation with the **×** on it at the top of the conversation. Point at a label on the left and click **⋮** to change its colour, rename it (**Edit**) or **Remove label** (its conversations stay in **All mail**).
+
 ## Replying
 - Open the conversation and click **Reply** (to the sender), **Reply all** (everyone on it) or **Forward**, at the bottom or on a message.
 - Write your answer and click **Send**. Attach files with the **paperclip** next to Send (up to the limit shown if too large).
@@ -28,7 +35,7 @@ SIMEX Mail is your team's mailbox for the exercise. Everything here is **exercis
 - Drafts are saved automatically every few seconds; find them under **Drafts** and click one to continue.
 
 ## Shortcuts (when you're not typing)
-`c` compose · `/` search · `j` / `k` next / previous · `Enter` open · `r` reply · `a` reply all · `f` forward · `e` archive · `#` delete · `u` back to the list · `Esc` close the compose window.
+`c` compose · `/` search · `v` move to · `l` labels · `j` / `k` next / previous · `Enter` open · `r` reply · `a` reply all · `f` forward · `e` archive · `#` delete · `u` back to the list · `Esc` close the compose window.
 
 ## Problems
 Can't sign in, or something looks wrong? Ask ExCon. They can reset your password. Don't share your login with other teams.

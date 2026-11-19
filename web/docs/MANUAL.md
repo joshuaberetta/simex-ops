@@ -116,7 +116,7 @@ On an inject, **Test → Send test**. In-app injects land in the **Test team** m
 To rehearse the whole loop, sign in as your Test team login (another browser or a private window), open the test messages, reply, and watch them appear under **Replies → Test team**.
 
 ### 4.3 View as team
-**Team inboxes → View as team** opens SIMEX Mail exactly as that team sees it, **read-only**: nothing is marked read, nothing can be sent, and your session stays ExCon. Use it to check what a team has received, or to look over their shoulder during the debrief.
+**Team inboxes → View as team** opens SIMEX Mail exactly as that team sees it, **read-only**: nothing is marked read, nothing can be sent, and your session stays ExCon. Use it to check what a team has received, or to look over their shoulder during the debrief. You also see the labels the team has made to organise its mail (Gmail-style folders); they're the team's own and change nothing on the ExCon side.
 
 ---
 
@@ -178,7 +178,7 @@ When **Settings → AI analysis** is on, Claude reads what teams send. It is for
 ## 6. After the exercise
 Export grades and a final backup, disarm, and disable the participant logins (People & logins) once the debrief no longer needs them.
 
-**Clearing a team's mailbox after testing:** **Team inboxes → Clear a team's mailbox**, pick the team, type `CLEAR`. It deletes everything in that team's mailbox (received, sent, drafts), its replies on the Replies tab with their AI analysis, the persona answers to them and the team's grades. Deliveries stay in the Log. It can't be undone, so download a backup first.
+**Clearing a team's mailbox after testing:** **Team inboxes → Clear a team's mailbox**, pick the team, type `CLEAR`. It deletes everything in that team's mailbox (received, sent, drafts, and the team's labels), its replies on the Replies tab with their AI analysis, the persona answers to them and the team's grades. Deliveries stay in the Log. It can't be undone, so download a backup first.
 
 ---
 

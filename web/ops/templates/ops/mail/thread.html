@@ -4,7 +4,7 @@
 <div class="gm-toolbar">
   <a class="gm-icon-btn" href="{{ base }}/?folder={{ folder }}" title="Back to {{ folder }}" aria-label="Back" data-back>{% icon "back" %}</a>
   {% if not readonly %}
-  <form method="post" action="{{ base }}/action/" class="inline" data-thread-actions>{% csrf_token %}
+  <form method="post" action="{{ base }}/action/" class="inline" data-thread-actions data-thread="{{ thread }}" data-labels="{% for l in thread_labels %}{{ l.id }}{% if not forloop.last %},{% endif %}{% endfor %}">{% csrf_token %}
     <input type="hidden" name="threads" value="{{ thread }}">
     <input type="hidden" name="next" value="{{ base }}/?folder={{ folder }}">
     {% if folder == 'trash' %}
@@ -15,6 +15,8 @@
     <button class="gm-icon-btn" name="action" value="trash" title="Delete (#)" aria-label="Delete" data-key-trash>{% icon "trash" %}</button>
     <span class="gm-tb-sep"></span>
     <button class="gm-icon-btn" name="action" value="unread" title="Mark as unread" aria-label="Mark as unread">{% icon "unread" %}</button>
+    <span class="gm-tb-sep"></span>
+    {% include "ops/mail/_label_menus.html" %}
     {% endif %}
   </form>
   {% endif %}
@@ -26,7 +28,9 @@
 </div>
 <div class="gm-thread">
   <h2 class="gm-thread-subject">{{ subject|default:"(no subject)" }}
-    {% if in_inbox %}<span class="gm-label">Inbox</span>{% endif %}{% if mails.0.is_test %}<span class="gm-label test">Test</span>{% endif %}</h2>
+    {% if in_inbox %}<span class="gm-label">Inbox</span>{% endif %}
+    {% for l in thread_labels %}<span class="gm-label"{% if l.colour %} style="background: {{ l.colour }}; color: {{ l.fg }}"{% endif %}>{{ l.name }}{% if not readonly %}<button type="button" class="gm-label-x" data-unlabel="{{ l.id }}" title="Remove this label" aria-label="Remove label {{ l.name }}">×</button>{% endif %}</span>{% endfor %}
+    {% if mails.0.is_test %}<span class="gm-label test">Test</span>{% endif %}</h2>
   {% for m in mails %}
   <article class="gm-msg {% if forloop.last %}open{% else %}closed{% endif %}" data-msg="{{ m.id }}">
     <div class="gm-avatar" style="background: {{ m.from_name|default:m.from_addr|avatar_colour }}">{{ m.from_name|default:m.from_addr|initial }}</div>

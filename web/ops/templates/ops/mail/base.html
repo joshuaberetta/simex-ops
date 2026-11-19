@@ -53,11 +53,32 @@
     <button class="gm-compose-btn" data-compose {% if readonly %}disabled title="Read-only view"{% endif %}>{% icon "edit" 24 %}<span>Compose</span></button>
     <ul class="gm-folders">
       {% for key, label in folders %}
-      <li><a href="{{ base }}/?folder={{ key }}" class="{% if folder == key and not q %}on{% endif %}{% if key == 'inbox' and inbox_unread %} bold{% endif %}" data-folder="{{ key }}">
+      <li><a href="{{ base }}/?folder={{ key }}" class="{% if folder == key and not q %}on{% endif %}{% if key == 'inbox' and inbox_unread %} bold{% endif %}" data-folder="{{ key }}"{% if key == 'inbox' %} data-drop-to="inbox"{% endif %}>
         {% if key == 'inbox' %}{% icon "inbox" %}{% elif key == 'starred' %}{% icon "star_border" %}{% elif key == 'sent' %}{% icon "send" %}{% elif key == 'drafts' %}{% icon "draft" %}{% elif key == 'all' %}{% icon "all" %}{% else %}{% icon "trash" %}{% endif %}
         <span class="gm-flabel">{{ label }}</span>
         {% if key == 'inbox' %}<span class="gm-count" data-unread-count>{% if inbox_unread %}{{ inbox_unread }}{% endif %}</span>{% elif key == 'drafts' and drafts %}<span class="gm-count">{{ drafts }}</span>{% endif %}
       </a></li>
+      {% endfor %}
+    </ul>
+    <div class="gm-labels-head"><span class="gm-flabel">Labels</span>{% if not readonly %}<button type="button" class="gm-icon-btn sm" data-label-create="" title="Create new label" aria-label="Create new label">{% icon "add" 20 %}</button>{% endif %}</div>
+    <ul class="gm-folders gm-labels">
+      {% for l in labels %}
+      <li class="gm-lrow"><a href="{{ base }}/?folder={{ l.key }}" class="{% if folder == l.key and not q %}on{% endif %}{% if l.unread %} bold{% endif %}" data-drop-to="{{ l.id }}" title="{{ l.name }}">
+        <span class="gm-licon"{% if l.colour %} style="color: {{ l.colour }}"{% endif %}>{% icon "label" %}</span>
+        <span class="gm-flabel">{{ l.name }}</span>
+        <span class="gm-count">{% if l.unread %}{{ l.unread }}{% endif %}</span>
+      </a>
+      {% if not readonly %}<span class="gm-menu-wrap gm-lmore">
+        <button type="button" class="gm-icon-btn sm" data-menu title="Options for {{ l.name }}" aria-label="Options for {{ l.name }}">{% icon "more" 18 %}</button>
+        <div class="gm-menu" hidden>
+          <div class="gm-lmenu-title">Label colour</div>
+          <div class="gm-swatches">{% for bg, fg in label_colours.items %}<button type="button" class="gm-swatch{% if l.colour == bg %} on{% endif %}" style="background: {{ bg }}; color: {{ fg }}" data-label-colour="{{ bg }}" data-id="{{ l.id }}" aria-label="Colour {{ bg }}">a</button>{% endfor %}
+            <button type="button" class="gm-swatch none{% if not l.colour %} on{% endif %}" data-label-colour="" data-id="{{ l.id }}" aria-label="No colour">a</button></div>
+          <button type="button" data-label-rename="{{ l.id }}" data-name="{{ l.name }}">Edit</button>
+          <button type="button" data-label-delete="{{ l.id }}" data-name="{{ l.name }}">Remove label</button>
+        </div>
+      </span>{% endif %}
+      </li>
       {% endfor %}
     </ul>
     <div class="gm-side-foot">
@@ -87,6 +108,16 @@
   </form>
 </div>
 <div class="gm-snackbar" id="snackbar" hidden></div>
+{% if not readonly %}<dialog class="gm-dialog" id="label-dialog">
+  <form method="dialog" data-label-form>
+    <h3 data-dialog-title>New label</h3>
+    <label class="gm-dfield"><span data-dialog-prompt>Please enter a new label name:</span>
+      <input name="name" maxlength="60" required autocomplete="off"></label>
+    <div class="gm-derr" data-dialog-err hidden></div>
+    <div class="gm-dactions"><button type="button" class="gm-text-btn" data-dialog-cancel>Cancel</button>
+      <button class="gm-text-btn primary" data-dialog-ok>Create</button></div>
+  </form>
+</dialog>{% endif %}
 {{ simex_js|json_script:"simex-config" }}
 <script src="{% static 'ops/notify.js' %}"></script>
 <script src="{% static 'ops/mail.js' %}"></script>

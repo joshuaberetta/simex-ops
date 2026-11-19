@@ -40,7 +40,10 @@
     const card = $(".gm-account-card");
     if (card) { if (acc) card.hidden = !card.hidden; else if (!e.target.closest(".gm-account-card")) card.hidden = true; }
     const menuBtn = e.target.closest("[data-menu]");
-    $$(".gm-menu").forEach((m) => { if (!menuBtn || m.previousElementSibling !== menuBtn) m.hidden = true; });
+    $$(".gm-menu").forEach((m) => {
+      if (m.contains(e.target) && e.target.closest("input, label, .gm-lmenu-title")) return;  // typing / ticking in a label menu
+      if (!menuBtn || m.previousElementSibling !== menuBtn) m.hidden = true;
+    });
     if (menuBtn) menuBtn.nextElementSibling.hidden = !menuBtn.nextElementSibling.hidden;
     const det = e.target.closest("[data-details]");
     $$(".gm-details").forEach((d) => { if (!det || d.previousElementSibling !== det) d.hidden = true; });
@@ -257,6 +260,133 @@
     window.simexListAct = (act) => { if (focus >= 0) { const b = $(`[data-row-action="${act}"]`, rows[focus]); if (b) b.click(); } };
     window.simexListToggle = () => { if (focus >= 0) { const c = $('input[name="threads"]', rows[focus]); c.checked = !c.checked; sync(); } };
   }
+  // --- labels (the team's own folders): Move to, Label as, create / edit / colour / remove, drag & drop
+  const after = (text) => { sessionStorage.setItem("simex-snack", text); location.reload(); };
+  const threadForm = $("[data-thread-actions]");
+  // The conversations a toolbar menu acts on, each with the ids of its labels.
+  const targets = () => (threadForm ? [threadForm] : $$('input[name="threads"]:checked').map((b) => b.closest(".gm-row")))
+    .map((el) => ({ thread: el.dataset.thread, labels: (el.dataset.labels || "").split(",").filter(Boolean) }));
+  const labelName = (id) => ((CFG.labels || []).find((l) => String(l.id) === String(id)) || {}).name || "";
+  const convs = (n) => (n === 1 ? "Conversation" : `${n} conversations`);
+  async function relabel(params, done) {
+    const r = await post(`${BASE}/action/`, params);
+    if (r.ok) after(done); else snack("Something went wrong. Try again.");
+  }
+  async function move(threads, to) {
+    const p = new URLSearchParams([["action", "move"], ["to", to], ["from", CFG.folder]]);
+    threads.forEach((t) => p.append("threads", t));
+    const r = await post(`${BASE}/action/`, p);
+    if (!r.ok) { snack("Something went wrong. Try again."); return; }
+    sessionStorage.setItem("simex-snack", `${convs(threads.length)} moved to "${to === "inbox" ? "Inbox" : labelName(to)}".`);
+    if (threadForm) location.href = `${BASE}/?folder=${encodeURIComponent(CFG.folder)}`; else location.reload();  // as Gmail: back to the list
+  }
+  $$("[data-label-filter]").forEach((f) => f.addEventListener("input", () => {
+    const q = f.value.trim().toLowerCase();
+    $$("[data-name]", f.closest(".gm-lmenu")).forEach((el) => { el.hidden = q && !el.dataset.name.includes(q); });
+  }));
+  $$("[data-move-to]").forEach((b) => b.onclick = () => move(targets().map((t) => t.thread), b.dataset.moveTo));
+  $$("[data-label-menu]").forEach((menu) => {
+    const boxes = $$('input[type="checkbox"]', menu);
+    const apply = $("[data-label-apply]", menu);
+    menu.previousElementSibling.addEventListener("click", () => {  // opening: tick what the selection already has
+      const ts = targets();
+      boxes.forEach((b) => {
+        const n = ts.filter((t) => t.labels.includes(b.value)).length;
+        b.checked = n > 0 && n === ts.length; b.indeterminate = n > 0 && n < ts.length;
+        b.dataset.was = b.indeterminate ? "some" : b.checked ? "all" : "none";
+      });
+      apply.hidden = true;
+      const f = $("[data-label-filter]", menu); f.value = ""; f.dispatchEvent(new Event("input"));
+      setTimeout(() => f.focus(), 0);
+    });
+    boxes.forEach((b) => b.onchange = () => {
+      apply.hidden = !boxes.some((x) => (x.indeterminate ? "some" : x.checked ? "all" : "none") !== x.dataset.was);
+    });
+    apply.onclick = async () => {
+      const threads = targets().map((t) => t.thread);
+      const add = boxes.filter((b) => !b.indeterminate && b.checked && b.dataset.was !== "all").map((b) => b.value);
+      const del = boxes.filter((b) => !b.indeterminate && !b.checked && b.dataset.was !== "none").map((b) => b.value);
+      for (const [act, ids] of [["label_add", add], ["label_remove", del]]) {
+        if (!ids.length) continue;
+        const p = new URLSearchParams([["action", act]]);
+        threads.forEach((t) => p.append("threads", t)); ids.forEach((i) => p.append("label", i));
+        await post(`${BASE}/action/`, p);
+      }
+      after(add.length === 1 && !del.length ? `${convs(threads.length)} added to "${labelName(add[0])}".`
+        : del.length === 1 && !add.length ? `${convs(threads.length)} removed from "${labelName(del[0])}".` : "Labels changed.");
+    };
+  });
+  $$("[data-unlabel]").forEach((b) => b.onclick = () =>
+    relabel({ action: "label_remove", threads: threadForm.dataset.thread, label: b.dataset.unlabel },
+            `Conversation removed from "${labelName(b.dataset.unlabel)}".`));
+
+  // New label / edit: a small dialog. From a Move to / Label as menu the new label is applied at once.
+  const dlg = $("#label-dialog");
+  function labelDialog({ title, prompt, ok, name = "", submit }) {
+    const f = $("[data-label-form]", dlg), err = $("[data-dialog-err]", dlg);
+    $("[data-dialog-title]", dlg).textContent = title; $("[data-dialog-prompt]", dlg).textContent = prompt;
+    $("[data-dialog-ok]", dlg).textContent = ok; f.elements.name.value = name; err.hidden = true;
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      const r = await post(`${BASE}/labels/`, submit(f.elements.name.value));
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { err.textContent = j.error || "Something went wrong."; err.hidden = false; return; }
+      dlg.close(); after(submit.done(f.elements.name.value.trim()));
+    };
+    $("[data-dialog-cancel]", dlg).onclick = () => dlg.close();
+    dlg.showModal(); f.elements.name.select();
+  }
+  $$("[data-label-create]").forEach((b) => b.onclick = () => {
+    const mode = b.dataset.labelCreate;  // "" (sidebar), "move" or "label"
+    const threads = mode ? targets().map((t) => t.thread) : [];
+    const submit = (name) => {
+      const p = new URLSearchParams([["op", "create"], ["name", name], ["from", CFG.folder]]);
+      if (mode === "move") p.append("move", "1");
+      threads.forEach((t) => p.append("threads", t));
+      return p;
+    };
+    submit.done = (name) => (threads.length ? `${convs(threads.length)} ${mode === "move" ? "moved" : "added"} to "${name}".`
+      : `Label "${name}" created.`);
+    labelDialog({ title: "New label", prompt: "Please enter a new label name:", ok: "Create", submit });
+  });
+  $$("[data-label-rename]").forEach((b) => b.onclick = () => {
+    const submit = (name) => ({ op: "rename", id: b.dataset.labelRename, name });
+    submit.done = (name) => `Label renamed to "${name}".`;
+    labelDialog({ title: "Edit label", prompt: "Label name:", ok: "Save", name: b.dataset.name, submit });
+  });
+  $$("[data-label-delete]").forEach((b) => b.onclick = async () => {
+    if (!confirm(`Remove the label "${b.dataset.name}"? Its conversations stay in your mailbox (All mail).`)) return;
+    await post(`${BASE}/labels/`, { op: "delete", id: b.dataset.labelDelete });
+    const here = CFG.folder === `l${b.dataset.labelDelete}`;
+    sessionStorage.setItem("simex-snack", `Label "${b.dataset.name}" removed.`);
+    if (here) location.href = `${BASE}/`; else location.reload();
+  });
+  $$(".gm-lmore [data-menu]").forEach((b) => b.addEventListener("click", () => {
+    const m = b.nextElementSibling, r = b.getBoundingClientRect();
+    m.style.top = `${Math.min(r.bottom + 4, window.innerHeight - 220)}px`;
+    m.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 200))}px`;
+  }));
+  $$("[data-label-colour]").forEach((b) => b.onclick = async () => {
+    await post(`${BASE}/labels/`, { op: "colour", id: b.dataset.id, colour: b.dataset.labelColour });
+    location.reload();
+  });
+
+  // Drag conversations (the selected ones, or the one dragged) onto a label or the Inbox: Move to.
+  let dragged = null;
+  $$(".gm-row[draggable]").forEach((r) => r.addEventListener("dragstart", (e) => {
+    const box = $('input[name="threads"]', r);
+    dragged = box.checked ? $$('input[name="threads"]:checked').map((b) => b.value) : [r.dataset.thread];
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", convs(dragged.length));
+  }));
+  document.addEventListener("dragend", () => { dragged = null; $$(".drop-over").forEach((x) => x.classList.remove("drop-over")); });
+  $$("[data-drop-to]").forEach((a) => {
+    if (CFG.readonly) return;
+    a.addEventListener("dragover", (e) => { if (dragged) { e.preventDefault(); a.classList.add("drop-over"); } });
+    a.addEventListener("dragleave", () => a.classList.remove("drop-over"));
+    a.addEventListener("drop", (e) => { if (!dragged) return; e.preventDefault(); move(dragged, a.dataset.dropTo); });
+  });
+
   const STAR = '<svg class="ic" width="20" height="20" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>';
   const STAR_BORDER = '<svg class="ic" width="20" height="20" viewBox="0 0 24 24"><path d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/></svg>';
 
@@ -328,6 +458,10 @@
     if (t.matches && t.matches("input, textarea, select, [contenteditable]")) return;
     const k = e.key;
     if (k === "c" && window.simexCompose) { e.preventDefault(); window.simexCompose(); }
+    else if ((k === "v" || k === "l") && !CFG.readonly) {  // Move to / Labels, for the open or selected conversations
+      const b = $(k === "v" ? "[data-key-move]" : "[data-key-label]");
+      if (b && b.offsetParent) { e.preventDefault(); b.click(); }
+    }
     else if (k === "/") { e.preventDefault(); $("[data-search]").focus(); }
     else if (tdata) {
       if (k === "r" && window.simexReply) { e.preventDefault(); window.simexReply("reply"); }
