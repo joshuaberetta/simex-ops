@@ -214,7 +214,12 @@
       const n = boxes().filter((b) => b.checked).length;
       $(".gm-tb-selected", bulk).hidden = n === 0 || CFG.readonly;
       $(".gm-tb-idle", bulk).hidden = n > 0 && !CFG.readonly;
-      rows.forEach((r) => r.classList.toggle("selected", $('input[name="threads"]', r).checked));
+      rows.forEach((r) => {
+        const on = $('input[name="threads"]', r).checked;
+        r.classList.toggle("selected", on);
+        const av = $("[data-select-row]", r); if (av) av.setAttribute("aria-checked", on ? "true" : "false");
+      });
+      document.body.classList.toggle("selecting", n > 0 && !CFG.readonly);
       const all = $("[data-select-all]", bulk);
       all.checked = n > 0 && n === boxes().length;
     };
@@ -224,8 +229,18 @@
       boxes().forEach((x) => x.checked = true);
       const i = document.createElement("input"); i.type = "hidden"; i.name = "action"; i.value = b.dataset.selectAnd; bulk.appendChild(i); bulk.submit();
     });
+    // Phones (no tick boxes): tap the avatar to select, as in the Gmail app; while anything is
+    // selected, tapping a row selects or unselects it instead of opening it.
+    const toggleRow = (r) => { const c = $('input[name="threads"]', r); c.checked = !c.checked; sync(); };
+    $$("[data-select-row]", bulk).forEach((av) => {
+      av.addEventListener("click", (e) => { e.stopPropagation(); toggleRow(av.closest(".gm-row")); });
+      av.addEventListener("keydown", (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleRow(av.closest(".gm-row")); } });
+    });
     rows.forEach((r) => r.addEventListener("click", (e) => {
       if (e.target.closest("button, a, label")) return;
+      if (document.body.classList.contains("selecting") && getComputedStyle($("[data-select-row]", r) || r).display === "flex") {
+        toggleRow(r); return;
+      }
       if (r.dataset.draft) { openDraft(r.dataset.draft); return; }
       location.href = r.dataset.href;
     }));

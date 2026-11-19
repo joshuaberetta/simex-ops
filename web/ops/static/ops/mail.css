@@ -389,3 +389,13 @@ body.gm { height: var(--app-h, 100%); }
   .gm-side { top: 68px; }
   body.side-open .gm-scrim { inset: 68px 0 0 0; }
 }
+
+/* phones: select conversations by tapping the avatar (it turns into a tick, as in the Gmail app) */
+@media (max-width: 760px) {
+  .gm-ravatar[data-select-row] { cursor: pointer; transition: background-color .15s; }
+  .gm-row.selected { background: #d3e3fd; }
+  .gm-row.selected .gm-ravatar { background: var(--blue) !important; color: transparent;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E") !important;
+    background-size: 22px !important; background-position: center !important; background-repeat: no-repeat !important; }
+  body.selecting .gm-tb-right { display: none; }
+}

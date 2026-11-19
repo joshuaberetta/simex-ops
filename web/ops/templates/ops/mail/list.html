@@ -44,7 +44,7 @@
     <div class="gm-row{% if r.unread %} unread{% endif %}" role="listitem" tabindex="-1"
          {% if r.draft %}data-draft="{{ m.id }}"{% else %}data-href="{{ base }}/t/{{ r.thread }}/?folder={{ folder }}"{% if not readonly and folder != 'trash' %} draggable="true"{% endif %}{% endif %} data-thread="{{ r.thread }}" data-labels="{% for l in r.all_labels %}{{ l }}{% if not forloop.last %},{% endif %}{% endfor %}">
       <label class="gm-check" onclick="event.stopPropagation()"><input type="checkbox" name="threads" value="{{ r.thread }}"><span></span></label>
-      <span class="gm-avatar gm-ravatar" style="background: {{ r.people|avatar_colour }}">{% if r.draft %}D{% else %}{{ r.people|cut:"To: "|initial }}{% endif %}</span>
+      <span class="gm-avatar gm-ravatar" style="background: {{ r.people|avatar_colour }}"{% if not readonly %} role="checkbox" aria-checked="false" aria-label="Select" tabindex="0" data-select-row{% endif %}>{% if r.draft %}D{% else %}{{ r.people|cut:"To: "|initial }}{% endif %}</span>
       <button type="button" class="gm-star{% if r.starred %} on{% endif %}" data-star-thread="{{ r.thread }}" aria-label="Star" {% if readonly %}disabled{% endif %}>{% if r.starred %}{% icon "star" 20 %}{% else %}{% icon "star_border" 20 %}{% endif %}</button>
       <span class="gm-from">{% if r.draft %}<span class="gm-draft-red">Draft</span>{% else %}{{ r.people }}{% endif %}{% if r.count > 1 %} <span class="gm-n">{{ r.count }}</span>{% endif %}</span>
       <span class="gm-subj">
