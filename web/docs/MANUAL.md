@@ -27,7 +27,7 @@ Read section 7, "Safety controls", before your first shift.
 | **Injects** | The schedule. Filter by day or status; open an inject to edit, preview, test or send it; change the channel in bulk. Import from the MEL is here too. |
 | **Replies** | Everything participants sent: team summary, inject × team grid, **Read / opens & clicks**, the inbox, and grading. |
 | **Dashboard** | The exercise at a glance: per team, replies, response times, scores, sentiment over time and a funnel; the rubric heatmap; flags, possibly AI-written replies, what teams ask for and commit to; an AI-written exercise summary (5.7). |
-| **Team inboxes** | Each team's mailbox at a glance (received, unread, sent, last sign-in) and **View as team**. |
+| **Team inboxes** | Each team's mailbox at a glance (received, unread, sent, last sign-in), **View as team**, and **Clear a team's mailbox** after testing (section 6). |
 | **Test runs** | Replays injects on a fast clock into the **Test team** mailbox (and, for email injects, to a test address). |
 | **Senders** | The personas: username (`cnn`), display name ("CNN Breaking News"). They are also the participants' address book. |
 | **People & logins** | Teams, participants, and their logins (create, reset password, disable, printable credential sheet). |
@@ -141,7 +141,9 @@ To rehearse the whole loop, sign in as your Test team login (another browser or 
 ### 5.4 Replies and grading
 - **Replies tab** (refreshes every minute): the **Teams** table, the **Injects × teams** grid (green replied, orange late, red overdue with no reply, blue waiting), **Read / opens & clicks**, and the **Inbox** of everything teams sent to personas.
   - In-app replies are matched **exactly** to the message they answer. A *new* message a team writes to a persona is matched to that persona's latest message to the team and marked **guess**; check it. **unmatched** needs assigning.
-- **A reply's page:** read it, download its files, **view in the team's mailbox**, correct the **Match**, set **Status** (ignored replies don't count), and **Answer as <persona>**: the answer lands in the team's mailbox in the same conversation (or goes by email for email threads), and their next reply is tracked too.
+- **Inbox → Conversations** (the default) shows one row per back-and-forth: an in-app conversation, or for email the same team, persona and subject. It gives the latest message, how many the team sent and how many were answered, and **awaiting answer** when the team wrote last and no persona has answered since. **Messages** lists every message on its own, as before.
+- **A reply's page** shows the whole conversation in order: the inject (or message) that started it, each message from the team and each persona answer. The highlighted one is the message the page is about; click another to open it. **Answer as <persona>** always answers the latest message, so the conversation stays in one thread.
+- On that page you can also read it, download its files, **view in the team's mailbox**, correct the **Match**, set **Status** (ignored replies don't count), and **Answer as <persona>**: the answer lands in the team's mailbox in the same conversation (or goes by email for email threads), and their next reply is tracked too.
 - **Grading:** from a grid cell or **Grade …**: all of the team's replies to that inject together; a score per criterion, comment, name; **Save and next team**. Non-responses can be graded too. **Export grades (CSV)** for the debrief.
 
 Write rubrics as observable behaviour ("acknowledged within 30 min", "named the cluster lead"), 2–4 points each. Nothing is copied from the MEL's expected outcomes.
@@ -172,6 +174,8 @@ When **Settings → AI analysis** is on, Claude reads what teams send. It is for
 
 ## 6. After the exercise
 Export grades and a final backup, disarm, and disable the participant logins (People & logins) once the debrief no longer needs them.
+
+**Clearing a team's mailbox after testing:** **Team inboxes → Clear a team's mailbox**, pick the team, type `CLEAR`. It deletes everything in that team's mailbox (received, sent, drafts), its replies on the Replies tab with their AI analysis, the persona answers to them and the team's grades. Deliveries stay in the Log. It can't be undone, so download a backup first.
 
 ---
 

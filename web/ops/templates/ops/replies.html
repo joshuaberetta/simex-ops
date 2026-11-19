@@ -78,13 +78,33 @@
 {% else %}<p class="muted">Nothing delivered yet.</p>{% endif %}
 
 <div class="bar"><h2>Inbox</h2>
+<nav class="seg small">
+  <a href="?kind={{ kind }}&team={{ team_f }}&inject={{ inject_f }}&status={{ status_f }}&matched={{ matched_f }}" class="{% if view == 'threads' %}on{% endif %}">Conversations</a>
+  <a href="?kind={{ kind }}&team={{ team_f }}&inject={{ inject_f }}&status={{ status_f }}&matched={{ matched_f }}&view=messages" class="{% if view == 'messages' %}on{% endif %}">Messages</a>
+</nav>
 <form method="get" class="filters">
-  <input type="hidden" name="kind" value="{{ kind }}">
+  <input type="hidden" name="kind" value="{{ kind }}">{% if view == 'messages' %}<input type="hidden" name="view" value="messages">{% endif %}
   <select name="team" onchange="this.form.submit()"><option value="0">all teams</option>{% for t in teams %}<option value="{{ t.id }}" {% if t.id == team_f %}selected{% endif %}>{{ t.name }}</option>{% endfor %}</select>
   <select name="inject" onchange="this.form.submit()"><option value="0">all injects</option>{% for id, mid in injects_all %}<option value="{{ id }}" {% if id == inject_f %}selected{% endif %}>{{ mid }}</option>{% endfor %}</select>
   <select name="status" onchange="this.form.submit()"><option value="">any status</option><option {% if status_f == 'new' %}selected{% endif %}>new</option><option {% if status_f == 'reviewed' %}selected{% endif %}>reviewed</option><option {% if status_f == 'ignored' %}selected{% endif %}>ignored</option></select>
   <label class="chk"><input type="checkbox" name="matched" value="no" {% if matched_f == 'no' %}checked{% endif %} onchange="this.form.submit()"> unmatched only</label>
 </form></div>
+{% if view == 'threads' %}
+<table class="list">
+  <thead><tr><th>Last message</th><th>Team</th><th>Persona</th><th>Inject</th><th>Conversation</th><th>Via</th><th></th></tr></thead>
+  {% for c in convs %}{% with r=c.latest %}
+  <tr class="{% if c.new %}in-new{% elif c.ignored %}in-ignored{% endif %}"><td class="nowrap"><a href="/replies/{{ r.id }}/">{{ r.received_at|date:"D H:i" }}</a></td>
+    <td>{% if r.team %}{{ r.team.name }}{% else %}<span class="warn">unknown team</span>{% endif %}<div class="muted small">{% if r.person %}{{ r.person.name }}{% else %}{{ r.from_name|default:r.from_addr }}{% endif %}</div></td>
+    <td class="small">{{ r.persona|default:'' }}</td>
+    <td class="small">{% if c.inject %}<a href="/injects/{{ c.inject.id }}/">{{ c.inject.mel_id }}</a>{% if c.guess %} <span class="warn">guess</span>{% endif %}{% else %}<span class="warn">unmatched</span>{% endif %}</td>
+    <td><a href="/replies/{{ r.id }}/">{{ c.first.subject|default:'(no subject)' }}</a> <span class="muted small">{{ c.n }} from team{% if c.answers %} · {{ c.answers }} answered{% endif %}</span>{% if c.files %} <span class="muted">📎</span>{% endif %}{% if c.error %} <span class="err small">fetch failed</span>{% endif %}
+      <div class="muted small">{{ c.preview|snippet:120 }}</div></td>
+    <td class="small">{{ r.channel }}</td>
+    <td>{% if c.ignored %}<span class="status cancelled">ignored</span>{% elif c.waiting %}<span class="status pending">awaiting answer</span>{% else %}<span class="status sent">answered</span>{% endif %}</td></tr>
+  {% endwith %}{% empty %}<tr><td colspan="7" class="muted">No replies yet.</td></tr>{% endfor %}
+</table>
+<p class="muted small">One row per back-and-forth: an in-app conversation, or for email the same team, persona and subject. <i>Awaiting answer</i>: the team wrote last and no persona has answered since (not every message needs an answer).</p>
+{% else %}
 <table class="list">
   <thead><tr><th>Received</th><th>From</th><th>To persona</th><th>Inject</th><th>Subject</th><th>Via</th><th></th></tr></thead>
   {% for r in inbox %}
@@ -97,4 +117,5 @@
     <td><span class="status {{ r.status|status_class }}">{{ r.status }}</span></td></tr>
   {% empty %}<tr><td colspan="7" class="muted">No replies yet.</td></tr>{% endfor %}
 </table>
+{% endif %}
 {% endblock %}

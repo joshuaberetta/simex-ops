@@ -510,3 +510,35 @@ def test_import_backup_from_email_app(excon):
 def test_admin_at_admin(excon):
     assert excon.get("/admin/").status_code == 200
     assert excon.get("/django-admin/ops/inject/").url == "/admin/ops/inject/"
+
+
+def test_conversations_group_back_and_forth_and_clear_mailbox(excon):
+    do_import(excon, SAMPLE)
+    arm()
+    deliver_now("1-15")
+    pa = participant("a", "Jane")
+    mail = Mail.objects.get(team__code="a")
+    pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: Update", "body": "First", "in_reply_to": mail.id})
+    first = Response.objects.get()
+    excon.post(f"/replies/{first.id}/answer/", {"body": "Persona answer"})
+    ans = Mail.objects.filter(team__code="a", folder="inbox").order_by("-id").first()
+    pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: Re: Update", "body": "Second", "in_reply_to": ans.id})
+    pb = participant("b", "Bob")
+    pb.post("/inbox/send/", {"to": "p:undac-b-tl", "subject": "Re: Update", "body": "B reply",
+                             "in_reply_to": Mail.objects.get(team__code="b", folder="inbox").id})
+    page = excon.get("/replies/").content.decode()
+    assert "2 from team · 1 answered" in page and "awaiting answer" in page
+    assert page.count('class="status pending">awaiting answer') == 2  # A wrote last, and B
+    second = Response.objects.get(text="Second")
+    conv = excon.get(f"/replies/{first.id}/").content.decode()
+    assert "Conversation · 4 messages" in conv  # inject, first, answer, second
+    assert conv.index("First") < conv.index("Persona answer") < conv.index("Second")
+    assert f'action="/replies/{second.id}/answer/"' in conv  # answers the latest message
+    # clear Team A after testing
+    assert excon.post("/inboxes/clear/", {"team": first.team_id, "confirm": "nope"}).status_code == 302
+    assert Response.objects.filter(team__code="a").count() == 2
+    excon.post("/inboxes/clear/", {"team": first.team_id, "confirm": "CLEAR"})
+    assert not Response.objects.filter(team__code="a").exists() and not Mail.objects.filter(team__code="a").exists()
+    assert not Message.objects.filter(kind="reply").exists()
+    assert Message.objects.filter(kind="live", team__code="a").exists()  # deliveries stay in the Log
+    assert Response.objects.filter(team__code="b").count() == 1

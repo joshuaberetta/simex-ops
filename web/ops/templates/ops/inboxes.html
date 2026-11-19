@@ -12,4 +12,12 @@
     <td><a class="btn small" href="/inbox/as/{{ t.id }}/">View as team</a></td></tr>
   {% endfor %}
 </table>
+<form method="post" action="/inboxes/clear/" class="card form danger-zone" style="max-width:640px;margin-top:18px">{% csrf_token %}
+  <h3>Clear a team's mailbox</h3>
+  <p class="small">After testing: deletes everything in the team's mailbox (received, sent, drafts), its replies on the Replies tab with their AI analysis,
+  the persona answers to them and its grades. Deliveries stay in the Log. This can't be undone: download a backup first (Settings).</p>
+  <label>Team <select name="team">{% for t in teams %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}</select></label>
+  <label>Type <b>CLEAR</b> <input name="confirm" autocomplete="off"></label>
+  <button class="btn danger">Clear mailbox</button>
+</form>
 {% endblock %}

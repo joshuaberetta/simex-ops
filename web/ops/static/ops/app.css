@@ -182,3 +182,8 @@ table.heat td.cell { border: 2px solid #fff; font-weight: 600; }
 @media (max-width: 1100px) { .cols2 { grid-template-columns: 1fr; } }
 .spark-x { display: flex; justify-content: space-between; font-size: 10px; margin-top: 2px; }
 table.heat td.cell a.muted { font-weight: 400; }
+.conv-head { margin-top: 14px; }
+.conv-item { border-top: 1px solid var(--line); padding: 8px 0 2px 10px; margin-top: 6px; border-left: 3px solid transparent; }
+.conv-item.from-persona { border-left-color: #c3c2b7; background: #fafbfc; }
+.conv-item.from-team.this { border-left-color: var(--accent); }
+.conv-item details { border-top: none; padding: 2px 0; }

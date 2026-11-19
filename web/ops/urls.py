@@ -55,6 +55,7 @@ urlpatterns = [
     path("teams/save/", x.team_save),
     path("teams/<int:tid>/delete/", x.team_delete),
     path("inboxes/", x.inboxes),
+    path("inboxes/clear/", x.inbox_clear),
     path("tests/", x.tests_page),
     path("tests/<int:rid>/", x.test_run_page),
     path("tests/<int:rid>/action/", x.test_run_action),

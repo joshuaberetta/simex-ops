@@ -15,15 +15,36 @@
     {% if files %}<dt>Files</dt><dd>{% for a in files %}{% if r.channel == 'email' %}{% if a.data is not None %}<a href="/response-files/{{ a.id }}/">{{ a.filename }}</a>{% else %}{{ a.filename }} <span class="muted">(too large, not stored)</span>{% endif %}{% else %}<a href="/inbox/file/{{ a.id }}/">{{ a.filename }}</a>{% endif %} <span class="muted">{{ a.size|kb }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}</dd>{% endif %}
     {% if r.error %}<dt>Error</dt><dd class="err">{{ r.error }}</dd>{% endif %}
   </dl>
-  {% if r.fetched %}
-    <pre class="mailtext">{{ new_part }}</pre>
-    {% if quoted %}<details><summary class="muted">quoted text</summary><pre class="mailtext muted">{{ quoted }}</pre></details>{% endif %}
-    {% if r.html and not r.text %}<iframe class="mail tall" sandbox srcdoc="{{ r.html }}"></iframe>{% endif %}
-  {% else %}<p class="muted">Content not fetched yet.</p>{% endif %}
+  {% if conv|length > 1 %}<h3 class="conv-head">Conversation · {{ conv|length }} messages</h3>{% endif %}
+  {% for kind_, at, o in conv %}
+  {% if kind_ == 'inject' %}
+  <div class="conv-item from-persona">
+    <div class="small"><b>{{ o.from_addr|name_only }}</b> → {{ o.target }} · {{ at|date:"D d M H:i" }} ·
+      {% if o.inject %}<a href="/injects/{{ o.inject.id }}/">inject {{ o.inject.mel_id }}</a>{% else %}<a href="/log/{{ o.id }}/">message</a>{% endif %}</div>
+    <details><summary class="small">{{ o.subject }}</summary><pre class="mailtext">{{ o.body|default:o.text }}</pre></details>
+  </div>
+  {% elif kind_ == 'answer' %}
+  <div class="conv-item from-persona">
+    <div class="small"><b>{{ o.from_addr|name_only }}</b> (ExCon answer) · {{ at|date:"D d M H:i" }} · <a href="/log/{{ o.id }}/">{{ o.status }}</a></div>
+    <pre class="mailtext">{{ o.shown }}</pre>
+  </div>
+  {% else %}
+  <div class="conv-item from-team {% if o.id == r.id %}this{% endif %} {% if o.status == 'ignored' %}muted{% endif %}">
+    <div class="small"><b>{% if o.person %}{{ o.person.name }}{% else %}{{ o.from_name|default:o.from_addr }}{% endif %}</b>{% if o.team %} ({{ o.team.name }}){% endif %}
+      → {{ o.persona|default:'?' }} · {% if o.id == r.id %}{{ at|date:"D d M H:i" }}{% else %}<a href="/replies/{{ o.id }}/">{{ at|date:"D d M H:i" }}</a>{% endif %}
+      {% if o.subject != r.subject %} · {{ o.subject }}{% endif %}{% if o.status == 'ignored' %} · ignored{% endif %}</div>
+    {% if o.fetched %}
+      <pre class="mailtext">{{ o.new_part }}</pre>
+      {% if o.quoted %}<details><summary class="muted small">quoted text</summary><pre class="mailtext muted">{{ o.quoted }}</pre></details>{% endif %}
+      {% if o.html and not o.text %}<iframe class="mail tall" sandbox srcdoc="{{ o.html }}"></iframe>{% endif %}
+    {% else %}<p class="muted">Content not fetched yet.</p>{% endif %}
+  </div>
+  {% endif %}
+  {% endfor %}
 </div>
 
 {% if r.persona %}
-<form method="post" action="/replies/{{ r.id }}/answer/" class="card form">{% csrf_token %}
+<form method="post" action="/replies/{{ latest.id }}/answer/" class="card form">{% csrf_token %}
   <h3>Answer as {% if sender %}{{ sender.display_name }}{% else %}{{ r.persona }}{% endif %} &lt;{{ r.persona }}@{{ MAIL_DOMAIN }}&gt;</h3>
   <textarea name="body" rows="6" placeholder="In character.{% if r.channel == 'email' %} The original is quoted below your text.{% else %} It appears in the team's inbox in the same conversation.{% endif %}"></textarea>
   <button class="btn" data-confirm="Send this reply to {% if r.team %}{{ r.team.name }}{% else %}{{ r.from_addr }}{% endif %}?">Send reply</button>
@@ -31,10 +52,6 @@
 </form>
 {% endif %}
 
-{% if thread %}
-<div class="card"><h3>Other replies from {{ r.team.name }} to {{ r.inject.mel_id }}</h3>
-  <ul>{% for t in thread %}<li><a href="/replies/{{ t.id }}/">{{ t.received_at|date:"D H:i" }}</a> {{ t.from_name|default:t.from_addr }}: {{ t.subject }}</li>{% endfor %}</ul></div>
-{% endif %}
 </section>
 <section class="col-side">
 {% if r.inject and r.team %}<div class="card"><a class="btn primary" href="/grades/{{ r.inject.id }}/{{ r.team.id }}/">Grade {{ r.team.name }} on {{ r.inject.mel_id }}</a></div>{% endif %}

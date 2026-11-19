@@ -304,3 +304,36 @@ def response_minutes(r):
     if m and m.sent_at:
         return max(0, int((r.received_at - m.sent_at) / timedelta(minutes=1)))
     return None
+
+
+# --- conversations (Replies tab) ---------------------------------------------------------------
+
+def thread_key(r):
+    """Which back-and-forth a Response belongs to: the in-app thread, or for email the same
+    team (or sender), persona and subject without Re:/Fwd:."""
+    if r.channel == "inapp" and r.mail_id and r.mail.thread:
+        return f"m:{r.mail.thread}"
+    who = f"t{r.team_id}" if r.team_id else (r.from_addr or "").lower()
+    return f"e:{who}:{r.persona or ''}:{clean_subject(r.subject)}"
+
+
+def conversation(r):
+    """Everything in r's back-and-forth, oldest first: what the persona sent that started it
+    (an inject or an earlier answer), the team's messages, ExCon's answers. Each item is
+    (kind, at, obj) with kind "inject" | "team" | "answer"."""
+    key = thread_key(r)
+    if key.startswith("m:"):
+        reps = list(Response.objects.filter(mail__thread=r.mail.thread, team_id=r.team_id)
+                    .select_related("mail", "person", "team", "inject", "message"))
+    else:
+        qs = Response.objects.filter(channel="email", persona=r.persona)
+        qs = qs.filter(team_id=r.team_id) if r.team_id else qs.filter(team__isnull=True, from_addr__iexact=r.from_addr)
+        reps = [x for x in qs.select_related("mail", "person", "team", "inject", "message") if thread_key(x) == key]
+    items = [("team", x.received_at, x) for x in reps]
+    answers = Message.objects.filter(kind="reply", response__in=reps)
+    items += [("answer", m.sent_at or m.created_at, m) for m in answers]
+    answer_ids = {m.id for m in answers}
+    starts = {x.message for x in reps if x.message and x.message.kind != "reply" and x.message.id not in answer_ids}
+    items += [("inject", m.sent_at or m.created_at, m) for m in starts]
+    items.sort(key=lambda it: (it[1], {"inject": 0, "team": 1, "answer": 2}[it[0]]))
+    return items

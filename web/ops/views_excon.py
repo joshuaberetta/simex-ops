@@ -14,6 +14,7 @@ from pathlib import PurePosixPath
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import Count, Max, Sum
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -658,6 +659,29 @@ def inboxes(request):
     return render(request, "ops/inboxes.html", {"tab": "inboxes", "teams": teams})
 
 
+@excon_required
+@require_POST
+def inbox_clear(request):
+    """Empty a team's mailbox after testing: its mails, its replies (with their AI analysis),
+    ExCon's answers to them, and its grades. Inject deliveries stay in the Log."""
+    team = get_object_or_404(Team, pk=int(request.POST.get("team") or 0))
+    if (request.POST.get("confirm") or "").strip() != "CLEAR":
+        messages.error(request, "Type CLEAR to empty the mailbox.")
+        return redirect("/inboxes/")
+    with transaction.atomic():
+        reps = Response.objects.filter(team=team)
+        n_answers = Message.objects.filter(kind="reply", response__in=reps).delete()[0]
+        n_reps = reps.count()
+        reps.delete()
+        n_mails = Mail.objects.filter(team=team).count()
+        Mail.objects.filter(team=team).delete()
+        n_grades = Grade.objects.filter(team=team).delete()[0] + AiGrade.objects.filter(team=team).delete()[0]
+    detail = f"{team.name}: {n_mails} mails, {n_reps} replies, {n_answers} answers, {n_grades} grades"
+    audit("inbox_clear", detail, _u(request))
+    messages.success(request, f"Cleared {detail}.")
+    return redirect("/inboxes/")
+
+
 # --- test runs -----------------------------------------------------------------------------------
 
 @excon_required
@@ -752,13 +776,38 @@ def test_run_action(request, rid):
 
 # --- replies & grading ------------------------------------------------------------------------------
 
+def conversations(reps):
+    """Responses (newest first) grouped into back-and-forths, newest activity first."""
+    groups = {}
+    for r in reps:
+        groups.setdefault(inbound.thread_key(r), []).append(r)
+    answered = {}
+    for rid, at in Message.objects.filter(kind="reply", response__in=reps).values_list("response_id", "created_at"):
+        answered[rid] = max(at, answered.get(rid, at))
+    out = []
+    for msgs in groups.values():
+        msgs.sort(key=lambda r: r.received_at)
+        live = [r for r in msgs if r.status != "ignored"] or msgs
+        latest = live[-1]
+        last_answer = max((answered[r.id] for r in msgs if r.id in answered), default=None)
+        out.append({"latest": latest, "first": msgs[0], "n": len(msgs), "preview": inbound.split_quoted(latest.text or "")[0], "answers": sum(r.id in answered for r in msgs),
+                    "new": any(r.status == "new" for r in msgs),
+                    "inject": next((r.inject for r in msgs if r.inject_id), None),
+                    "guess": any(r.match == "guess" for r in msgs), "files": any(r.attachments.all() or (r.mail and r.mail.files.all()) for r in msgs),
+                    "error": any(r.error for r in msgs),
+                    "waiting": latest.status != "ignored" and (last_answer is None or last_answer < latest.received_at),
+                    "ignored": all(r.status == "ignored" for r in msgs)})
+    out.sort(key=lambda c: c["latest"].received_at, reverse=True)
+    return out
+
+
 def reply_grid(kind):
     """Teams, every Response of this kind, the inject x team matrix and per-team totals
     (Replies tab and Dashboard)."""
     kinds = ["live", "reply"] if kind == "live" else ["test", "oneoff"]
     teams = list(Team.objects.filter(active=True, is_test=(kind != "live")) if kind != "live"
                  else Team.objects.filter(active=True, is_test=False))
-    all_in = list(Response.objects.filter(kind=kind).select_related("inject", "team", "person")
+    all_in = list(Response.objects.filter(kind=kind).select_related("inject", "team", "person", "mail")
                   .prefetch_related("attachments").order_by("received_at"))
     sent = inbound.first_sent(kinds)
     maxes = dict(RubricCriterion.objects.values_list("inject_id").annotate(s=Sum("max_points"))
@@ -864,7 +913,9 @@ def replies_page(request):
     inbox = [r for r in reversed(all_in)
              if (not team_f or r.team_id == team_f) and (not inject_f or r.inject_id == inject_f)
              and (not status_f or r.status == status_f) and (matched_f != "no" or r.match == "none")]
+    view = "messages" if request.GET.get("view") == "messages" else "threads"
     return render(request, "ops/replies.html", {
+        "view": view, "convs": conversations(inbox)[:300] if view == "threads" else [],
         "tab": "replies", "kind": kind, "teams": teams, "matrix": matrix, "team_sum": team_sum,
         "inbox": inbox[:300], "new_count": sum(1 for r in all_in if r.status == "new"),
         "unmatched": sum(1 for r in all_in if r.match == "none" and r.status != "ignored"),
@@ -927,11 +978,16 @@ def reply_page(request, rid):
     if r.status == "new":
         r.status = "reviewed"
         r.save(update_fields=["status"])
-    thread = (Response.objects.filter(inject_id=r.inject_id, team_id=r.team_id).exclude(pk=r.pk).order_by("received_at")
-              if r.inject_id and r.team_id else [])
+    conv = inbound.conversation(r)
+    for kind_, _, obj in conv:
+        if kind_ == "team":
+            obj.new_part, obj.quoted = inbound.split_quoted(obj.text or "")
+        elif kind_ == "answer":
+            obj.shown = inbound.split_quoted(obj.body or obj.text or "")[0]
+    latest = max((o for k, _, o in conv if k == "team" and o.status != "ignored"), key=lambda o: o.received_at, default=r)
     new_part, quoted = inbound.split_quoted(r.text or "")
     return render(request, "ops/reply.html", {
-        "tab": "replies", "r": r, "minutes": inbound.response_minutes(r), "thread": thread,
+        "tab": "replies", "r": r, "minutes": inbound.response_minutes(r), "conv": conv, "latest": latest,
         "answers": r.answers.order_by("id"), "teams": Team.objects.all(), "people": Person.objects.order_by("name"),
         "injects_all": Inject.objects.order_by("seq"), "new_part": new_part, "quoted": quoted,
         "sender": Sender.objects.filter(local_part=r.persona).first() if r.persona else None,
