@@ -7,6 +7,8 @@ FastAPI + Jinja (server-rendered, no build step) + SQLAlchemy 2 (Postgres on DO,
 - `app/inbound.py` Resend webhook (Svix signature), fetch of received emails, matching to message/inject/team (reply-to token `persona+token@`, else a guess); grading (`RubricCriterion`, `Grade`) and the Replies tab are in `main.py`.
 - Tests: `.venv/bin/python -m pytest -q` (SQLite, log mailer, scheduler off; `tick()` is called directly).
 
+Django version (branch `django-inbox`, directory `django/`, see `django/README.md`): same features plus in-app team mailboxes as the default channel, participant logins, read-only "view as team", exact in-app reply matching, a separate scheduler worker and Django migrations. Its own tests: `cd django && .venv/bin/python -m pytest -q`. Participant pages (`ops/views_inbox.py`, `templates/ops/mail/`) must filter every query by the viewer's team; every ExCon view is `@excon_required` (a test walks the URLconf).
+
 Rules:
 - **Never store control-side material** (expected outcomes, story, theme, key figures, relevance, MEL description). The importer drops them; keep it that way. No exercise content in git (`*.xlsx`, `injects*.json` are ignored).
 - Every email gets a `Message` row before it is sent, with a deterministic idempotency key; keep that order so a crash mid-send never duplicates.

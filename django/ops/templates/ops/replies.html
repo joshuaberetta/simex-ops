@@ -1,0 +1,98 @@
+{% extends "ops/base.html" %}{% load ops %}
+{% block title %}Replies · SIMEX ops{% endblock %}
+{% block head %}<meta http-equiv="refresh" content="60">{% endblock %}
+{% block body %}
+<div class="bar">
+  <h1>Replies</h1>
+  <nav class="seg">
+    <a href="/replies/?kind=live" class="{% if kind == 'live' %}on{% endif %}">Exercise</a>
+    <a href="/replies/?kind=test" class="{% if kind != 'live' %}on{% endif %}">Test team</a>
+  </nav>
+  <div class="actions">
+    {% if uses_email %}<form method="post" action="/replies/sync/" class="inline">{% csrf_token %}<button class="btn" title="Fetch emails a webhook missed">Sync email from Resend</button></form>{% endif %}
+    <a class="btn" href="/replies/export.csv">Export grades (CSV)</a>
+  </div>
+</div>
+{% if uses_email and not webhook_ready %}<div class="flash warn">Some injects go by email, but receiving isn't configured: add a Resend webhook to <code>{{ webhook_url }}</code> for <i>email.received</i> and set RESEND_WEBHOOK_SECRET. Until then, <b>Sync email</b> pulls received mail by hand.</div>{% endif %}
+<p class="muted small">{{ new_count }} new · {{ unmatched }} not matched to an inject. In-app replies are matched exactly to the message they answer; a fresh message to a persona is matched to that persona's latest message to the team ("guess"). The page refreshes every minute.</p>
+
+<h2>Teams</h2>
+<table class="list">
+  <thead><tr><th>Team</th><th>Replies</th><th>Expected injects answered</th><th>Late / missing</th><th>Median first reply</th><th>Score</th></tr></thead>
+  {% for ts in team_sum %}
+  <tr><td><a href="/replies/?kind={{ kind }}&team={{ ts.team.id }}">{{ ts.team.name }}</a></td><td>{{ ts.replies }}</td>
+    <td>{{ ts.answered }} / {{ ts.expected }}</td><td>{{ ts.late|default:'' }}</td>
+    <td>{% if ts.median is not None %}{{ ts.median }} min{% endif %}</td>
+    <td>{% if ts.max %}{{ ts.score|num }} / {{ ts.max|num }} <span class="muted">({{ ts.pct }}%)</span>{% endif %}</td></tr>
+  {% endfor %}
+</table>
+
+<h2>Injects × teams</h2>
+{% if matrix %}
+<div class="scroll">
+<table class="list matrix">
+  <thead><tr><th>Inject</th>{% for t in teams %}<th>{{ t.name }}</th>{% endfor %}</tr></thead>
+  {% for inj, cells in matrix %}
+  <tr><td><a href="/injects/{{ inj.id }}/#rubric">{{ inj.mel_id }}</a> <span class="small">{{ inj.subject|default:''|truncatechars:50 }}</span>
+      <div class="muted small">{{ inj.send_at|date:"D d M H:i" }}{% if inj.expects_reply %} · reply expected{% if inj.reply_due_minutes %} in {{ inj.reply_due_minutes }} min{% endif %}{% endif %}</div></td>
+    {% for c in cells %}
+    <td class="cell {{ c.state }}"><a href="/grades/{{ inj.id }}/{{ c.team.id }}/">
+      {% if c.n %}{{ c.n }} repl{{ c.n|pluralize:"y,ies" }}{% if c.minutes is not None %} · {{ c.minutes }} min{% endif %}
+      {% elif c.state == 'missing' %}no reply (overdue){% elif c.state == 'waiting' %}waiting{% elif c.state == 'unsent' %}<span class="muted">not sent</span>{% else %}<span class="muted">—</span>{% endif %}
+      {% if c.grade %}<div><b>{{ c.score|num }}{% if c.max %} / {{ c.max }}{% endif %}</b></div>{% elif c.n and c.max %}<div class="muted">grade</div>{% endif %}
+    </a></td>
+    {% endfor %}
+  </tr>
+  {% endfor %}
+</table>
+</div>
+<p class="muted small">Rows: injects marked "reply expected" (on the inject page, with a rubric) and any inject that got a reply. Click a cell to read the team's replies and grade them.</p>
+{% else %}<p class="muted">Nothing yet. Mark injects that need a response ("Replies &amp; rubric" on the inject page); replies appear here as they arrive.</p>{% endif %}
+
+<h2>Read <span class="muted small">in-app</span> · opens &amp; clicks <span class="muted small">email</span></h2>
+{% if eng_rows %}
+<table class="list small">
+  <thead><tr><th>Team</th><th>Read / delivered</th><th>Median time to first read</th><th>Attachment downloads / clicks</th><th>Bounced</th></tr></thead>
+  {% for s in eng_team_sum %}<tr><td>{% if s.team %}{{ s.team.name }}{% else %}All (Bcc emails){% endif %}</td><td>{{ s.read }} / {{ s.n }}</td>
+    <td>{% if s.median is not None %}{{ s.median }} min{% endif %}</td><td>{{ s.clicks|default:'' }}</td><td>{% if s.bounced %}<b class="err">{{ s.bounced }}</b>{% endif %}</td></tr>{% endfor %}
+</table>
+<div class="scroll">
+<table class="list matrix">
+  <thead><tr><th>Inject</th>{% for t in eng_teams %}<th>{% if t %}{{ t.name }}{% else %}All (Bcc){% endif %}</th>{% endfor %}</tr></thead>
+  {% for inj, cells in eng_rows %}
+  <tr><td><a href="/injects/{{ inj.id }}/">{{ inj.mel_id }}</a> <span class="small">{{ inj.subject|default:''|truncatechars:40 }}</span></td>
+    {% for e in cells %}
+    <td class="cell {% if e and e.bounced %}missing{% elif e and e.read %}replied{% elif e %}waiting{% endif %}">
+      {% if e %}{% if e.read %}{% if e.channel == 'inapp' %}read{% else %}opened{% endif %}{% if e.n > 1 %} {{ e.read }}/{{ e.n }}{% endif %}{% if e.minutes is not None %} · {{ e.minutes }} min{% endif %}
+        <div class="muted">{{ e.opens }}×{% if e.clicks %} · {{ e.clicks }} {% if e.channel == 'inapp' %}download{{ e.clicks|pluralize }}{% else %}click{{ e.clicks|pluralize }}{% endif %}{% endif %}</div>
+      {% elif e.bounced %}bounced{% else %}unread{% endif %}{% else %}<span class="muted">—</span>{% endif %}
+    </td>
+    {% endfor %}
+  </tr>
+  {% endfor %}
+</table>
+</div>
+<p class="muted small">In-app: "read" when someone in the team opens the conversation (count = times opened), downloads count each attachment download. Email: Resend's open pixel (blocked by some clients, so treat as a lower bound) and link clicks; a click also counts as an open.</p>
+{% else %}<p class="muted">Nothing delivered yet.</p>{% endif %}
+
+<div class="bar"><h2>Inbox</h2>
+<form method="get" class="filters">
+  <input type="hidden" name="kind" value="{{ kind }}">
+  <select name="team" onchange="this.form.submit()"><option value="0">all teams</option>{% for t in teams %}<option value="{{ t.id }}" {% if t.id == team_f %}selected{% endif %}>{{ t.name }}</option>{% endfor %}</select>
+  <select name="inject" onchange="this.form.submit()"><option value="0">all injects</option>{% for id, mid in injects_all %}<option value="{{ id }}" {% if id == inject_f %}selected{% endif %}>{{ mid }}</option>{% endfor %}</select>
+  <select name="status" onchange="this.form.submit()"><option value="">any status</option><option {% if status_f == 'new' %}selected{% endif %}>new</option><option {% if status_f == 'reviewed' %}selected{% endif %}>reviewed</option><option {% if status_f == 'ignored' %}selected{% endif %}>ignored</option></select>
+  <label class="chk"><input type="checkbox" name="matched" value="no" {% if matched_f == 'no' %}checked{% endif %} onchange="this.form.submit()"> unmatched only</label>
+</form></div>
+<table class="list">
+  <thead><tr><th>Received</th><th>From</th><th>To persona</th><th>Inject</th><th>Subject</th><th>Via</th><th></th></tr></thead>
+  {% for r in inbox %}
+  <tr class="in-{{ r.status }}"><td class="nowrap"><a href="/replies/{{ r.id }}/">{{ r.received_at|date:"D H:i" }}</a></td>
+    <td>{% if r.person %}{{ r.person.name }}{% else %}{{ r.from_name|default:r.from_addr }}{% endif %}<div class="muted small">{% if r.team %}{{ r.team.name }}{% else %}unknown team{% endif %}</div></td>
+    <td class="small">{{ r.persona|default:'' }}</td>
+    <td class="small">{% if r.inject %}<a href="/injects/{{ r.inject.id }}/">{{ r.inject.mel_id }}</a>{% if r.match == 'guess' %} <span class="warn">guess</span>{% endif %}{% else %}<span class="warn">unmatched</span>{% endif %}</td>
+    <td><a href="/replies/{{ r.id }}/">{{ r.subject|default:'(no subject)' }}</a>{% if r.attachments.all or r.mail.files.all %} <span class="muted">📎</span>{% endif %}{% if r.error %} <span class="err small">fetch failed</span>{% endif %}</td>
+    <td class="small">{{ r.channel }}</td>
+    <td><span class="status {{ r.status|status_class }}">{{ r.status }}</span></td></tr>
+  {% empty %}<tr><td colspan="7" class="muted">No replies yet.</td></tr>{% endfor %}
+</table>
+{% endblock %}

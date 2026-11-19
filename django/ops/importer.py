@@ -1,0 +1,299 @@
+"""Import email injects from the master events list (MEL-MIL.xlsx) or from an injects.json
+export (undac-simex registers/injects.json, or the bundle from its export script).
+
+Only participant-facing fields are read. Expected outcomes, story, theme, key figures,
+relevance and the ExCon description are dropped here and never stored.
+"""
+
+import datetime
+import io
+import json
+import re
+from datetime import timezone
+
+from zoneinfo import ZoneInfo
+
+from django.conf import settings
+
+from .models import IMPORT_FIELDS, Inject, Sender, audit
+
+# MEL column header -> raw field (the sheet's own spelling, newline included).
+MEL_COLUMNS = {
+    "Inject #": "inject_id", "Time": "time", "Inject \nmethod": "method", "Content": "content",
+    "Supporting documents": "supporting_documents", "Send date": "send_date", "Send time": "send_time",
+    "Mailbox": "mailbox", "Sender alias": "sender", "Recipients": "recipients", "Subject": "subject",
+}
+MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september",
+          "october", "november", "december"]
+DAY = re.compile(r"(?:(?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day\s+)?(\d{1,2})(?:\s*(?:&|and)\s*(\d{1,2}))?"
+                 r"\s+(" + "|".join(MONTHS) + r")(?:\s+(\d{4}))?", re.I)
+HM = re.compile(r"(?<!\d)(\d{1,2}):(\d{2})(?!\d)|(?<!\d)([01]\d|2[0-3])([0-5]\d)(?!\d)")
+SCENARIO_YEAR = 2035
+
+
+class ImportError_(ValueError):
+    pass
+
+
+def _text(v):
+    if v is None:
+        return None
+    if isinstance(v, datetime.time):
+        return v.strftime("%H:%M")
+    if isinstance(v, (datetime.datetime, datetime.date)):
+        return v.isoformat()
+    s = str(v).strip()
+    return s or None
+
+
+def _hm(s):
+    m = HM.search(s or "")
+    if not m:
+        return None
+    h, mi = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+    return f"{int(h):02d}:{mi}"
+
+
+def _day_header(value):
+    """Dates covered by a day-header row in the Time column, or None (same rules as
+    undac-simex scripts/parse_mel.py)."""
+    if isinstance(value, datetime.datetime) and value.year >= 2000 and value.time() == datetime.time(0, 0):
+        return [value.date()], ""
+    if not isinstance(value, str):
+        return None
+    m = DAY.search(value)
+    if not m:
+        return None
+    year = int(m.group(4) or SCENARIO_YEAR)
+    month = MONTHS.index(m.group(3).lower()) + 1
+    days = [int(m.group(1))] + ([int(m.group(2))] if m.group(2) else [])
+    return [datetime.date(year, month, d) for d in days], value[m.end():].strip()
+
+
+def read_mel_xlsx(data: bytes):
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    if "MEL-MIL" not in wb.sheetnames:
+        raise ImportError_("No sheet called MEL-MIL in this workbook.")
+    rows = wb["MEL-MIL"].iter_rows(values_only=True)
+    header = None
+    for row in rows:
+        if row and "Inject #" in row:
+            header = [_text(c) for c in row]
+            break
+    if not header:
+        raise ImportError_("No header row with 'Inject #' found in the MEL-MIL sheet.")
+    cols = {MEL_COLUMNS[h]: i for i, h in enumerate(header) if h in MEL_COLUMNS}
+    if "inject_id" not in cols or "time" not in cols:
+        raise ImportError_("The MEL-MIL sheet is missing the 'Inject #' or 'Time' column.")
+
+    out, days, order = [], [], {}
+    for row in rows:
+        cells = {k: _text(row[i]) if i < len(row) else None for k, i in cols.items()}
+        raw_time = row[cols["time"]] if cols["time"] < len(row) else None
+        time_cell = cells.get("time") or ""
+        if hdr := _day_header(raw_time):
+            days, time_cell = hdr
+            order = {}
+            if not cells.get("content") and not cells.get("sender"):
+                continue
+        elif isinstance(raw_time, datetime.datetime) and raw_time.year < 1950:
+            time_cell = raw_time.strftime("%H:%M")
+        if not cells.get("inject_id"):
+            continue
+        group = cells["inject_id"].split("-")[0]
+        day = None
+        if days:
+            order.setdefault(group, len(order))
+            day = days[min(order[group], len(days) - 1)]
+        t = _hm(time_cell)
+        cells["scenario_dt"] = f"{day.isoformat()}T{t}" if day and t else None
+        out.append(cells)
+    return out
+
+
+def read_json(data: bytes):
+    try:
+        items = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as e:
+        raise ImportError_(f"Not valid JSON: {e}") from e
+    if isinstance(items, dict):
+        items = items.get("injects", [])
+    if not isinstance(items, list):
+        raise ImportError_("Expected a list of injects.")
+    return items
+
+
+def _send_at(send_date, send_time):
+    """MEL send date + time (exercise timezone) -> naive UTC ISO string."""
+    if not send_date:
+        return None
+    try:
+        d = datetime.date.fromisoformat(send_date[:10])
+    except ValueError:
+        return None
+    t = _hm(send_time or "") or "00:00"
+    local = datetime.datetime.combine(d, datetime.time.fromisoformat(t), tzinfo=ZoneInfo(settings.TIME_ZONE))
+    return local.astimezone(timezone.utc).replace(tzinfo=None).isoformat(timespec="minutes")
+
+
+def sender_local(sender):
+    if not sender:
+        return None
+    local = sender.split("@")[0].strip()
+    local = re.sub(r"\s+", "", local).lower()
+    return local or None
+
+
+def delivery_for(label):
+    l = (label or "").lower()
+    if "each team" in l:
+        return "each_team"
+    if "all teams" in l:
+        return "all_bcc"
+    if "individual" in l:
+        return "each_person"
+    return "each_team"
+
+
+def is_email(raw):
+    return bool(raw.get("sender")) or "mail" in (raw.get("method") or "").lower()
+
+
+def normalise(raw_items):
+    """Raw MEL rows or injects.json records -> import records (participant-facing fields)."""
+    out, seen = [], {}
+    for seq, raw in enumerate(raw_items):
+        if not raw.get("inject_id") or not is_email(raw):
+            continue
+        mel_id = re.sub(r"\s+", " ", raw["inject_id"]).strip()
+        # A few ids repeat in the MEL; later ones get -b, -c...
+        n = seen.get(mel_id, 0)
+        seen[mel_id] = n + 1
+        if n:
+            mel_id = f"{mel_id}-{chr(ord('a') + n)}"
+        docs = [d.strip() for d in (raw.get("supporting_documents") or "").splitlines()]
+        docs = [d for d in docs if d and d.lower() not in ("none", "n/a", "-")]
+        out.append({
+            "mel_id": mel_id,
+            "seq": seq,
+            "method": raw.get("method"),
+            "mailbox": raw.get("mailbox"),
+            "scenario_dt": raw.get("scenario_dt"),
+            "send_at": _send_at(raw.get("send_date"), raw.get("send_time")),
+            "sender_local": sender_local(raw.get("sender")),
+            "recipients_label": raw.get("recipients"),
+            "delivery": delivery_for(raw.get("recipients")),
+            "subject": raw.get("subject"),
+            "body": raw.get("content"),
+            "supporting_documents": "\n".join(docs) or None,
+        })
+    return out
+
+
+def parse_upload(filename, data):
+    name = (filename or "").lower()
+    if name.endswith(".xlsx"):
+        raw = read_mel_xlsx(data)
+    elif name.endswith(".json"):
+        raw = read_json(data)
+    else:
+        raise ImportError_("Upload MEL-MIL.xlsx or an injects .json file.")
+    records = normalise(raw)
+    if not records:
+        raise ImportError_("No email injects found in this file.")
+    return records
+
+
+# --- comparing and applying ----------------------------------------------------------
+
+def current_value(inj, field):
+    v = getattr(inj, field)
+    if field == "send_at" and v is not None:
+        return v.astimezone(timezone.utc).replace(tzinfo=None).isoformat(timespec="minutes")
+    return v
+
+
+def set_value(inj, field, value):
+    if field == "send_at":
+        value = datetime.datetime.fromisoformat(value).replace(tzinfo=timezone.utc) if value else None
+    setattr(inj, field, value)
+
+
+def plan(records):
+    """What an import would do: per inject, new / unchanged / update / conflict."""
+    existing = {i.mel_id: i for i in Inject.objects.all()}
+    rows = []
+    for r in records:
+        inj = existing.pop(r["mel_id"], None)
+        if not inj:
+            rows.append({"mel_id": r["mel_id"], "action": "new", "subject": r["subject"], "changes": []})
+            continue
+        snap = inj.imported or {}
+        changes = []
+        for f in IMPORT_FIELDS:
+            new, cur = r.get(f), current_value(inj, f)
+            if f in snap and new == snap.get(f):
+                continue  # unchanged in the MEL since the last import
+            if new == cur:
+                continue
+            local_edit = f in snap and cur != snap.get(f)
+            changes.append({"field": f, "current": cur, "new": new, "local_edit": local_edit})
+        action = "unchanged" if not changes else ("conflict" if any(c["local_edit"] for c in changes) else "update")
+        if changes and all(c["field"] == "seq" for c in changes):
+            action = "unchanged"  # only moved within the sheet
+        rows.append({"mel_id": r["mel_id"], "action": action, "subject": inj.subject, "changes": changes,
+                     "status": inj.status})
+    missing = [{"mel_id": i.mel_id, "subject": i.subject, "status": i.status} for i in existing.values()]
+    return rows, missing
+
+
+LOCKED = {"sending", "sent", "partial"}  # never rewrite what has (partly) gone out
+
+
+def apply(records, overwrite_local=False, user=""):
+    existing = {i.mel_id: i for i in Inject.objects.all()}
+    counts = {"new": 0, "updated": 0, "kept_local": 0, "skipped_sent": 0}
+    for r in records:
+        inj = existing.get(r["mel_id"])
+        if not inj:
+            inj = Inject(mel_id=r["mel_id"])
+            for f in IMPORT_FIELDS:
+                set_value(inj, f, r.get(f))
+            inj.status = "scheduled" if r.get("send_at") else "draft"
+            inj.imported = {f: r.get(f) for f in IMPORT_FIELDS}
+            inj.save()
+            counts["new"] += 1
+            continue
+        if inj.status in LOCKED:
+            counts["skipped_sent"] += 1
+            continue
+        snap = dict(inj.imported or {})
+        changed = False
+        for f in IMPORT_FIELDS:
+            new, cur = r.get(f), current_value(inj, f)
+            local_edit = f in snap and cur != snap.get(f)
+            if new != cur and (not local_edit or overwrite_local):
+                set_value(inj, f, new)
+                changed = True
+            elif new != cur:
+                counts["kept_local"] += 1
+            snap[f] = new
+        inj.imported = snap
+        inj.save()
+        if changed:
+            counts["updated"] += 1
+    ensure_senders(records)
+    audit("import", json.dumps(counts), user)
+    return counts
+
+
+def ensure_senders(records):
+    have = set(Sender.objects.values_list("local_part", flat=True))
+    for r in records:
+        lp = r.get("sender_local")
+        if lp and lp not in have:
+            # "undac-{team}-tl" -> "UNDAC {team_name} TL"; edit names on the Senders tab.
+            name = " ".join("{team_name}" if "{" in p else p.upper() for p in lp.split("-"))
+            Sender.objects.create(local_part=lp, display_name=name)
+            have.add(lp)

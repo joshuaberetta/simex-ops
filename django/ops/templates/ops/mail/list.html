@@ -1,0 +1,72 @@
+{% extends "ops/mail/base.html" %}{% load ops %}
+{% block title %}{% if q %}Search results{% else %}{% for k, l in folders %}{% if k == folder %}{{ l }}{% endif %}{% endfor %}{% if folder == 'inbox' and inbox_unread %} ({{ inbox_unread }}){% endif %}{% endif %}{% endblock %}
+{% block main %}
+<form method="post" action="{{ base }}/action/" class="gm-listform" data-bulk>{% csrf_token %}
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  <div class="gm-toolbar">
+    <label class="gm-check gm-icon-btn" title="Select"><input type="checkbox" data-select-all><span></span></label>
+    <span class="gm-tb-idle">
+      <a class="gm-icon-btn" href="{{ request.get_full_path }}" title="Refresh" aria-label="Refresh">{% icon "refresh" %}</a>
+      <span class="gm-menu-wrap">
+        <button type="button" class="gm-icon-btn" data-menu title="More" aria-label="More">{% icon "more" %}</button>
+        <div class="gm-menu" hidden>
+          {% if not readonly %}<button type="button" data-select-and="read">Mark all as read</button>{% endif %}
+          <a href="{{ base }}/?folder=all">Open All mail</a>
+        </div>
+      </span>
+    </span>
+    <span class="gm-tb-selected" hidden>
+      {% if folder == 'trash' %}
+        <button class="gm-icon-btn" name="action" value="restore" title="Move to Inbox" aria-label="Restore">{% icon "restore" %}</button>
+      {% elif folder == 'drafts' %}
+        <button class="gm-icon-btn" name="action" value="discard" title="Discard drafts" aria-label="Discard drafts">{% icon "trash" %}</button>
+      {% else %}
+        {% if folder != 'sent' %}<button class="gm-icon-btn" name="action" value="archive" title="Archive" aria-label="Archive">{% icon "archive" %}</button>{% endif %}
+        <button class="gm-icon-btn" name="action" value="trash" title="Delete" aria-label="Delete">{% icon "trash" %}</button>
+        <span class="gm-tb-sep"></span>
+        <button class="gm-icon-btn" name="action" value="read" title="Mark as read" aria-label="Mark as read">{% icon "read" %}</button>
+        <button class="gm-icon-btn" name="action" value="unread" title="Mark as unread" aria-label="Mark as unread">{% icon "unread" %}</button>
+        <button class="gm-icon-btn" name="action" value="star" title="Star" aria-label="Star">{% icon "star_border" %}</button>
+      {% endif %}
+    </span>
+    <span class="gm-tb-right">
+      {% if total %}<span class="gm-range">{{ first }}–{{ last }} of {{ total }}</span>{% endif %}
+      <a class="gm-icon-btn{% if not has_prev %} disabled{% endif %}" href="{% if has_prev %}?folder={{ folder }}&q={{ q|urlencode }}&page={{ page|add:'-1' }}{% else %}#{% endif %}" aria-label="Newer">{% icon "prev" %}</a>
+      <a class="gm-icon-btn{% if not has_next %} disabled{% endif %}" href="{% if has_next %}?folder={{ folder }}&q={{ q|urlencode }}&page={{ page|add:'1' }}{% else %}#{% endif %}" aria-label="Older">{% icon "next" %}</a>
+    </span>
+  </div>
+  {% if q %}<div class="gm-searchnote">Results for <b>{{ q }}</b> in {% if folder == 'inbox' %}all mail{% else %}{{ folder }}{% endif %}</div>{% endif %}
+  {% if folder == 'trash' and rows %}<div class="gm-searchnote">Messages in Trash stay here; nothing is deleted for good during the exercise.</div>{% endif %}
+  <div class="gm-list" role="list">
+    {% for r in rows %}{% with m=r.latest %}
+    <div class="gm-row{% if r.unread %} unread{% endif %}" role="listitem" tabindex="-1"
+         {% if r.draft %}data-draft="{{ m.id }}"{% else %}data-href="{{ base }}/t/{{ r.thread }}/?folder={{ folder }}"{% endif %} data-thread="{{ r.thread }}">
+      <label class="gm-check" onclick="event.stopPropagation()"><input type="checkbox" name="threads" value="{{ r.thread }}"><span></span></label>
+      <span class="gm-avatar gm-ravatar" style="background: {{ r.people|avatar_colour }}">{% if r.draft %}D{% else %}{{ r.people|cut:"To: "|initial }}{% endif %}</span>
+      <button type="button" class="gm-star{% if r.starred %} on{% endif %}" data-star-thread="{{ r.thread }}" aria-label="Star" {% if readonly %}disabled{% endif %}>{% if r.starred %}{% icon "star" 20 %}{% else %}{% icon "star_border" 20 %}{% endif %}</button>
+      <span class="gm-from">{% if r.draft %}<span class="gm-draft-red">Draft</span>{% else %}{{ r.people }}{% endif %}{% if r.count > 1 %} <span class="gm-n">{{ r.count }}</span>{% endif %}</span>
+      <span class="gm-subj">
+        {% if folder != 'inbox' and m.folder == 'inbox' and not m.archived %}<span class="gm-label">Inbox</span>{% endif %}
+        <span class="gm-s">{{ r.subject|default:"(no subject)" }}</span>{% with sn=m.body|snippet:140 %}{% if sn %}<span class="gm-snip"> - {{ sn }}</span>{% endif %}{% endwith %}
+      </span>
+      <span class="gm-att">{% if r.has_files %}{% icon "attach" 18 %}{% endif %}</span>
+      <span class="gm-date">{{ m.created_at|maildate }}</span>
+      {% if not readonly %}
+      <span class="gm-hover" onclick="event.stopPropagation()">
+        {% if folder == 'trash' %}<button type="button" class="gm-icon-btn" data-row-action="restore" title="Move to Inbox">{% icon "restore" %}</button>
+        {% elif r.draft %}<button type="button" class="gm-icon-btn" data-row-action="discard" title="Discard">{% icon "trash" %}</button>
+        {% else %}
+        {% if m.folder == 'inbox' %}<button type="button" class="gm-icon-btn" data-row-action="archive" title="Archive">{% icon "archive" %}</button>{% endif %}
+        <button type="button" class="gm-icon-btn" data-row-action="trash" title="Delete">{% icon "trash" %}</button>
+        {% if r.unread %}<button type="button" class="gm-icon-btn" data-row-action="read" title="Mark as read">{% icon "read" %}</button>
+        {% else %}<button type="button" class="gm-icon-btn" data-row-action="unread" title="Mark as unread">{% icon "unread" %}</button>{% endif %}
+        {% endif %}
+      </span>
+      {% endif %}
+    </div>
+    {% endwith %}{% empty %}
+    <div class="gm-empty">{% if q %}No messages matched your search.{% elif folder == 'inbox' %}Your inbox is empty.{% elif folder == 'starred' %}No starred messages. Stars let you give messages a special status to make them easier to find.{% elif folder == 'drafts' %}You don't have any saved drafts.{% elif folder == 'trash' %}No conversations in Trash.{% else %}No conversations.{% endif %}</div>
+    {% endfor %}
+  </div>
+</form>
+{% endblock %}

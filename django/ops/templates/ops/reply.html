@@ -1,0 +1,59 @@
+{% extends "ops/base.html" %}{% load ops %}
+{% block title %}Reply · SIMEX ops{% endblock %}
+{% block body %}
+<h1><a href="/replies/?kind={{ r.kind }}" class="muted">Replies</a> / {{ r.subject|default:'(no subject)' }}</h1>
+<div class="cols">
+<section class="col-main">
+<div class="card">
+  <dl class="hdrs">
+    <dt>From</dt><dd>{{ r.from_name|default:'' }} &lt;{{ r.from_addr }}&gt;{% if r.person %} · <b>{{ r.person.name }}</b>{% else %} <span class="warn">(not in the roster)</span>{% endif %}{% if r.team %} · {{ r.team.name }}{% endif %}</dd>
+    <dt>To</dt><dd>{{ r.to|joinlist }}</dd>
+    {% if r.cc %}<dt>Cc</dt><dd>{{ r.cc|joinlist }}</dd>{% endif %}
+    <dt>Via</dt><dd>{% if r.channel == 'inapp' %}in-app{% if r.team %} · <a href="/inbox/as/{{ r.team_id }}/t/{{ r.mail.thread }}/?folder=sent">view in the team's mailbox</a>{% endif %}{% else %}email{% endif %}</dd>
+    <dt>Received</dt><dd>{{ r.received_at|date:"D d M H:i:s" }}{% if minutes is not None %} · <b>{{ minutes }} min</b> after the message it answers{% endif %}</dd>
+    <dt>Inject</dt><dd>{% if r.inject %}<a href="/injects/{{ r.inject.id }}/">{{ r.inject.mel_id }}</a> {{ r.inject.subject|default:'' }} <span class="muted">({{ r.match }})</span>{% else %}<span class="warn">not matched</span>{% endif %}</dd>
+    {% if files %}<dt>Files</dt><dd>{% for a in files %}{% if r.channel == 'email' %}{% if a.data is not None %}<a href="/response-files/{{ a.id }}/">{{ a.filename }}</a>{% else %}{{ a.filename }} <span class="muted">(too large, not stored)</span>{% endif %}{% else %}<a href="/inbox/file/{{ a.id }}/">{{ a.filename }}</a>{% endif %} <span class="muted">{{ a.size|kb }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}</dd>{% endif %}
+    {% if r.error %}<dt>Error</dt><dd class="err">{{ r.error }}</dd>{% endif %}
+  </dl>
+  {% if r.fetched %}
+    <pre class="mailtext">{{ new_part }}</pre>
+    {% if quoted %}<details><summary class="muted">quoted text</summary><pre class="mailtext muted">{{ quoted }}</pre></details>{% endif %}
+    {% if r.html and not r.text %}<iframe class="mail tall" sandbox srcdoc="{{ r.html }}"></iframe>{% endif %}
+  {% else %}<p class="muted">Content not fetched yet.</p>{% endif %}
+</div>
+
+{% if r.persona %}
+<form method="post" action="/replies/{{ r.id }}/answer/" class="card form">{% csrf_token %}
+  <h3>Answer as {% if sender %}{{ sender.display_name }}{% else %}{{ r.persona }}{% endif %} &lt;{{ r.persona }}@{{ MAIL_DOMAIN }}&gt;</h3>
+  <textarea name="body" rows="6" placeholder="In character.{% if r.channel == 'email' %} The original is quoted below your text.{% else %} It appears in the team's inbox in the same conversation.{% endif %}"></textarea>
+  <button class="btn" data-confirm="Send this reply to {% if r.team %}{{ r.team.name }}{% else %}{{ r.from_addr }}{% endif %}?">Send reply</button>
+  {% for m in answers %}<p class="small">Answered {{ m.created_at|date:"D H:i" }}: <a href="/log/{{ m.id }}/">{{ m.status }}</a></p>{% endfor %}
+</form>
+{% endif %}
+
+{% if thread %}
+<div class="card"><h3>Other replies from {{ r.team.name }} to {{ r.inject.mel_id }}</h3>
+  <ul>{% for t in thread %}<li><a href="/replies/{{ t.id }}/">{{ t.received_at|date:"D H:i" }}</a> {{ t.from_name|default:t.from_addr }}: {{ t.subject }}</li>{% endfor %}</ul></div>
+{% endif %}
+</section>
+<section class="col-side">
+{% if r.inject and r.team %}<div class="card"><a class="btn primary" href="/grades/{{ r.inject.id }}/{{ r.team.id }}/">Grade {{ r.team.name }} on {{ r.inject.mel_id }}</a></div>{% endif %}
+<form method="post" action="/replies/{{ r.id }}/" class="card form">{% csrf_token %}
+  <h3>Match</h3>
+  <label>Inject <select name="inject_id"><option value="">— none —</option>{% for i in injects_all %}<option value="{{ i.id }}" {% if i.id == r.inject_id %}selected{% endif %}>{{ i.mel_id }} {{ i.subject|default:''|truncatechars:40 }}</option>{% endfor %}</select></label>
+  <label>Team <select name="team_id"><option value="">— none —</option>{% for t in teams %}<option value="{{ t.id }}" {% if t.id == r.team_id %}selected{% endif %}>{{ t.name }}</option>{% endfor %}</select></label>
+  <label>Person <select name="person_id"><option value="">— none —</option>{% for p in people %}<option value="{{ p.id }}" {% if p.id == r.person_id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select></label>
+  <button class="btn">Save match</button>
+</form>
+<form method="post" action="/replies/{{ r.id }}/" class="card form">{% csrf_token %}
+  <h3>Status</h3>
+  <label class="chk"><input type="radio" name="status" value="new" {% if r.status == 'new' %}checked{% endif %}> new</label>
+  <label class="chk"><input type="radio" name="status" value="reviewed" {% if r.status == 'reviewed' %}checked{% endif %}> reviewed</label>
+  <label class="chk"><input type="radio" name="status" value="ignored" {% if r.status == 'ignored' %}checked{% endif %}> ignored</label>
+  {% if r.channel == 'email' %}<label class="chk"><input type="checkbox" name="refetch" value="1"> fetch the content again</label>{% endif %}
+  <button class="btn small">Save</button>
+</form>
+{% if r.message %}<div class="card"><h3>In reply to</h3><p class="small"><a href="/log/{{ r.message.id }}/">{{ r.message.subject }}</a><br>delivered {{ r.message.sent_at|date:"D d M H:i" }} to {{ r.message.target }}</p></div>{% endif %}
+</section>
+</div>
+{% endblock %}

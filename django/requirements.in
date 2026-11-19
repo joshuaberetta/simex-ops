@@ -1,0 +1,9 @@
+django>=5.1,<6
+dj-database-url
+psycopg[binary]
+gunicorn
+whitenoise
+httpx
+openpyxl
+tzdata
+markdown

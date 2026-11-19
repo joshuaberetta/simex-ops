@@ -1,0 +1,48 @@
+# DigitalOcean App Platform: the Django version with in-app team mailboxes,
+# https://inbox.simex.kobolabs.dev (branch django-inbox, code in django/).
+#
+# Secrets have no value here on purpose (an update replaces the whole spec). Render a copy
+# with the values before `doctl apps create/update --spec`, and delete it afterwards.
+#
+# Database: like the main app, its own database and user on an existing cluster (the account
+# is at its database limit), given as the DATABASE_URL secret, with the app added to the
+# cluster's trusted sources:  doctl databases firewalls append <cluster-id> --rule app:<app-id>
+#
+# Two components share the image: web (gunicorn, migrations at start) and scheduler (a
+# worker running `manage.py run_scheduler`). Exactly one scheduler instance.
+name: simex-inbox
+region: fra
+alerts:
+  - rule: DEPLOYMENT_FAILED
+  - rule: DOMAIN_FAILED
+domains:
+  - domain: inbox.simex.kobolabs.dev
+    type: PRIMARY
+    zone: kobolabs.dev
+envs:
+  - { key: DATABASE_URL, scope: RUN_TIME, type: SECRET }
+  - { key: SECRET_KEY, scope: RUN_AND_BUILD_TIME, type: SECRET }
+  - { key: APP_PASSWORD, scope: RUN_TIME, type: SECRET }
+  - { key: RESEND_API_KEY, scope: RUN_TIME, type: SECRET }
+  - { key: RESEND_WEBHOOK_SECRET, scope: RUN_TIME, type: SECRET }
+  - { key: APP_USERNAME, scope: RUN_TIME, value: "undac" }
+  - { key: PUBLIC_URL, scope: RUN_TIME, value: "https://inbox.simex.kobolabs.dev" }
+  - { key: MAIL_DOMAIN, scope: RUN_TIME, value: "simex.kobolabs.dev" }
+  - { key: EXERCISE_TZ, scope: RUN_TIME, value: "Africa/Nairobi" }
+services:
+  - name: web
+    github: { repo: joshuaberetta/simex-ops, branch: django-inbox, deploy_on_push: true }
+    source_dir: django
+    dockerfile_path: django/Dockerfile
+    http_port: 8080
+    instance_size_slug: apps-s-1vcpu-1gb
+    instance_count: 1
+    health_check: { http_path: /healthz, initial_delay_seconds: 20, period_seconds: 10, failure_threshold: 6 }
+workers:
+  - name: scheduler
+    github: { repo: joshuaberetta/simex-ops, branch: django-inbox, deploy_on_push: true }
+    source_dir: django
+    dockerfile_path: django/Dockerfile
+    run_command: python manage.py run_scheduler
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    instance_count: 1

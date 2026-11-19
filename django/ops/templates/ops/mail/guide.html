@@ -1,0 +1,6 @@
+{% extends "ops/mail/base.html" %}{% load ops %}
+{% block title %}Help{% endblock %}
+{% block main %}
+<div class="gm-toolbar"><a class="gm-icon-btn" href="{{ base }}/" aria-label="Back to Inbox">{% icon "back" %}</a></div>
+<article class="gm-guide">{{ guide }}</article>
+{% endblock %}

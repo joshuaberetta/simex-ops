@@ -1,0 +1,311 @@
+"""Turn an inject into the concrete deliveries it produces: emails (one per team, per person,
+or one for everyone) or in-app inbox items (one per team inbox / person), with placeholders
+filled, footer added and, for tests, recipients redirected."""
+
+import html as htmlmod
+import re
+from dataclasses import dataclass, field
+
+from django.conf import settings as config
+
+from .models import Person, Sender, Team
+
+PLACEHOLDER = re.compile(r"\{(team|team_name|name|first_name)\}")
+EMAIL = re.compile(r"^[^@\s,;<>]+@[^@\s,;<>]+\.[^@\s,;<>]+$")
+LOCAL = re.compile(r"^[a-z0-9][a-z0-9._+-]*$")
+# Addresses that must never get a live email (seeded placeholders, documentation domains).
+PLACEHOLDER_DOMAIN = re.compile(r"(\.invalid|@example\.(com|org|net)|\.example)$", re.I)
+URL = re.compile(r"(https?://[^\s<>\"']+)")
+
+
+@dataclass
+class Draft:
+    target: str
+    from_addr: str
+    reply_to: str | None
+    to: list
+    cc: list
+    bcc: list
+    subject: str
+    body: str
+    footer: str
+    attachment_ids: list
+    warnings: list = field(default_factory=list)
+    banner: str | None = None
+    original_to: dict | None = None
+    team_id: int | None = None
+    person_id: int | None = None
+    reply_local: str = ""  # with reply_to None, replies go to <reply_local>+<token>@MAIL_DOMAIN
+    channel: str = "email"
+    inbox_team_id: int | None = None  # in-app: the team inbox it lands in
+    to_label: str = ""  # in-app: what the To line shows
+    from_name: str = ""
+
+    @property
+    def reply_display(self):
+        return self.reply_to or f"{self.reply_local}+<ref>@{config.MAIL_DOMAIN} (tracked in Replies)"
+
+    @property
+    def text(self):
+        parts = ([self.banner] if self.banner else []) + [self.body]
+        return "\n\n".join(parts) + (("\n\n--\n" + self.footer) if self.footer else "")
+
+    @property
+    def html(self):
+        return wrap_html(text_to_html(self.body), self.footer, banner=self.banner)
+
+
+def split_addresses(value):
+    return [a.strip() for a in re.split(r"[,;\s]+", value or "") if a.strip()]
+
+
+def fill(template, ctx):
+    return PLACEHOLDER.sub(lambda m: ctx.get(m.group(1), m.group(0)), template or "")
+
+
+def text_to_html(text):
+    out = []
+    for para in re.split(r"\n\s*\n", text.strip()):
+        esc = htmlmod.escape(para)
+        esc = URL.sub(r'<a href="\1">\1</a>', esc)
+        out.append("<p>" + esc.replace("\n", "<br>\n") + "</p>")
+    return "\n".join(out)
+
+
+def wrap_html(body_html, footer_text, banner=None):
+    parts = ['<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.45;color:#111">']
+    if banner:
+        parts.append('<div style="border:2px solid #b45309;background:#fffbeb;padding:8px 10px;margin-bottom:14px;'
+                     'font-size:13px">' + text_to_html(banner) + "</div>")
+    parts.append(body_html)
+    if footer_text:
+        parts.append('<hr style="border:none;border-top:1px solid #ccc;margin:18px 0 8px">'
+                     '<div style="font-size:12px;color:#666">' + text_to_html(footer_text) + "</div>")
+    parts.append("</div>")
+    return "\n".join(parts)
+
+
+def footer_for(inj, cfg):
+    if inj.footer_mode == "none":
+        return ""
+    if inj.footer_mode == "custom":
+        return inj.footer or ""
+    return cfg.get("footer", "")
+
+
+def sender_for(inj):
+    return Sender.objects.filter(local_part=inj.sender_local).first() if inj.sender_local else None
+
+
+def scope_teams(inj):
+    teams = list(Team.objects.filter(active=True, is_test=False))
+    if inj.team_ids:
+        teams = [t for t in teams if t.id in inj.team_ids]
+    return teams
+
+
+def _targets(inj, warnings):
+    """(target label, placeholder context, to-list, team id, person id) per email."""
+    teams = scope_teams(inj)
+
+    def members(t):
+        return [p for p in t.people.all() if p.active and p.email]
+    if inj.delivery == "each_team":
+        if not teams:
+            warnings.append("No active teams: add teams on the People tab.")
+        out = []
+        for t in teams:
+            to = [t.email] if t.email else [p.email for p in members(t)]
+            if not to:
+                warnings.append(f"{t.name} has no members or team email.")
+                continue
+            out.append((t.name, {"team": t.code, "team_name": t.name, "name": t.name, "first_name": t.name}, to,
+                        t.id, None))
+        return out
+    if inj.delivery == "each_person":
+        out = []
+        for t in teams:
+            for p in members(t):
+                first = p.name.split()[0] if p.name.split() else p.name
+                out.append((f"{p.name} ({t.name})",
+                            {"team": t.code, "team_name": t.name, "name": p.name, "first_name": first}, [p.email],
+                            t.id, p.id))
+        if not inj.team_ids:  # people not in a team are included when sending to everyone
+            for p in Person.objects.filter(active=True, team=None).exclude(email="").order_by("name"):
+                first = p.name.split()[0] if p.name.split() else p.name
+                out.append((p.name, {"team": "", "team_name": "", "name": p.name, "first_name": first}, [p.email],
+                            None, p.id))
+        if not out:
+            warnings.append("No active participants to send to.")
+        return out
+    if inj.delivery == "all_bcc":
+        people = [p.email for t in teams for p in members(t)]
+        if not inj.team_ids:
+            people += [p.email for p in Person.objects.filter(active=True, team=None).exclude(email="")]
+        if not people:
+            warnings.append("No active participants to send to.")
+            return []
+        return [("all participants (Bcc)", {"team": "", "team_name": "", "name": "", "first_name": ""},
+                 ["__bcc__"] + people, None, None)]
+    return [("custom", {"team": "", "team_name": "", "name": "", "first_name": ""}, [], None, None)]
+
+
+def _sender_checks(inj, warnings):
+    sender = sender_for(inj)
+    if not inj.sender_local:
+        warnings.append("No sender set.")
+    elif not sender:
+        warnings.append(f"Sender '{inj.sender_local}' is not in the Senders list (the address is still used).")
+    return sender
+
+
+def build(inj, cfg):
+    """Every delivery of an inject on its channel, or [] with warnings explaining why not."""
+    return build_inapp(inj, cfg) if inj.channel == "inapp" else build_email(inj, cfg)
+
+
+def _identity(inj, sender, ctx):
+    local = fill(inj.sender_local or "", ctx).lower()
+    name = fill(inj.from_name or (sender.display_name if sender else "") or local, ctx).replace('"', "'")
+    return local, name
+
+
+def build_inapp(inj, cfg):
+    """In-app: one inbox item per team (each_team, all_bcc) or per participant (each_person)."""
+    warnings = []
+    sender = _sender_checks(inj, warnings)
+    footer = footer_for(inj, cfg)
+    teams = scope_teams(inj)
+    atts = list(inj.attachments.all()) if inj.pk else []
+    if not teams:
+        warnings.append("No active teams: add teams on the People tab.")
+    targets = []
+    for t in teams:
+        if inj.delivery == "each_person":
+            people = [p for p in t.people.all() if p.active]
+            if not people:
+                warnings.append(f"{t.name} has no participants.")
+            for p in people:
+                targets.append((f"{p.name} ({t.name})", {"team": t.code, "team_name": t.name, "name": p.name,
+                                                          "first_name": p.first_name}, t, p, p.name))
+        elif inj.delivery == "each_team":
+            targets.append((t.name, {"team": t.code, "team_name": t.name, "name": t.name, "first_name": t.name},
+                            t, None, t.name))
+        else:  # all_bcc / custom: the same message in every team's inbox
+            targets.append((t.name, {"team": "", "team_name": "", "name": "", "first_name": ""}, t, None,
+                            "All teams"))
+    drafts = []
+    for target, ctx, team, person, to_label in targets:
+        local, name = _identity(inj, sender, ctx)
+        subject = (cfg.get("subject_prefix") or "") + fill(inj.subject or "", ctx)
+        d = Draft(target=target, from_addr=f'"{name}" <{local}@{config.MAIL_DOMAIN}>', reply_to=None, to=[], cc=[],
+                  bcc=[], subject=subject, body=fill(inj.body or "", ctx), footer=footer,
+                  attachment_ids=[a.id for a in atts], team_id=team.id, person_id=person.id if person else None,
+                  reply_local=local, channel="inapp", inbox_team_id=team.id, to_label=to_label, from_name=name)
+        if not LOCAL.match(local):
+            d.warnings.append(f"Sender username '{local}' is not a valid email username.")
+        if not subject.strip():
+            d.warnings.append("Empty subject.")
+        drafts.append(d)
+    return drafts, warnings
+
+
+def build_email(inj, cfg):
+    """All emails for an inject, or [] with warnings explaining why not."""
+    warnings = []
+    sender = sender_for(inj)
+    if not inj.sender_local:
+        warnings.append("No sender set.")
+    elif not sender:
+        warnings.append(f"Sender '{inj.sender_local}' is not in the Senders list (the address is still used).")
+    reply_to = inj.reply_to or (sender.reply_to if sender else None) or cfg.get("default_reply_to") or None
+    footer = footer_for(inj, cfg)
+    to_extra, cc, bcc = split_addresses(inj.to_extra), split_addresses(inj.cc), split_addresses(inj.bcc)
+    excon = split_addresses(cfg.get("excon_bcc"))
+    drafts = []
+    atts = list(inj.attachments.all()) if inj.pk else []
+    for target, ctx, to, team_id, person_id in _targets(inj, warnings):
+        local, name = _identity(inj, sender, ctx)
+        from_addr = f'"{name}" <{local}@{config.MAIL_DOMAIN}>'
+        this_bcc = list(bcc) + excon
+        if to and to[0] == "__bcc__":
+            # Resend needs a To address: the reply-to if one is set, else the persona itself
+            # (it arrives in Replies, where mail from our own domain is ignored).
+            this_bcc = to[1:] + this_bcc
+            to = [reply_to] if reply_to else [f"{local}@{config.MAIL_DOMAIN}"]
+        to = to + to_extra
+        subject = (cfg.get("subject_prefix") or "") + fill(inj.subject or "", ctx)
+        d = Draft(target=target, from_addr=from_addr, reply_to=reply_to, to=_dedupe(to), cc=_dedupe(cc),
+                  bcc=_dedupe(this_bcc), subject=subject, body=fill(inj.body or "", ctx), footer=footer,
+                  attachment_ids=[a.id for a in atts], team_id=team_id, person_id=person_id,
+                  reply_local=local, from_name=name)
+        total = sum(a.size for a in atts)
+        if total > 28 * 1024 * 1024:  # Resend: 40 MB per email after base64 (+33%)
+            d.warnings.append(f"Attachments total {total / 1e6:.0f} MB: over Resend's 40 MB per email once encoded.")
+        if not LOCAL.match(local):
+            d.warnings.append(f"Sender username '{local}' is not a valid email username.")
+        if not d.to:
+            d.warnings.append("No To address.")
+        if not subject.strip():
+            d.warnings.append("Empty subject.")
+        for a in d.to + d.cc + d.bcc + ([reply_to] if reply_to else []):
+            if not EMAIL.match(a):
+                d.warnings.append(f"'{a}' does not look like an email address.")
+            elif PLACEHOLDER_DOMAIN.search(a):
+                d.warnings.append(f"{a} is a placeholder address: live sends skip it.")
+        drafts.append(d)
+    return drafts, warnings
+
+
+def _dedupe(addrs):
+    seen, out = set(), []
+    for a in addrs:
+        k = a.lower()
+        if k not in seen:
+            seen.add(k)
+            out.append(a)
+    return out
+
+
+def _key(addr):
+    return re.sub(r"[^a-z0-9]+", "-", addr.split("@")[0].lower()).strip("-")[:40] or "x"
+
+
+def redirect(d: Draft, pattern, label="TEST"):
+    """Point every recipient of a draft at the test inbox(es) given by pattern ({key} = the
+    original address's username) and add a banner listing the real recipients."""
+    def r(addrs):
+        return _dedupe([pattern.replace("{key}", _key(a)) for a in addrs])
+    lines = [f"{label}: in the live exercise this email would go to"]
+    for lab, lst in (("To", d.to), ("Cc", d.cc), ("Bcc", d.bcc)):
+        if lst:
+            lines.append(f"{lab}: {', '.join(lst)}")
+    if not d.to:
+        lines.append("WARNING: no To address, so the live send would fail.")
+    d.banner = "\n".join(lines)
+    d.original_to = {"to": d.to, "cc": d.cc, "bcc": d.bcc}
+    d.to, d.cc, d.bcc = r(d.to) or [pattern.replace("{key}", "no-to")], r(d.cc), r(d.bcc)
+    d.cc = [a for a in d.cc if a not in d.to]
+    d.bcc = [a for a in d.bcc if a not in d.to and a not in d.cc]
+    d.subject = f"[{label}] {d.subject}"
+    d.warnings = [w for w in d.warnings if "placeholder address" not in w]
+    return d
+
+
+def strip_placeholders(d: Draft):
+    """Live sends: drop placeholder addresses. Returns the addresses removed."""
+    removed = [a for a in d.to + d.cc + d.bcc if PLACEHOLDER_DOMAIN.search(a)]
+    d.to = [a for a in d.to if a not in removed]
+    d.cc = [a for a in d.cc if a not in removed]
+    d.bcc = [a for a in d.bcc if a not in removed]
+    return removed
+
+
+def redirect_inapp(d: Draft, test_team, label="TEST"):
+    """Test runs, in-app: deliver to the Test team's inbox, with a banner naming the real one."""
+    d.banner = f"{label}: in the live exercise this goes to the inbox of {d.target}" + (
+        f" (To: {d.to_label})" if d.to_label and d.to_label != d.target else "") + "."
+    d.original_to = {"inbox": d.target}
+    d.inbox_team_id = test_team.id
+    d.subject = f"[{label}] {d.subject}"
+    return d

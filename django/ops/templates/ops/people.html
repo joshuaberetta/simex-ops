@@ -1,0 +1,87 @@
+{% extends "ops/base.html" %}
+{% block title %}People · SIMEX ops{% endblock %}
+{% block body %}
+<h1>People, teams &amp; logins</h1>
+{% if creds %}
+<div class="card live-card">
+  <h3>New logins: shown once</h3>
+  <p class="small">Copy or print these now. Passwords are not stored in readable form; reset a login to issue a new one.</p>
+  <table class="list small"><thead><tr><th>Name</th><th>Team</th><th>Username</th><th>Password</th></tr></thead>
+  {% for row in creds %}<tr><td>{{ row.0 }}</td><td>{{ row.1 }}</td><td><code>{{ row.2 }}</code></td><td><code>{{ row.3 }}</code></td></tr>{% endfor %}</table>
+  <form method="post" action="/people/credentials/" target="_blank" class="inline">{% csrf_token %}
+    <input type="hidden" name="rows" value="{{ creds_json }}"><button class="btn small">Printable sheet</button></form>
+</div>
+{% endif %}
+{% if has_placeholders %}
+<div class="flash warn">Some people are placeholders (…@placeholder.invalid, no login). Replace them with the real roster before the exercise.</div>
+{% endif %}
+<div class="cols">
+<section class="col-main">
+<h2>Teams</h2>
+<p class="muted small">Each team has one shared inbox. The code fills <code>{team}</code> (e.g. in <code>undac-{team}-tl</code>), the name fills <code>{team_name}</code>.
+The <b>Test team</b> receives test runs and test sends; give yourself a login in it to try the participant view.</p>
+<table class="list">
+  <thead><tr><th colspan="6">Order · code · name · email inbox (email channel, optional) · active</th></tr></thead>
+  {% for t in teams %}
+  <tr><td colspan="6"><form method="post" action="/teams/save/" class="rowform">{% csrf_token %}
+    <input type="hidden" name="id" value="{{ t.id }}">
+    <input name="sort" value="{{ t.sort }}" class="narrow">
+    <input name="code" value="{{ t.code }}" class="narrow" required>
+    <input name="name" value="{{ t.name }}" required>
+    <input name="email" value="{{ t.email }}" placeholder="optional">
+    <label class="chk"><input type="checkbox" name="active" value="1" {% if t.active %}checked{% endif %}></label>
+    <span class="muted small">{{ t.people.count }} people{% if t.is_test %} · test team{% endif %}</span>
+    <a class="small" href="/inboxes/?team={{ t.id }}">inbox</a>
+    <button class="btn small">Save</button>
+  </form>
+  {% if not t.is_test %}<form method="post" action="/teams/{{ t.id }}/delete/" class="inline">{% csrf_token %}<button class="link" data-confirm="Delete {{ t.name }} and its inbox? Its people stay, without a team.">delete</button></form>{% endif %}</td></tr>
+  {% endfor %}
+</table>
+<form method="post" action="/teams/save/" class="card rowform">{% csrf_token %}<b>Add team</b>
+  <input name="sort" value="{{ teams|length }}" class="narrow"><input name="code" placeholder="e" class="narrow" required><input name="name" placeholder="Team E" required><input name="email" placeholder="email inbox (optional)">
+  <button class="btn small primary">Add team</button></form>
+
+<h2>People</h2>
+<table class="list">
+  <thead><tr><th colspan="7">Name · email · team · role · active · login</th></tr></thead>
+  {% for p in people %}
+  <tr><td colspan="7"><form method="post" action="/people/save/" class="rowform">{% csrf_token %}
+    <input type="hidden" name="id" value="{{ p.id }}">
+    <input name="name" value="{{ p.name }}" required>
+    <input name="email" value="{{ p.email }}" placeholder="email (optional)" class="{% if 'placeholder.invalid' in p.email %}placeholder{% endif %}">
+    <select name="team_id"><option value="">— no team —</option>{% for t in teams %}<option value="{{ t.id }}" {% if t.id == p.team_id %}selected{% endif %}>{{ t.name }}</option>{% endfor %}</select>
+    <select name="role"><option value="member">member</option><option value="tl" {% if p.role == 'tl' %}selected{% endif %}>team leader</option></select>
+    <label class="chk"><input type="checkbox" name="active" value="1" {% if p.active %}checked{% endif %}></label>
+    <button class="btn small">Save</button>
+  </form>
+  <form method="post" action="/people/{{ p.id }}/account/" class="inline">{% csrf_token %}
+    {% if p.user %}<code class="small">{{ p.user.username }}</code>{% if not p.user.is_active %} <span class="warn small">disabled</span>{% endif %}
+      <button class="link" name="action" value="reset" data-confirm="Issue a new password for {{ p.name }}?">reset password</button>
+      {% if p.user.is_active %}<button class="link" name="action" value="deactivate">disable</button>{% else %}<button class="link" name="action" value="activate">enable</button>{% endif %}
+    {% else %}<button class="link" name="action" value="create">create login</button>{% endif %}
+  </form>
+  <form method="post" action="/people/{{ p.id }}/delete/" class="inline">{% csrf_token %}<button class="link" data-confirm="Delete {{ p.name }} and their login?">delete</button></form></td></tr>
+  {% endfor %}
+</table>
+<form method="post" action="/people/save/" class="card rowform">{% csrf_token %}<b>Add person</b>
+  <input name="name" placeholder="Name" required><input name="email" placeholder="email (optional)">
+  <select name="team_id"><option value="">— no team —</option>{% for t in teams %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}</select>
+  <select name="role"><option value="member">member</option><option value="tl">team leader</option></select>
+  <label class="chk"><input type="checkbox" name="account" value="1" checked> create login</label>
+  <button class="btn small primary">Add</button></form>
+</section>
+<section class="col-side">
+<form method="post" action="/people/bulk/" class="card form">{% csrf_token %}
+  <h3>Paste a roster</h3>
+  <p class="small">CSV lines: <code>name,email,team code,role</code> (email optional, role <code>tl</code> or empty). Unknown team codes create a team. Existing people (same email) are updated.</p>
+  <textarea name="csv" rows="10" placeholder="Jane Doe,jane@example.org,a,tl&#10;John Roe,,a"></textarea>
+  <label class="chk"><input type="checkbox" name="accounts" value="1" checked> create logins for people without one</label>
+  <label class="chk"><input type="checkbox" name="replace_placeholders" value="1" checked> remove the placeholder people</label>
+  <button class="btn primary">Add people</button>
+</form>
+<div class="card small"><h3>Who sees what</h3>
+<p>Participant logins see only their own team's inbox at <code>/inbox/</code>: messages delivered to the team, what the team sent, and the persona address book. They never see injects, schedules, rubrics, grades or other teams.</p>
+<p>ExCon logins are Django staff users (or members of the <code>excon</code> group); create more in <a href="/django-admin/auth/user/">Django admin</a>.</p></div>
+</section>
+</div>
+{% endblock %}

@@ -1,0 +1,76 @@
+from django.contrib.auth import views as auth_views
+from django.urls import include, path
+
+from . import views_excon as x
+from . import views_inbox as p
+
+# The participant mail client. Mounted twice: /inbox/ for the logged-in team, and
+# /inbox/as/<team id>/ for ExCon's read-only "view as team".
+mail_patterns = [
+    path("", p.inbox),
+    path("t/<str:thread>/", p.thread_view),
+    path("action/", p.action),
+    path("star/<int:mid>/", p.star_mail),
+    path("draft/", p.draft_save),
+    path("draft/<int:mid>/", p.draft_get),
+    path("send/", p.send),
+    path("poll/", p.poll),
+    path("file/<int:fid>/", p.mail_file),
+    path("help/", p.guide),
+]
+
+urlpatterns = [
+    path("", p.home),
+    path("healthz", p.healthz),
+    path("login/", p.ThrottledLogin.as_view()),
+    path("logout/", auth_views.LogoutView.as_view(next_page="/login/")),
+    path("webhooks/resend", p.resend_webhook),
+    path("inbox/as/<int:as_team>/", include(mail_patterns)),
+    path("inbox/", include(mail_patterns)),
+    # ExCon
+    path("injects/", x.injects),
+    path("injects/bulk/", x.injects_bulk),
+    path("injects/new/", x.inject_new),
+    path("injects/<int:iid>/", x.inject_page),
+    path("injects/<int:iid>/status/", x.inject_status),
+    path("injects/<int:iid>/send/", x.inject_send),
+    path("injects/<int:iid>/test/", x.inject_test),
+    path("injects/<int:iid>/delete/", x.inject_delete),
+    path("injects/<int:iid>/attachments/", x.attachments_upload),
+    path("injects/<int:iid>/rubric/", x.rubric_save),
+    path("attachments/<int:aid>/", x.attachment_get),
+    path("attachments/<int:aid>/delete/", x.attachment_delete),
+    path("import/", x.import_page),
+    path("import/<int:bid>/apply/", x.import_apply),
+    path("import/attachments/", x.import_attachments),
+    path("senders/", x.senders_page),
+    path("senders/<int:sid>/delete/", x.sender_delete),
+    path("people/", x.people_page),
+    path("people/bulk/", x.people_bulk),
+    path("people/save/", x.person_save),
+    path("people/credentials/", x.credentials_sheet),
+    path("people/<int:pid>/delete/", x.person_delete),
+    path("people/<int:pid>/account/", x.person_account),
+    path("teams/save/", x.team_save),
+    path("teams/<int:tid>/delete/", x.team_delete),
+    path("inboxes/", x.inboxes),
+    path("tests/", x.tests_page),
+    path("tests/<int:rid>/", x.test_run_page),
+    path("tests/<int:rid>/action/", x.test_run_action),
+    path("replies/", x.replies_page),
+    path("replies/sync/", x.replies_sync),
+    path("replies/export.csv", x.replies_export),
+    path("replies/<int:rid>/", x.reply_page),
+    path("replies/<int:rid>/answer/", x.reply_answer),
+    path("response-files/<int:aid>/", x.response_attachment),
+    path("grades/<int:iid>/<int:tid>/", x.grade_page),
+    path("help/", x.help_page),
+    path("log/", x.log_page),
+    path("log/<int:mid>/", x.message_page),
+    path("settings/", x.settings_page),
+    path("settings/arm/", x.settings_arm),
+    path("settings/pause/", x.settings_pause),
+    path("settings/domain/", x.settings_domain),
+    path("settings/backup/", x.settings_backup),
+    path("settings/restore/", x.settings_restore),
+]

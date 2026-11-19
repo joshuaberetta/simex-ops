@@ -1,0 +1,47 @@
+# SIMEX inbox (Django)
+
+The Django version of SIMEX ops, on branch `django-inbox`, intended for **https://inbox.simex.kobolabs.dev**. It keeps every feature of the FastAPI app (`../app/`) and adds **in-app team mailboxes** as the default way to deliver injects, so an exercise can run without email at all. Operator manual: [`docs/MANUAL.md`](docs/MANUAL.md) (served at `/help/`); participant guide: [`docs/PARTICIPANT_GUIDE.md`](docs/PARTICIPANT_GUIDE.md) (at `/inbox/help/`).
+
+## What is different from the FastAPI app
+
+| | FastAPI app | Django app |
+|---|---|---|
+| Delivery | Email via Resend | Per inject: **in-app** (default) or email via Resend |
+| Participants | Email addresses only | Logins (one per person), each in a team; a shared **team mailbox** ("SIMEX Mail", a familiar webmail layout) |
+| Replies | Resend inbound webhook, matched by reply token or a guess | In-app replies matched **exactly**; email as before |
+| ExCon view of teams | — | **View as team** (read-only, nothing marked read) |
+| Engagement | Resend opens/clicks | In-app **read** (first read, times opened) and attachment downloads; email opens/clicks/bounces as before |
+| Users | One shared login | Django auth: ExCon = staff or group `excon`; participants see only `/inbox/` for their team |
+| Scheduler | Thread in the web process | Separate worker (`manage.py run_scheduler`) |
+| Schema | `create_all` | Django migrations |
+
+## Decisions made (the user can overturn them)
+
+- **Accounts:** one login per participant; one shared mailbox per team; every sent message records who wrote it. ExCon creates logins on **People & logins** (single, or bulk CSV `name,email,team code,role`), sees generated passwords once, can print a credential sheet, reset passwords, disable logins. Django admin is a secondary tool only.
+- **Who participants can write to:** the active Senders (personas) as an address book. **Team-to-team** messages are a setting, off by default.
+- **Channel per inject:** `inapp` by default (also for imports); `email` keeps the Resend path with idempotency keys, placeholder stripping, reply tokens and the Svix-verified webhook.
+- **In-app delivery:** each_team → that team's mailbox; each_person → the person's team mailbox, addressed to them; everyone → a copy in every team's mailbox. "Only these addresses" is email-only.
+- **Tests:** in-app test sends and test runs go to the **Test team** mailbox with a banner naming the real team; email tests keep the address redirect.
+- **Scheduler as a worker component** rather than a thread: the web runs several gunicorn workers, and a separate process keeps deliveries going during web redeploys. Rows are claimed with conditional UPDATEs and `SELECT … FOR UPDATE SKIP LOCKED` on Postgres; in-app items are created in the same transaction that marks the delivery sent.
+- **Participant client styling:** the layout follows the webmail clients participants know (top search bar, Compose button and folders on the left, conversation list, threaded view, floating compose window, keyboard shortcuts), built with system fonts and inline Material Design icons (Apache 2.0). It is branded **SIMEX Mail** with its own logo; it uses no Google logo, name, fonts or assets, and must not be presented as Gmail.
+
+## Run locally
+
+```
+cd django
+uv venv -p 3.12 .venv && uv pip install -p .venv -r requirements.txt pytest pytest-django
+.venv/bin/python manage.py migrate && .venv/bin/python manage.py seed_simex      # ExCon login undac / nairobi2026 (APP_PASSWORD), teams A-D, Test team
+.venv/bin/python manage.py runserver                                            # http://127.0.0.1:8000
+.venv/bin/python manage.py run_scheduler                                        # in a second terminal
+.venv/bin/python -m pytest -q                                                   # tests (SQLite, log mailer)
+```
+
+Environment: `DATABASE_URL` (default SQLite), `SECRET_KEY`, `APP_USERNAME`, `APP_PASSWORD`, `PUBLIC_URL` (an `https://` URL switches on production settings), `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `MAIL_DOMAIN`, `EXERCISE_TZ`, `TICK_SECONDS`.
+
+## Deploy
+
+`.do/app-django.yaml` (app `simex-inbox`, components `web` and `scheduler`). Render the secrets into a copy before `doctl apps create --spec`, then add the app to the database cluster's trusted sources. Not deployed yet.
+
+## Layout
+
+`simex/` settings and URLs · `ops/models.py` · `ops/importer.py`, `render.py`, `mailer.py` (ported) · `ops/delivery.py` scheduler and delivery for both channels · `ops/inbound.py` email webhook, in-app responses, engagement · `ops/views_excon.py` ExCon tabs · `ops/views_inbox.py` the participant mail client (also mounted read-only at `/inbox/as/<team>/`) · `ops/templates/ops/mail/` participant templates, `ops/static/ops/mail.{css,js}` · `ops/tests/`.

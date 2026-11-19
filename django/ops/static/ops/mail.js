@@ -1,0 +1,393 @@
+// SIMEX Mail: compose window, recipient chips, drafts, list/thread actions, shortcuts, polling.
+(function () {
+  "use strict";
+  const CFG = JSON.parse(document.getElementById("simex-config").textContent);
+  const BASE = CFG.base;
+  const $ = (s, el = document) => el.querySelector(s);
+  const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
+  const csrf = () => ($('[name="csrfmiddlewaretoken"]') || {}).value || "";
+  const BOOK = CFG.book || [];
+  const byKey = Object.fromEntries(BOOK.map((b) => [b.key, b]));
+  const COLOURS = ["#1a73e8", "#d93025", "#188038", "#e37400", "#9334e6", "#007b83", "#c5221f", "#5f6368", "#b06000", "#1967d2", "#a142f4", "#12b5cb"];
+  const colour = (s) => { let h = 0; for (const c of s || "?") h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLOURS[h % COLOURS.length]; };
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  function post(url, data) {
+    const body = data instanceof FormData ? data : new URLSearchParams(data);
+    return fetch(url, { method: "POST", body, headers: { "X-CSRFToken": csrf(), "X-Requested-With": "fetch" }, credentials: "same-origin" });
+  }
+
+  function snack(text, action) {
+    const el = $("#snackbar");
+    el.innerHTML = esc(text) + (action ? ` <button type="button">${esc(action.label)}</button>` : "");
+    el.hidden = false;
+    if (action) $("button", el).onclick = action.run;
+    clearTimeout(snack.t);
+    snack.t = setTimeout(() => { el.hidden = true; }, 6000);
+  }
+
+  // --- sidebar, account card, menus --------------------------------------------------------------
+  const side = $("[data-toggle-side]");
+  if (side) side.onclick = () => {
+    if (window.matchMedia("(max-width: 760px)").matches) document.body.classList.toggle("side-open");
+    else document.body.classList.toggle("side-collapsed");
+  };
+  document.addEventListener("click", (e) => {
+    const acc = e.target.closest("[data-account]");
+    const card = $(".gm-account-card");
+    if (card) { if (acc) card.hidden = !card.hidden; else if (!e.target.closest(".gm-account-card")) card.hidden = true; }
+    const menuBtn = e.target.closest("[data-menu]");
+    $$(".gm-menu").forEach((m) => { if (!menuBtn || m.previousElementSibling !== menuBtn) m.hidden = true; });
+    if (menuBtn) menuBtn.nextElementSibling.hidden = !menuBtn.nextElementSibling.hidden;
+    const det = e.target.closest("[data-details]");
+    $$(".gm-details").forEach((d) => { if (!det || d.previousElementSibling !== det) d.hidden = true; });
+    if (det) { e.stopPropagation(); det.nextElementSibling.hidden = !det.nextElementSibling.hidden; }
+    if (document.body.classList.contains("side-open") && !e.target.closest(".gm-side, [data-toggle-side]")) document.body.classList.remove("side-open");
+  });
+
+  // --- composer (floating window and inline reply share it) ---------------------------------------
+  class Composer {
+    constructor(form, opts = {}) {
+      this.form = form;
+      this.opts = opts;
+      this.keys = { to: [], cc: [], bcc: [] };
+      this.files = [];
+      this.dirty = false;
+      this.saving = null;
+      for (const field of ["to", "cc", "bcc"]) this.bindChips(field);
+      $$("[data-show]", form).forEach((b) => b.onclick = () => { $(`[data-field="${b.dataset.show}"]`, form).hidden = false; b.hidden = true; $(`[data-chip-input="${b.dataset.show}"]`, form).focus(); });
+      $("[data-files]", form).onchange = (e) => { this.files.push(...e.target.files); e.target.value = ""; this.renderFiles(); };
+      form.addEventListener("input", (e) => { if (!e.target.matches("[data-chip-input]")) this.touch(); });
+      form.addEventListener("submit", (e) => { e.preventDefault(); this.send(); });
+      $("[data-discard]", form).onclick = () => this.discard();
+      this.timer = setInterval(() => { if (this.dirty) this.save(); }, 4000);
+    }
+    touch() { this.dirty = true; $("[data-draft-state]", this.form).textContent = ""; }
+    bindChips(field) {
+      const input = $(`[data-chip-input="${field}"]`, this.form);
+      const box = $(`[data-field="${field}"] .gm-suggest`, this.form);
+      let idx = 0, items = [];
+      const show = () => {
+        const q = input.value.trim().toLowerCase();
+        items = BOOK.filter((b) => !this.keys[field].includes(b.key) && (!q || b.name.toLowerCase().includes(q) || b.addr.toLowerCase().includes(q))).slice(0, 8);
+        if (!items.length || document.activeElement !== input) { box.hidden = true; return; }
+        idx = Math.min(idx, items.length - 1);
+        box.innerHTML = items.map((b, i) => `<div data-i="${i}" class="${i === idx ? "on" : ""}"><span class="gm-avatar" style="background:${colour(b.name)}">${esc((b.name || "?")[0].toUpperCase())}</span><span>${esc(b.name)}<small>${esc(b.addr)}${b.kind === "team" ? " · team" : ""}</small></span></div>`).join("");
+        box.hidden = false;
+      };
+      input.addEventListener("input", () => { idx = 0; show(); });
+      input.addEventListener("focus", show);
+      input.addEventListener("blur", () => setTimeout(() => { box.hidden = true; this.commitTyped(field, input); }, 150));
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowDown") { idx = Math.min(idx + 1, items.length - 1); show(); e.preventDefault(); }
+        else if (e.key === "ArrowUp") { idx = Math.max(idx - 1, 0); show(); e.preventDefault(); }
+        else if ((e.key === "Enter" || e.key === "Tab" || e.key === ",") && !box.hidden && items[idx]) { e.preventDefault(); this.add(field, items[idx].key); input.value = ""; show(); }
+        else if (e.key === "Backspace" && !input.value && this.keys[field].length) { this.remove(field, this.keys[field].at(-1)); }
+      });
+      box.addEventListener("mousedown", (e) => { const d = e.target.closest("[data-i]"); if (d) { e.preventDefault(); this.add(field, items[+d.dataset.i].key); input.value = ""; show(); } });
+      $(`[data-chips="${field}"]`, this.form).addEventListener("click", () => input.focus());
+    }
+    commitTyped(field, input) {
+      const v = input.value.trim().toLowerCase();
+      if (!v) return;
+      const hit = BOOK.find((b) => b.addr.toLowerCase() === v || b.name.toLowerCase() === v);
+      if (hit) { this.add(field, hit.key); input.value = ""; }
+    }
+    add(field, key) {
+      if (!key || this.keys[field].includes(key)) return;
+      this.keys[field].push(key);
+      if (!byKey[key] && key.startsWith("p:")) byKey[key] = { key, name: key.slice(2), addr: key.slice(2) + "@…", kind: "persona" };
+      this.renderChips(field); this.touch();
+    }
+    remove(field, key) { this.keys[field] = this.keys[field].filter((k) => k !== key); this.renderChips(field); this.touch(); }
+    renderChips(field) {
+      const wrap = $(`[data-chips="${field}"]`, this.form);
+      const input = $(`[data-chip-input="${field}"]`, wrap);
+      $$(".gm-chip", wrap).forEach((c) => c.remove());
+      for (const k of this.keys[field]) {
+        const b = byKey[k] || { name: k, addr: "" };
+        const chip = document.createElement("span");
+        chip.className = "gm-chip";
+        chip.title = b.addr;
+        chip.innerHTML = `<span class="gm-avatar" style="background:${colour(b.name)}">${esc((b.name || "?")[0].toUpperCase())}</span>${esc(b.name)}<button type="button" aria-label="Remove">×</button>`;
+        $("button", chip).onclick = (e) => { e.stopPropagation(); this.remove(field, k); };
+        wrap.insertBefore(chip, input);
+      }
+      this.form.elements[field].value = this.keys[field].join(",");
+      if (this.keys[field].length && field !== "to") $(`[data-field="${field}"]`, this.form).hidden = false;
+    }
+    renderFiles() {
+      const box = $("[data-att-chips]", this.form);
+      box.innerHTML = "";
+      this.files.forEach((f, i) => {
+        const c = document.createElement("span");
+        c.className = "gm-att-chip";
+        c.innerHTML = `${esc(f.name)} <small>(${Math.max(1, Math.round(f.size / 1024))}K)</small><button type="button" aria-label="Remove">×</button>`;
+        $("button", c).onclick = () => { this.files.splice(i, 1); this.renderFiles(); };
+        box.appendChild(c);
+      });
+    }
+    load(d) {
+      this.form.elements.draft_id.value = d.id || "";
+      this.form.elements.in_reply_to.value = d.in_reply_to || "";
+      this.form.elements.forward_of.value = d.forward_of || "";
+      for (const f of ["to", "cc", "bcc"]) { this.keys[f] = []; (d[f] || []).forEach((k) => this.add(f, k)); this.renderChips(f); }
+      this.form.elements.subject.value = d.subject || "";
+      this.form.elements.body.value = d.body || "";
+      this.files = []; this.renderFiles();
+      this.dirty = false;
+    }
+    data(withFiles) {
+      const fd = new FormData();
+      for (const n of ["draft_id", "in_reply_to", "forward_of", "subject", "body"]) fd.append(n, this.form.elements[n].value);
+      for (const f of ["to", "cc", "bcc"]) fd.append(f, this.keys[f].join(","));
+      if (withFiles) this.files.forEach((f) => fd.append("files", f));
+      return fd;
+    }
+    empty() { return !this.keys.to.length && !this.keys.cc.length && !this.form.elements.subject.value.trim() && !this.form.elements.body.value.trim(); }
+    async save() {
+      if (CFG.readonly || this.empty()) return;
+      this.dirty = false;
+      try {
+        const r = await post(`${BASE}/draft/`, this.data(false));
+        const j = await r.json();
+        this.form.elements.draft_id.value = j.id;
+        $("[data-draft-state]", this.form).textContent = "Draft saved";
+      } catch (e) { this.dirty = true; }
+    }
+    async send() {
+      const btn = $(".gm-send", this.form);
+      const mb = this.files.reduce((s, f) => s + f.size, 0) / 1048576;
+      if (mb > CFG.maxMb) { snack(`Attachments are over ${CFG.maxMb} MB.`); return; }
+      if (!this.keys.to.length && !this.keys.cc.length && !this.keys.bcc.length) { snack("Please specify at least one recipient."); return; }
+      btn.disabled = true;
+      const r = await post(`${BASE}/send/`, this.data(true));
+      btn.disabled = false;
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { snack(j.error || "Sending failed."); return; }
+      clearInterval(this.timer);
+      sessionStorage.setItem("simex-snack", "Message sent");
+      if (this.opts.onSent) this.opts.onSent(j);
+      location.reload();
+    }
+    async discard() {
+      const id = this.form.elements.draft_id.value;
+      if (id) await post(`${BASE}/action/`, new URLSearchParams([["action", "discard"], ["draft_ids", id]])).catch(() => {});
+      this.load({});
+      if (this.opts.onClose) this.opts.onClose(true);
+      snack("Draft discarded");
+    }
+  }
+
+  // floating window
+  const win = $("#compose");
+  let floating = null;
+  if (win && !CFG.readonly) {
+    floating = new Composer($("form", win), { onClose: () => { win.hidden = true; } });
+    const open = (d) => {
+      win.hidden = false; win.classList.remove("min");
+      floating.load(d || {});
+      $(".gm-compose-title", win).textContent = (d && d.subject) || "New Message";
+      setTimeout(() => $('[data-chip-input="to"]', win).focus(), 30);
+    };
+    window.simexCompose = open;
+    $$("[data-compose]").forEach((b) => b.onclick = () => open());
+    $("[data-compose-minimize]", win).onclick = (e) => { e.stopPropagation(); win.classList.toggle("min"); win.classList.remove("full"); };
+    $("[data-compose-expand]", win).onclick = (e) => { e.stopPropagation(); win.classList.toggle("full"); win.classList.remove("min"); };
+    $("[data-compose-close]", win).onclick = async (e) => { e.stopPropagation(); await floating.save(); win.hidden = true; if (floating.form.elements.draft_id.value) snack("Draft saved"); };
+    $(".gm-compose-head", win).onclick = () => { if (win.classList.contains("min")) win.classList.remove("min"); };
+    $("[name=subject]", win).addEventListener("input", (e) => { $(".gm-compose-title", win).textContent = e.target.value || "New Message"; });
+  }
+
+  // --- list page ------------------------------------------------------------------------------------
+  const bulk = $("[data-bulk]");
+  if (bulk) {
+    const rows = $$(".gm-row", bulk);
+    const boxes = () => $$('input[name="threads"]', bulk);
+    const sync = () => {
+      const n = boxes().filter((b) => b.checked).length;
+      $(".gm-tb-selected", bulk).hidden = n === 0 || CFG.readonly;
+      $(".gm-tb-idle", bulk).hidden = n > 0 && !CFG.readonly;
+      rows.forEach((r) => r.classList.toggle("selected", $('input[name="threads"]', r).checked));
+      const all = $("[data-select-all]", bulk);
+      all.checked = n > 0 && n === boxes().length;
+    };
+    $("[data-select-all]", bulk).onchange = (e) => { boxes().forEach((b) => b.checked = e.target.checked); sync(); };
+    boxes().forEach((b) => b.onchange = sync);
+    $$("[data-select-and]", bulk).forEach((b) => b.onclick = () => {
+      boxes().forEach((x) => x.checked = true);
+      const i = document.createElement("input"); i.type = "hidden"; i.name = "action"; i.value = b.dataset.selectAnd; bulk.appendChild(i); bulk.submit();
+    });
+    rows.forEach((r) => r.addEventListener("click", (e) => {
+      if (e.target.closest("button, a, label")) return;
+      if (r.dataset.draft) { openDraft(r.dataset.draft); return; }
+      location.href = r.dataset.href;
+    }));
+    $$("[data-star-thread]").forEach((b) => b.onclick = async (e) => {
+      e.stopPropagation();
+      const on = !b.classList.contains("on");
+      await post(`${BASE}/action/`, { action: on ? "star" : "unstar", threads: b.dataset.starThread });
+      b.classList.toggle("on", on);
+      b.innerHTML = on ? STAR : STAR_BORDER;
+    });
+    $$("[data-row-action]").forEach((b) => b.onclick = async (e) => {
+      e.stopPropagation();
+      const row = b.closest(".gm-row");
+      const act = b.dataset.rowAction;
+      const params = new URLSearchParams([["action", act], ["threads", row.dataset.thread]]);
+      if (act === "discard") params.append("draft_ids", row.dataset.draft);
+      await post(`${BASE}/action/`, params);
+      if (act === "read" || act === "unread") { location.reload(); return; }
+      row.remove();
+      snack(act === "archive" ? "Conversation archived." : act === "trash" ? "Conversation moved to Trash." : act === "restore" ? "Conversation moved to Inbox." : "Draft discarded.",
+        act === "archive" || act === "trash" ? { label: "Undo", run: async () => { await post(`${BASE}/action/`, { action: act === "archive" ? "unarchive" : "restore", threads: row.dataset.thread }); location.reload(); } } : null);
+    });
+    // keyboard focus in the list
+    let focus = -1;
+    window.simexListMove = (d) => {
+      if (!rows.length) return;
+      rows.forEach((r) => r.classList.remove("focus"));
+      focus = Math.max(0, Math.min(rows.length - 1, focus + d));
+      rows[focus].classList.add("focus"); rows[focus].scrollIntoView({ block: "nearest" });
+    };
+    window.simexListOpen = () => { if (focus >= 0) rows[focus].click(); };
+    window.simexListAct = (act) => { if (focus >= 0) { const b = $(`[data-row-action="${act}"]`, rows[focus]); if (b) b.click(); } };
+    window.simexListToggle = () => { if (focus >= 0) { const c = $('input[name="threads"]', rows[focus]); c.checked = !c.checked; sync(); } };
+  }
+  const STAR = '<svg class="ic" width="20" height="20" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>';
+  const STAR_BORDER = '<svg class="ic" width="20" height="20" viewBox="0 0 24 24"><path d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/></svg>';
+
+  async function openDraft(id) {
+    if (!window.simexCompose) return;
+    const r = await fetch(`${BASE}/draft/${id}/`, { credentials: "same-origin" });
+    if (r.ok) window.simexCompose(await r.json());
+  }
+
+  // --- thread page ----------------------------------------------------------------------------------
+  const tdata = $("#thread-data") ? JSON.parse($("#thread-data").textContent) : null;
+  let inline = null;
+  if (tdata) {
+    $$("[data-toggle-msg]").forEach((h) => h.addEventListener("click", (e) => {
+      if (e.target.closest("button, a")) return;
+      const art = h.closest(".gm-msg");
+      if (art.classList.contains("closed")) { art.classList.remove("closed"); art.classList.add("open"); }
+      else if (art.nextElementSibling && art.nextElementSibling.classList.contains("gm-msg")) { art.classList.add("closed"); art.classList.remove("open"); }
+    }));
+    $$(".gm-msg.closed").forEach((a) => a.addEventListener("click", (e) => { if (!e.target.closest("button, a")) { a.classList.remove("closed"); a.classList.add("open"); } }));
+    $$("[data-star-mail]").forEach((b) => b.onclick = async (e) => {
+      e.stopPropagation();
+      const r = await post(`${BASE}/star/${b.dataset.starMail}/`, {});
+      const j = await r.json();
+      b.classList.toggle("on", j.starred); b.innerHTML = j.starred ? STAR : STAR_BORDER;
+    });
+    const box = $(".gm-inline-reply");
+    if (box) {
+      inline = new Composer($("form", box), { inline: true });
+      const re = (s) => /^re:/i.test(s) ? s : `Re: ${s}`;
+      const fw = (s) => /^fwd?:/i.test(s) ? s : `Fwd: ${s}`;
+      const openInline = (mode, id) => {
+        const m = tdata.msgs[id] || tdata.msgs[tdata.last];
+        let d;
+        if (mode === "forward") {
+          d = { to: [], subject: fw(m.subject), forward_of: id,
+            body: `\n\n---------- Forwarded message ---------\nFrom: ${m.from} <${m.addr}>\nDate: ${m.date}\nSubject: ${m.subject}\nTo: ${m.to}\n\n${m.body}` };
+        } else {
+          // The conversation above is the context, so (as in webmail) the quote is not pasted in.
+          d = { to: mode === "all" ? tdata.replyAll : (m.reply && m.reply.length ? m.reply : tdata.reply), subject: re(m.subject), in_reply_to: id, body: "" };
+        }
+        inline.load(d);
+        $(".gm-inline-form", box).dataset.mode = mode;
+        box.hidden = false; $("[data-reply-actions]").hidden = true;
+        const ta = $("[name=body]", box); ta.focus(); ta.setSelectionRange(0, 0); ta.scrollTop = 0;
+        box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        if (mode === "forward") $('[data-chip-input="to"]', box).focus();
+      };
+      inline.opts.onClose = () => { box.hidden = true; $("[data-reply-actions]").hidden = false; };
+      $$("[data-reply]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); openInline("reply", b.dataset.reply); });
+      $$("[data-reply-all]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); openInline("all", b.dataset.replyAll); });
+      $$("[data-forward]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); openInline("forward", b.dataset.forward); });
+      window.simexReply = (mode) => openInline(mode, String(tdata.last));
+    }
+  }
+
+  // --- keyboard shortcuts ---------------------------------------------------------------------------
+  document.addEventListener("keydown", (e) => {
+    const t = e.target;
+    if (e.key === "Escape") {
+      if (win && !win.hidden) { $("[data-compose-close]", win).click(); }
+      if (t.matches && t.matches("input, textarea")) t.blur();
+      return;
+    }
+    if (e.metaKey || e.ctrlKey || e.altKey) {
+      if ((e.key === "Enter") && t.closest && t.closest("[data-composer]")) { t.closest("[data-composer]").requestSubmit(); }
+      return;
+    }
+    if (t.matches && t.matches("input, textarea, select, [contenteditable]")) return;
+    const k = e.key;
+    if (k === "c" && window.simexCompose) { e.preventDefault(); window.simexCompose(); }
+    else if (k === "/") { e.preventDefault(); $("[data-search]").focus(); }
+    else if (tdata) {
+      if (k === "r" && window.simexReply) { e.preventDefault(); window.simexReply("reply"); }
+      else if (k === "a" && window.simexReply) { e.preventDefault(); window.simexReply("all"); }
+      else if (k === "f" && window.simexReply) { e.preventDefault(); window.simexReply("forward"); }
+      else if (k === "j") { const a = $("[data-key-j]"); if (a && !a.classList.contains("disabled")) location.href = a.href; }
+      else if (k === "k") { const a = $("[data-key-k]"); if (a && !a.classList.contains("disabled")) location.href = a.href; }
+      else if (k === "e") { const b = $("[data-key-archive]"); if (b) b.click(); }
+      else if (k === "#") { const b = $("[data-key-trash]"); if (b) b.click(); }
+      else if (k === "u") { location.href = $("[data-back]").href; }
+    } else if (bulk) {
+      if (k === "j") window.simexListMove(1);
+      else if (k === "k") window.simexListMove(-1);
+      else if (k === "Enter" || k === "o") window.simexListOpen();
+      else if (k === "e") window.simexListAct("archive");
+      else if (k === "#") window.simexListAct("trash");
+      else if (k === "x") window.simexListToggle();
+    }
+  });
+
+  // --- polling: unread count in the title and sidebar, sound, notification --------------------------
+  const soundBtn = $("[data-sound]");
+  const soundOn = () => localStorage.getItem("simex-sound") === "1";
+  const paintSound = () => { if (soundBtn) { soundBtn.style.color = soundOn() ? "#0b57d0" : ""; soundBtn.title = soundOn() ? "Notifications on (click to mute)" : "Turn on notification sound"; } };
+  if (soundBtn) soundBtn.onclick = () => {
+    localStorage.setItem("simex-sound", soundOn() ? "0" : "1"); paintSound();
+    if (soundOn()) { beep(); if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); }
+  };
+  paintSound();
+  function beep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.18].forEach((d, i) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = i ? 1046 : 784; g.gain.setValueAtTime(0.0001, ctx.currentTime + d);
+        g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + d + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + d + 0.25);
+        o.connect(g); g.connect(ctx.destination); o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + 0.3); });
+    } catch (e) { /* no audio */ }
+  }
+  const baseTitle = document.title.replace(/^Inbox \(\d+\)/, "Inbox");
+  let latest = null;
+  async function poll() {
+    try {
+      const r = await fetch(`${BASE}/poll/`, { credentials: "same-origin" });
+      if (!r.ok) return;
+      const j = await r.json();
+      const n = j.unread;
+      $$("[data-unread-count]").forEach((el) => el.textContent = n ? n : "");
+      const inboxLink = $('[data-folder="inbox"]'); if (inboxLink) inboxLink.classList.toggle("bold", n > 0);
+      if (CFG.folder === "inbox" && !$("#thread-data")) document.title = n ? baseTitle.replace(/^Inbox/, `Inbox (${n})`) : baseTitle;
+      else document.title = (n ? `(${n}) ` : "") + baseTitle.replace(/^\(\d+\) /, "");
+      if (latest !== null && j.latest > latest) {
+        snack(`New message from ${j.from}`, { label: "View", run: () => { location.href = `${BASE}/`; } });
+        if (soundOn()) {
+          beep();
+          if ("Notification" in window && Notification.permission === "granted" && document.hidden) new Notification(j.from || "New message", { body: j.subject });
+        }
+        if (CFG.folder === "inbox" && bulk && !$$('input[name="threads"]:checked').length && (!win || win.hidden)) setTimeout(() => location.reload(), 1500);
+      }
+      latest = j.latest;
+    } catch (e) { /* offline: try again next time */ }
+  }
+  poll();
+  setInterval(poll, 15000);
+
+  const pending = sessionStorage.getItem("simex-snack");
+  if (pending) { sessionStorage.removeItem("simex-snack"); snack(pending); }
+})();

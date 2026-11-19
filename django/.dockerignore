@@ -1,0 +1,5 @@
+.venv
+*.db
+staticfiles
+__pycache__
+ops/tests
