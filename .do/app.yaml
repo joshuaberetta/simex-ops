@@ -5,8 +5,13 @@
 #   .venv/bin/python .do/render_spec.py <app-id>    # writes .do/app.rendered.yaml (git-ignored)
 #   doctl apps update <app-id> --spec .do/app.rendered.yaml && rm .do/app.rendered.yaml
 #
-# The database is an App Platform dev database (the account is at its managed-cluster
-# limit). It has no automatic backups: download one from Settings > Backup.
+# Database: its own database and user (simex_ops, owner of the database and its public
+# schema; CONNECT revoked from PUBLIC) on the existing fra1 cluster risa-dash-db. It is not
+# attached in a databases: block, because App Platform counts that against the account's
+# (exhausted) database limit. DATABASE_URL is a secret instead, and the app was added to the
+# cluster's trusted sources by hand:
+#   doctl databases firewalls append <cluster-id> --rule app:<app-id>
+# DO backs the cluster up daily; Settings > Backup downloads the app's data on demand.
 name: simex-ops
 region: fra
 alerts:
@@ -19,10 +24,6 @@ domains:
   - domain: ops.simex.kobolabs.dev
     type: PRIMARY
     zone: kobolabs.dev
-databases:
-  - name: db
-    engine: PG
-    production: false
 services:
   - name: web
     github: { repo: joshuaberetta/simex-ops, branch: main, deploy_on_push: true }
@@ -34,7 +35,7 @@ services:
     instance_count: 1
     health_check: { http_path: /healthz, initial_delay_seconds: 10, period_seconds: 10, failure_threshold: 6 }
     envs:
-      - { key: DATABASE_URL, scope: RUN_TIME, value: "${db.DATABASE_URL}" }
+      - { key: DATABASE_URL, scope: RUN_TIME, type: SECRET }
       - { key: PUBLIC_URL, scope: RUN_TIME, value: "https://ops.simex.kobolabs.dev" }
       - { key: MAIL_DOMAIN, scope: RUN_TIME, value: "simex.kobolabs.dev" }
       - { key: EXERCISE_TZ, scope: RUN_TIME, value: "Africa/Nairobi" }
