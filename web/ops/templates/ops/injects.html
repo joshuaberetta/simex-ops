@@ -42,7 +42,8 @@
   </div>
   {% for label, items in groups %}
   <h2 class="day">{{ label }}</h2>
-  <table class="list">
+  <table class="list fixed">
+    <colgroup><col style="width:36px"><col style="width:64px"><col style="width:72px"><col><col style="width:16%"><col style="width:18%"><col style="width:80px"><col style="width:52px"><col style="width:124px"></colgroup>
     <thead><tr><th></th><th>Send</th><th>Id</th><th>Subject</th><th>From</th><th>To</th><th>Via</th><th>Att.</th><th>Status</th></tr></thead>
     <tbody>
     {% for i in items %}

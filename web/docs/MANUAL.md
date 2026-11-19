@@ -22,18 +22,20 @@ Read section 7, "Safety controls", before your first shift.
 
 ## 2. The tabs
 
+The tabs come in two groups: what you use while the exercise runs (**Injects**, **Replies**, **Team inboxes**, **Dashboard**, **Log**), then, after the divider, setting it up (**People & logins**, **Senders**, **Test runs**, **Settings**).
+
 | Tab | What it is for |
 |---|---|
 | **Injects** | The schedule. Filter by day or status; open an inject to edit, preview, test or send it; change the channel in bulk. Import from the MEL is here too. |
 | **Replies** | Everything participants sent: team summary, inject × team grid, **Read / opens & clicks**, the inbox, and grading. |
-| **Dashboard** | The exercise at a glance: per team, replies, response times, scores, sentiment over time and a funnel; the rubric heatmap; flags, possibly AI-written replies, what teams ask for and commit to; an AI-written exercise summary (5.7). |
 | **Team inboxes** | Each team's mailbox at a glance (received, unread, sent, last sign-in), **View as team**, and **Clear a team's mailbox** after testing (section 6). |
-| **Test runs** | Replays injects on a fast clock into the **Test team** mailbox (and, for email injects, to a test address). |
-| **Senders** | The personas: username (`cnn`), display name ("CNN Breaking News"). They are also the participants' address book. |
-| **People & logins** | Teams, participants, and their logins (create, reset password, disable, printable credential sheet). |
+| **Dashboard** | The exercise at a glance: per team, replies, response times, scores, sentiment over time and a funnel; the rubric heatmap; flags, possibly AI-written replies, what teams ask for and commit to; an AI-written exercise summary (5.7). |
 | **Log** | Every delivery the app made, with content and status, plus the activity log of every action. |
+| **People & logins** | Teams, participants, and their logins (create, reset password, disable, printable credential sheet). |
+| **Senders** | The personas: username (`cnn`), display name ("CNN Breaking News"). They are also the participants' address book. |
+| **Test runs** | Replays injects on a fast clock into the **Test team** mailbox (and, for email injects, to a test address). |
 | **Settings** | **Delivery channel**, footer, subject prefix and inject code in the subject, **AI analysis**, team-to-team messaging, attachment limit, email options, grace period, **live sending switch**, backup and restore. |
-| **Help** | This manual. |
+| **Help** | This manual (top right, next to your name). |
 
 The status bar under the tabs shows the Nairobi clock, **Live disarmed** (green) or **LIVE ARMED** (red), **ALL SENDING PAUSED** when paused, when the scheduler last ran (red if it stopped), the next inject due, counts of overdue and failed injects, and the **Pause all sending** button.
 
