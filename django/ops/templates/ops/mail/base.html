@@ -20,6 +20,7 @@
   </form>
   <div class="gm-top-right">
     {% if readonly %}<a class="gm-viewas" href="/inboxes/" title="Back to ExCon">{% icon "eye" 18 %} Viewing as {{ team.name }} · read-only</a>{% endif %}
+    <a class="gm-icon-btn" href="{{ base }}/help/" title="Help" aria-label="Help">{% icon "help" 22 %}</a>
     <button class="gm-icon-btn" data-sound title="Notification sound" aria-label="Notification sound">{% icon "bell" 22 %}</button>
     <div class="gm-account">
       <button class="gm-avatar big" style="background: {{ team.name|avatar_colour }}" data-account aria-label="Account">{% if me %}{{ me.name|initial }}{% else %}{{ team.name|initial }}{% endif %}</button>
@@ -47,7 +48,7 @@
     </ul>
     <div class="gm-side-foot">
       <div class="gm-side-team">{% icon "label" 18 %} {{ team.name }}</div>
-      <p>Exercise mail for the UNDAC SIMEX. Not a real emergency.</p>
+      <p>Exercise mail for the UNDAC SIMEX. Not a real emergency. <a href="{{ base }}/help/" class="gm-link">How to use SIMEX Mail</a></p>
     </div>
   </nav>
   <main class="gm-main">
@@ -56,6 +57,8 @@
   </main>
 </div>
 
+{% if not readonly %}<button class="gm-fab" data-compose aria-label="Compose">{% icon "edit" 24 %}<span>Compose</span></button>{% endif %}
+<div class="gm-scrim" data-toggle-side></div>
 <div class="gm-compose" id="compose" hidden>
   <div class="gm-compose-head" data-compose-min>
     <span class="gm-compose-title">New Message</span>

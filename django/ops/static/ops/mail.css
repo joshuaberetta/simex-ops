@@ -255,3 +255,36 @@ body.readonly .gm-hover, body.readonly .gm-tb-selected { display: none !importan
   .gm-reply-actions { flex-wrap: wrap; }
   .gm-file { width: 100%; }
 }
+
+/* help */
+.gm-link { color: var(--blue); }
+.gm-guide { max-width: 760px; padding: 8px 40px 48px; line-height: 1.6; color: #222; }
+.gm-guide h1 { font-size: 24px; font-weight: 400; margin: 12px 0 16px; }
+.gm-guide h2 { font-size: 16px; font-weight: 500; margin: 24px 0 8px; }
+.gm-guide code { background: #f1f3f4; border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+.gm-guide li { margin-bottom: 4px; }
+
+/* fixes after screenshot review */
+.gm-ravatar, .gm-fab, .gm-scrim { display: none; }
+.gm-msg-snip { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-msg-who { overflow: hidden; }
+.gm-inline-form .gm-body-input { width: 100%; display: block; }
+.gm-compose-form .gm-body-input { width: 100%; }
+@media (max-width: 760px) {
+  .gm-side .gm-compose-btn { position: static; box-shadow: none; }
+  .gm-top-right a[href$="/help/"] { display: none; }
+  .gm-fab { display: inline-flex; position: fixed; right: 16px; bottom: 20px; z-index: 34; align-items: center; gap: 12px;
+    height: 56px; padding: 0 20px 0 16px; border: 0; border-radius: 16px; background: var(--blue-soft); color: #001d35;
+    font-weight: 500; box-shadow: 0 3px 5px -1px rgba(0,0,0,.2), 0 6px 10px 0 rgba(0,0,0,.14), 0 1px 18px 0 rgba(0,0,0,.12); }
+  body.side-open .gm-scrim { display: block; position: fixed; inset: 56px 0 0 0; background: rgba(32,33,36,.4); z-index: 34; }
+  .gm-row { display: grid; grid-template-columns: 52px 1fr auto; grid-template-areas: "av from date" "av subj star";
+    column-gap: 4px; row-gap: 2px; min-height: 76px; padding: 10px 12px; height: auto; background: #fff; }
+  .gm-ravatar { display: flex; grid-area: av; width: 40px; height: 40px; font-size: 17px; }
+  .gm-row .gm-check, .gm-row .gm-att, .gm-row .gm-hover { display: none !important; }
+  .gm-from { grid-area: from; padding: 0; font-size: 16px; }
+  .gm-date { grid-area: date; width: auto; font-size: 12px; align-self: center; }
+  .gm-subj { grid-area: subj; padding: 0; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .gm-row .gm-star { grid-area: star; align-self: end; margin: 0; order: 0; }
+  .gm-msg.closed .gm-msg-meta .gm-star, .gm-msg.closed .gm-msg-meta .gm-att { display: none; }
+  .gm-msg.closed .gm-msg-date { display: inline; font-size: 12px; }
+}

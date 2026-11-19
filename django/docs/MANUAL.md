@@ -1,0 +1,178 @@
+# SIMEX inbox: operator manual
+
+For ExCon members who deliver the SIMEX injects, watch the team mailboxes, answer in character and grade the responses. The app is at **https://inbox.simex.kobolabs.dev**. ExCon signs in as `undac` (or their own staff login); participants sign in with the team logins you hand out. All times are **Nairobi time**.
+
+Read section 7, "Safety controls", before your first shift.
+
+---
+
+## 1. How it works in one minute
+
+- **Injects.** Each email inject from the MEL is one row on the **Injects** tab, with a send time, a persona as sender (e.g. `ccdpr@simex.kobolabs.dev`), recipients, a subject, a body and attachments.
+- **Delivery.** Each inject has a **channel**:
+  - **In-app** (the default): it lands in the teams' mailboxes inside this site, *SIMEX Mail*, a webmail client participants open in their browser. No real email is involved.
+  - **Email**: it is sent through Resend to the participants' real addresses, as in the email-only version.
+- **When.** At each inject's time the scheduler delivers it, but only if **live sending is armed** and nothing is paused. One inject usually becomes one message per team.
+- **Answers.** Participants reply to (or write to) personas from SIMEX Mail. Every answer appears on the **Replies** tab, matched exactly to the inject and team it answers. You read it, answer in character, and grade it against the inject's rubric.
+- **Nothing reaches participants by accident:**
+  - live sending is off until someone arms it;
+  - **Pause all sending** stops everything at once;
+  - an inject that missed its time is held as **overdue**, never delivered late on its own.
+
+## 2. The tabs
+
+| Tab | What it is for |
+|---|---|
+| **Injects** | The schedule. Filter by day or status; open an inject to edit, preview, test or send it; change the channel in bulk. Import from the MEL is here too. |
+| **Replies** | Everything participants sent: team summary, inject × team grid, **Read / opens & clicks**, the inbox, and grading. |
+| **Team inboxes** | Each team's mailbox at a glance (received, unread, sent, last sign-in) and **View as team**. |
+| **Test runs** | Replays injects on a fast clock into the **Test team** mailbox (and, for email injects, to a test address). |
+| **Senders** | The personas: username (`cnn`), display name ("CNN Breaking News"). They are also the participants' address book. |
+| **People & logins** | Teams, participants, and their logins (create, reset password, disable, printable credential sheet). |
+| **Log** | Every delivery the app made, with content and status, plus the activity log of every action. |
+| **Settings** | Footer, subject prefix, team-to-team messaging, attachment limit, email-channel options, grace period, **live sending switch**, backup and restore. |
+| **Help** | This manual. |
+
+The status bar under the tabs shows the Nairobi clock, **Live disarmed** (green) or **LIVE ARMED** (red), **ALL SENDING PAUSED** when paused, when the scheduler last ran (red if it stopped), the next inject due, counts of overdue and failed injects, and the **Pause all sending** button.
+
+---
+
+## 3. Before the exercise (the day before at the latest)
+
+### 3.1 Load the injects
+1. In the knowledge base: `python3 -I scripts/export_inject_bundle.py`. It writes `work/simex-ops/injects.json` and `attachments.zip`.
+2. **Injects → Import / update**, upload `injects.json` (or `MEL-MIL.xlsx`) and click **Check file**.
+3. Read the summary (new / updated / with local edits / unchanged), then **Apply import**. New injects are **in-app**.
+4. On the same page, upload `attachments.zip`. Files are matched to injects by the names in the MEL's *Supporting documents* column.
+5. Open a few injects: documents the MEL lists but that are still missing are shown in orange under **Attachments**. Upload those by hand (max 30 MB each; put a link in the body for the 1-20 briefing video).
+
+Only participant-facing fields are imported. Expected outcomes, story, theme, key figures and the ExCon description never enter the app. Re-importing updates what changed in the MEL, keeps your edits (unless you tick "Overwrite my local edits") and never touches what was already delivered.
+
+### 3.2 Teams, participants and logins
+**People & logins.** A new app has placeholder teams A–D (with placeholder people, no logins) and the **Test team**.
+
+1. Paste the roster into **Paste a roster**, one line per person: `name,email,team code,role` (email optional for in-app; role `tl` for team leaders). Keep **create logins** and **remove the placeholder people** ticked.
+   ```
+   Jane Doe,jane@example.org,a,tl
+   John Roe,,a
+   ```
+2. The page then shows **New logins: shown once**: username and password for each new person. Click **Printable sheet** and print it (one slip per person), or copy it somewhere safe. Passwords are not stored readable; if one is lost, use **reset password** on that person.
+3. Each team shares **one mailbox**: everyone in Team A sees Team A's mail, and what one member sends appears in everyone's *Sent*, with the sender's name.
+4. Give yourself a login in the **Test team** (Add person → team "Test team" → create login) to try SIMEX Mail as a participant.
+
+- **Team code** fills `{team}` in addresses (`undac-{team}-tl` → `undac-a-tl@…`); **team name** fills `{team_name}`.
+- **Disable** blocks a login without deleting the person; **delete** removes both.
+- More ExCon logins: Django admin (`/django-admin/`, staff users or the `excon` group).
+
+### 3.3 Personas (Senders)
+One row per persona, created from the MEL's sender aliases. Fix display names (e.g. `CCDPR` → "CCDPR Deputy Director"); **rename in injects** keeps injects in step when a username changes. Add personas the MEL lacks (e.g. `cnn` / "CNN Breaking News").
+
+Active senders are the participants' **address book**: they can write to any of them. Untick **active** to hide one.
+
+### 3.4 Settings
+- **Default footer:** "EXERCISE EXERCISE EXERCISE …" at the bottom of every message.
+- **Teams may write to other teams:** off by default (teams write only to personas). Turn it on if the scenario wants OSOCC-to-OSOCC traffic; those messages show under Team inboxes but are not "replies".
+- **Max attachments per message:** what participants may attach (default 10 MB).
+- **Email channel:** reply-to (leave empty), ExCon Bcc, test addresses. Only matters for injects on the email channel.
+- **Grace period:** 10 minutes by default (see 7.3).
+
+### 3.5 Go through the injects
+Filter **Injects** by day and open each one:
+- **Send at:** the real (Nairobi) time; the MEL's scenario time is separate.
+- **Channel:** *In-app inbox* or *Email (Resend)*. Use email only where the exercise really needs participants' own mailboxes.
+- **Sender username / name**, **Recipients** (*one per team*, *one per participant* — lands in that person's team mailbox addressed to them —, *everyone*), teams to leave out.
+- **Subject and body:** plain text; `{team}`, `{team_name}`, `{name}`, `{first_name}` are filled per message.
+- **Preview** (right): exactly what each team gets. **Clear every orange warning.**
+- **Replies & rubric:** tick "teams are expected to reply", set "within (minutes)", add criteria with max points (or copy another inject's rubric).
+
+Bulk: tick injects in the list and use **Schedule / Back to draft / Cancel / Shift by N min / Channel: In-app | Email**.
+
+### 3.6 Rehearse (at least once) — section 4.
+
+### 3.7 Take a backup
+**Settings → Download backup.** One file with everything: injects, attachments, mailboxes, logins, grades.
+
+---
+
+## 4. Testing without reaching participants
+
+### 4.1 Send one test
+On an inject, **Test → Send test**. In-app injects land in the **Test team** mailbox (subject `[TEST]`, a banner says which team it was really for); email injects go to the address you type. The inject's status doesn't change.
+
+### 4.2 Test run (a rehearsal on a fast clock)
+**Test runs → New test run**: choose the injects (all, a day, or ids), the start, the timing ("one every 30 s" or "real gaps, 60× faster"), and for email injects a test address pattern (`you+{key}@gmail.com`). **Dry run** builds and logs only. The run page refreshes every 10 s and has **Pause / Resume / Next one now / Cancel**, and a link to the **Test team inbox**.
+
+To rehearse the whole loop, sign in as your Test team login (another browser or a private window), open the test messages, reply, and watch them appear under **Replies → Test team**.
+
+### 4.3 View as team
+**Team inboxes → View as team** opens SIMEX Mail exactly as that team sees it, **read-only**: nothing is marked read, nothing can be sent, and your session stays ExCon. Use it to check what a team has received, or to look over their shoulder during the debrief.
+
+---
+
+## 5. During the exercise
+
+### 5.1 Start of each day
+1. Status bar: the scheduler ran seconds ago (if it says "is the worker running?", see 8).
+2. **Injects** for today: everything that should go out is **scheduled**; shift times if the exercise runs late.
+3. Hand out (or re-check) logins; teams sign in at **https://inbox.simex.kobolabs.dev** and keep the tab open.
+4. **Settings → Live sending:** type `SEND LIVE`, **Arm live sending**.
+
+### 5.2 Watching deliveries
+- **scheduled → sending → sent**. In-app deliveries are instant; **partial** / **failed** mean some or all deliveries failed (in-app this is rare: usually a team without an inbox).
+- **Team inboxes** shows what each team has received and whether they have read it.
+- **Replies → Read / opens & clicks:** for in-app, *read* = someone in the team opened the conversation (with the time to first read and how often it was opened), *downloads* = attachments downloaded. For email, Resend's opens and clicks (a lower bound) and bounces.
+
+### 5.3 Sending by hand, holding, changing
+- **Send now:** on the inject, type its id under **Send live now**. In-app messages land at once.
+- **Hold:** **Back to draft** or **Cancel inject**. **Edit:** change and **Save** — what is saved at the send time is what goes out.
+- **Ad-hoc inject:** **Injects → New inject**.
+- **Stop everything:** **Pause all sending**; **Resume sending** continues without duplicates.
+
+### 5.4 Replies and grading
+- **Replies tab** (refreshes every minute): the **Teams** table, the **Injects × teams** grid (green replied, orange late, red overdue with no reply, blue waiting), **Read / opens & clicks**, and the **Inbox** of everything teams sent to personas.
+  - In-app replies are matched **exactly** to the message they answer. A *new* message a team writes to a persona is matched to that persona's latest message to the team and marked **guess**; check it. **unmatched** needs assigning.
+- **A reply's page:** read it, download its files, **view in the team's mailbox**, correct the **Match**, set **Status** (ignored replies don't count), and **Answer as <persona>**: the answer lands in the team's mailbox in the same conversation (or goes by email for email threads), and their next reply is tracked too.
+- **Grading:** from a grid cell or **Grade …**: all of the team's replies to that inject together; a score per criterion, comment, name; **Save and next team**. Non-responses can be graded too. **Export grades (CSV)** for the debrief.
+
+Write rubrics as observable behaviour ("acknowledged within 30 min", "named the cluster lead"), 2–4 points each. Nothing is copied from the MEL's expected outcomes.
+
+### 5.5 End of each day
+**Settings → Disarm** (unless injects run overnight), **Download backup**, deal with overdue or failed injects.
+
+---
+
+## 6. After the exercise
+Export grades and a final backup, disarm, and disable the participant logins (People & logins) once the debrief no longer needs them.
+
+---
+
+## 7. Safety controls
+- **Live sending switch** (Settings): disarmed = nothing reaches teams; arming needs `SEND LIVE`. A restored backup always comes back disarmed.
+- **Pause all sending:** stops live and test deliveries immediately, even halfway through an inject's teams; resuming never delivers anything twice.
+- **Overdue instead of late:** an inject more than the grace period past its time (after an outage, or arming late) is held as **overdue**. Send it by hand or reschedule it.
+- **No duplicates:** every delivery is recorded before it happens; an in-app message is created in the same transaction that marks it delivered.
+- **Confirmations:** typing the inject id for a manual live send or a deletion; `RESTORE` for a restore.
+- **Separation:** participant logins can only see their own team's mailbox. They cannot open injects, schedules, rubrics, grades, other teams, or this manual.
+
+---
+
+## 8. Troubleshooting
+
+| What you see | What to do |
+|---|---|
+| "Scheduler: … is the worker running?" | The scheduler worker is down. Check the *scheduler* component in DigitalOcean; meanwhile send urgent injects by hand (in-app sends deliver immediately). |
+| A participant can't sign in | People & logins → **reset password**, give them the new one. Check the login isn't disabled and the person has a team. |
+| A team says nothing arrived | Team inboxes → View as team. If it's there, they may be looking at another folder or another team's login. |
+| Inject **overdue** | Send now, or move its time and Schedule. |
+| Inject **failed / partial** | Open it, read the error, fix it, "only retry the failed deliveries". |
+| A reply is "unmatched" or a "guess" | Open it and set the inject and team under **Match**. |
+| Email channel: "Mailer: log" | `RESEND_API_KEY` is missing; email injects are only logged. In-app is unaffected. |
+| Need to undo a big mistake | Settings → Restore a backup (type RESTORE). It replaces everything, including logins. |
+
+## 9. Quick reference: a day of the exercise
+1. Status bar OK (scheduler recent).
+2. Today's injects scheduled, times right, no warnings.
+3. Teams signed in. Arm live sending.
+4. Watch **Replies** and **Team inboxes**; answer in character; grade as answers arrive.
+5. Handle overdue or failed injects; pause if anything looks wrong.
+6. End of day: disarm, download a backup.

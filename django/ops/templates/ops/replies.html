@@ -49,6 +49,32 @@
 <p class="muted small">Rows: injects marked "reply expected" (on the inject page, with a rubric) and any inject that got a reply. Click a cell to read the team's replies and grade them.</p>
 {% else %}<p class="muted">Nothing yet. Mark injects that need a response ("Replies &amp; rubric" on the inject page); replies appear here as they arrive.</p>{% endif %}
 
+<h2>Read <span class="muted small">in-app</span> · opens &amp; clicks <span class="muted small">email</span></h2>
+{% if eng_rows %}
+<table class="list small">
+  <thead><tr><th>Team</th><th>Read / delivered</th><th>Median time to first read</th><th>Attachment downloads / clicks</th><th>Bounced</th></tr></thead>
+  {% for s in eng_team_sum %}<tr><td>{% if s.team %}{{ s.team.name }}{% else %}All (Bcc emails){% endif %}</td><td>{{ s.read }} / {{ s.n }}</td>
+    <td>{% if s.median is not None %}{{ s.median }} min{% endif %}</td><td>{{ s.clicks|default:'' }}</td><td>{% if s.bounced %}<b class="err">{{ s.bounced }}</b>{% endif %}</td></tr>{% endfor %}
+</table>
+<div class="scroll">
+<table class="list matrix">
+  <thead><tr><th>Inject</th>{% for t in eng_teams %}<th>{% if t %}{{ t.name }}{% else %}All (Bcc){% endif %}</th>{% endfor %}</tr></thead>
+  {% for inj, cells in eng_rows %}
+  <tr><td><a href="/injects/{{ inj.id }}/">{{ inj.mel_id }}</a> <span class="small">{{ inj.subject|default:''|truncatechars:40 }}</span></td>
+    {% for e in cells %}
+    <td class="cell {% if e and e.bounced %}missing{% elif e and e.read %}replied{% elif e %}waiting{% endif %}">
+      {% if e %}{% if e.read %}{% if e.channel == 'inapp' %}read{% else %}opened{% endif %}{% if e.n > 1 %} {{ e.read }}/{{ e.n }}{% endif %}{% if e.minutes is not None %} · {{ e.minutes }} min{% endif %}
+        <div class="muted">{{ e.opens }}×{% if e.clicks %} · {{ e.clicks }} {% if e.channel == 'inapp' %}download{{ e.clicks|pluralize }}{% else %}click{{ e.clicks|pluralize }}{% endif %}{% endif %}</div>
+      {% elif e.bounced %}bounced{% else %}unread{% endif %}{% else %}<span class="muted">—</span>{% endif %}
+    </td>
+    {% endfor %}
+  </tr>
+  {% endfor %}
+</table>
+</div>
+<p class="muted small">In-app: "read" when someone in the team opens the conversation (count = times opened), downloads count each attachment download. Email: Resend's open pixel (blocked by some clients, so treat as a lower bound) and link clicks; a click also counts as an open.</p>
+{% else %}<p class="muted">Nothing delivered yet.</p>{% endif %}
+
 <div class="bar"><h2>Inbox</h2>
 <form method="get" class="filters">
   <input type="hidden" name="kind" value="{{ kind }}">

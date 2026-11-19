@@ -176,7 +176,8 @@ def conversations(team, folder, q=""):
     mails = list(_folder_qs(team, folder, q).prefetch_related("files").order_by("-created_at", "-id")[:2000])
     if folder == "drafts":
         return [{"thread": m.thread, "latest": m, "count": 1, "unread": False, "starred": m.starred,
-                 "has_files": bool(m.files.all()), "people": "Draft", "draft": True} for m in mails]
+                 "has_files": bool(m.files.all()), "people": "Draft", "draft": True, "subject": m.subject}
+                for m in mails]
     threads = {}
     order = []
     for m in mails:
@@ -187,7 +188,8 @@ def conversations(team, folder, q=""):
     # Counts and unread state over the whole conversation (all folders but drafts and trash).
     all_in = {}
     for m in (Mail.objects.filter(team=team, thread__in=order).exclude(folder="drafts")
-              .only("id", "thread", "folder", "read_at", "from_name", "to_label", "starred", "trashed_at")):
+              .only("id", "thread", "folder", "read_at", "from_name", "from_addr", "to_label", "starred", "trashed_at",
+                    "subject")):
         all_in.setdefault(m.thread, []).append(m)
     rows = []
     for t in order:
@@ -202,7 +204,8 @@ def conversations(team, folder, q=""):
             people = "To: " + (latest.to_label.split(" <")[0] if latest.to_label else "")
         else:
             people = ", ".join(names[-3:])
-        rows.append({"thread": t, "latest": latest, "count": len(conv),
+        first = min(conv, key=lambda x: x.id)
+        rows.append({"thread": t, "latest": latest, "count": len(conv), "subject": first.subject,
                      "unread": any(m.folder == "inbox" and m.read_at is None for m in conv),
                      "starred": any(m.starred for m in conv), "people": people,
                      "has_files": any(m.files.all() for m in threads[t]), "draft": False})
@@ -253,6 +256,8 @@ def thread_view(request, v, thread):
         raise Http404
     if not v.readonly:
         Mail.objects.filter(id__in=[m.id for m in mails], folder="inbox", read_at__isnull=True).update(read_at=timezone.now())
+        inbound.record_read([m for m in mails if m.folder == "inbox" and m.message_id], v.person,
+                            request.META.get("HTTP_USER_AGENT", ""))
     # Neighbours in the folder list, for j/k and the arrows.
     rows = conversations(v.team, folder)
     keys = [r["thread"] for r in rows]
@@ -287,6 +292,12 @@ def _key_for_sender(mail):
         t = Team.objects.filter(code=mail.from_addr.split("@")[0]).first()
         return f"t:{t.id}" if t else ""
     return f"p:{mail.persona or mail.from_addr.split('@')[0]}"
+
+
+@mailbox_view
+def guide(request, v):
+    from . import docs
+    return render(request, "ops/mail/guide.html", _ctx(v, folder="", guide=docs.html("PARTICIPANT_GUIDE.md")))
 
 
 # --- actions ------------------------------------------------------------------------------------
@@ -474,6 +485,8 @@ def mail_file(request, fid, as_team=None):
     data = a.content()
     if data is None:
         raise Http404
+    if person and a.mail.team_id == person.team_id and a.mail.folder == "inbox" and a.mail.message_id:
+        inbound.record_read([a.mail], person, request.META.get("HTTP_USER_AGENT", ""), what="download", link=a.filename)
     resp = HttpResponse(data, content_type="application/octet-stream")  # download only, never rendered inline
     resp["Content-Disposition"] = f'attachment; filename="{a.filename.replace(chr(34), chr(39))}"'
     resp["X-Content-Type-Options"] = "nosniff"

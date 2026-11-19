@@ -118,6 +118,15 @@ body.login { display: grid; place-items: center; min-height: 100vh; }
 .loginbox input { display: block; width: 100%; margin-top: 4px; }
 .loginbox .btn { width: 100%; }
 
+.form .crit input:not([type=checkbox]) { display: inline-block; width: auto; margin-top: 0; }
+.form .crit input.wide { flex: 1; }
+.form .crit input.narrow { width: 60px; }
+.manual { max-width: 980px; line-height: 1.55; }
+.manual h1 { font-size: 22px; } .manual h2 { margin-top: 28px; border-top: 1px solid var(--line); padding-top: 16px; }
+.manual h3 { text-transform: none; letter-spacing: 0; color: var(--ink); font-size: 15px; margin-top: 18px; }
+.manual table { border-collapse: collapse; margin: 8px 0; } .manual td, .manual th { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; }
+.manual pre { background: #f3f4f6; padding: 8px 12px; border-radius: 5px; }
+.manual li { margin-bottom: 3px; }
 .badge { background: #e8590c; color: #fff; border-radius: 9px; padding: 0 6px; font-size: 11px; margin-left: 4px; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #fff; }
 .seg a { padding: 5px 12px; color: var(--ink); border-right: 1px solid var(--line); }

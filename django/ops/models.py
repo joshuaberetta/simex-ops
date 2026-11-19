@@ -181,8 +181,14 @@ class Message(models.Model):
     team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.SET_NULL)
     person = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL)
     reply_token = models.CharField(max_length=20, unique=True, null=True, blank=True)
-    delivery = models.CharField(max_length=30, blank=True, null=True)
+    delivery = models.CharField(max_length=30, blank=True, null=True)  # delivered, bounced... (never overwritten by a late "delivered" after a bounce)
     delivery_at = models.DateTimeField(null=True, blank=True)
+    # Engagement: email = Resend open/click tracking; in-app = the team opening the
+    # conversation (opened = read) and downloading its attachments (clicked). Details in Event.
+    opened_at = models.DateTimeField(null=True, blank=True)
+    open_count = models.IntegerField(default=0)
+    clicked_at = models.DateTimeField(null=True, blank=True)
+    click_count = models.IntegerField(default=0)
     extra_headers = models.JSONField(null=True, blank=True)
     response = models.ForeignKey("Response", null=True, blank=True, on_delete=models.SET_NULL,
                                  related_name="answers")  # ExCon reply: the response it answers
@@ -195,6 +201,20 @@ class Message(models.Model):
 
     class Meta:
         ordering = ["-id"]
+
+
+class Event(models.Model):
+    """Every delivery/engagement event about one of our messages: Resend's (delivered,
+    bounced, opened, clicked...) and in-app ones (read, download)."""
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name="events")
+    type = models.CharField(max_length=30)
+    at = models.DateTimeField(default=timezone.now)
+    link = models.TextField(blank=True, null=True)  # clicked URL / downloaded file
+    user_agent = models.CharField(max_length=400, blank=True, null=True)
+    person = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL)  # in-app reader
+
+    class Meta:
+        ordering = ["at", "id"]
 
 
 class Mail(models.Model):

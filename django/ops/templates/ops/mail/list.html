@@ -42,11 +42,12 @@
     <div class="gm-row{% if r.unread %} unread{% endif %}" role="listitem" tabindex="-1"
          {% if r.draft %}data-draft="{{ m.id }}"{% else %}data-href="{{ base }}/t/{{ r.thread }}/?folder={{ folder }}"{% endif %} data-thread="{{ r.thread }}">
       <label class="gm-check" onclick="event.stopPropagation()"><input type="checkbox" name="threads" value="{{ r.thread }}"><span></span></label>
+      <span class="gm-avatar gm-ravatar" style="background: {{ r.people|avatar_colour }}">{% if r.draft %}D{% else %}{{ r.people|cut:"To: "|initial }}{% endif %}</span>
       <button type="button" class="gm-star{% if r.starred %} on{% endif %}" data-star-thread="{{ r.thread }}" aria-label="Star" {% if readonly %}disabled{% endif %}>{% if r.starred %}{% icon "star" 20 %}{% else %}{% icon "star_border" 20 %}{% endif %}</button>
       <span class="gm-from">{% if r.draft %}<span class="gm-draft-red">Draft</span>{% else %}{{ r.people }}{% endif %}{% if r.count > 1 %} <span class="gm-n">{{ r.count }}</span>{% endif %}</span>
       <span class="gm-subj">
         {% if folder != 'inbox' and m.folder == 'inbox' and not m.archived %}<span class="gm-label">Inbox</span>{% endif %}
-        <span class="gm-s">{{ m.subject|default:"(no subject)" }}</span><span class="gm-snip"> - {{ m.body|snippet:140 }}</span>
+        <span class="gm-s">{{ r.subject|default:"(no subject)" }}</span>{% with sn=m.body|snippet:140 %}{% if sn %}<span class="gm-snip"> - {{ sn }}</span>{% endif %}{% endwith %}
       </span>
       <span class="gm-att">{% if r.has_files %}{% icon "attach" 18 %}{% endif %}</span>
       <span class="gm-date">{{ m.created_at|maildate }}</span>

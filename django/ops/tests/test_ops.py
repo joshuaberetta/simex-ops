@@ -343,6 +343,76 @@ def test_email_channel_live_and_reply_webhook(excon):
     assert bad.status_code == 401
 
 
+def test_inapp_read_tracking(excon):
+    do_import(excon, SAMPLE)
+    arm()
+    deliver_now("1-15")
+    pa = participant("a")
+    mail = Mail.objects.get(team__code="a")
+    from ops.models import MailAttachment
+    f = MailAttachment.objects.create(mail=mail, filename="plan.pdf", data=b"x", size=1)
+    pa.get(f"/inbox/t/{mail.thread}/")
+    pa.get(f"/inbox/t/{mail.thread}/")
+    pa.get(f"/inbox/file/{f.id}/")
+    m = mail.message
+    m.refresh_from_db()
+    assert m.open_count == 2 and m.opened_at and m.click_count == 1
+    team = Team.objects.get(code="a")
+    excon.get(f"/inbox/as/{team.id}/t/{mail.thread}/")  # ExCon viewing as the team does not count
+    m.refresh_from_db()
+    assert m.open_count == 2
+    page = excon.get("/replies/").content.decode()
+    assert "read" in page and "1 download" in page
+
+
+def test_email_delivery_state_not_hidden_by_late_delivered(excon):
+    do_import(excon, SAMPLE)
+    Inject.objects.update(channel="email")
+    for t in Team.objects.filter(is_test=False):
+        Person.objects.create(name=f"Real {t.code}", email=f"real-{t.code}@kobotoolbox.org", team=t)
+    arm()
+    deliver_now("1-15")
+    m = Message.objects.get(target="Team A")
+    inbound.record_event({"type": "email.bounced", "data": {"email_id": m.resend_id}})
+    inbound.record_event({"type": "email.delivered", "data": {"email_id": m.resend_id}})
+    inbound.record_event({"type": "email.clicked", "data": {"email_id": m.resend_id, "click": {
+        "link": "https://x.org", "timestamp": "2026-11-23T08:00:00Z", "userAgent": "UA"}}})
+    m.refresh_from_db()
+    assert m.delivery == "bounced" and m.click_count == 1 and m.opened_at is not None and m.open_count == 1
+    assert m.events.filter(type="clicked", link="https://x.org").exists()
+
+
+def test_every_page_renders_with_data(excon):
+    """Smoke test over the UI with real-looking data (catches template errors)."""
+    do_import(excon, SAMPLE)
+    arm()
+    deliver_now("1-15")
+    inj = Inject.objects.get(mel_id="1-15")
+    _rubric(inj)
+    excon.post("/tests/", {"name": "R", "scope": "ids", "ids": "3-13", "timing": "interval", "interval": "5"})
+    pa = participant("a")
+    mail = Mail.objects.get(team__code="a")
+    pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re", "body": "x", "in_reply_to": mail.id})
+    pa.post("/inbox/draft/", {"to": "p:undac-a-tl", "subject": "d", "body": "y"})
+    r, m, team = Response.objects.get(), Message.objects.first(), Team.objects.get(code="a")
+    run = __import__("ops.models", fromlist=["TestRun"]).TestRun.objects.get()
+    for url in ["/injects/", f"/injects/{inj.id}/", "/import/", "/senders/", "/people/", "/inboxes/", "/tests/",
+                f"/tests/{run.id}/", "/replies/", "/replies/?kind=test", f"/replies/{r.id}/",
+                f"/grades/{inj.id}/{team.id}/", "/log/", f"/log/{m.id}/", "/settings/", "/help/",
+                f"/inbox/as/{team.id}/", f"/inbox/as/{team.id}/?folder=sent", f"/inbox/as/{team.id}/t/{mail.thread}/"]:
+        assert excon.get(url).status_code == 200, url
+    for url in ["/inbox/", "/inbox/?folder=sent", "/inbox/?folder=drafts", "/inbox/?folder=all", "/inbox/?folder=starred",
+                "/inbox/?folder=trash", "/inbox/?q=Update", f"/inbox/t/{mail.thread}/?folder=inbox", "/inbox/help/"]:
+        assert pa.get(url).status_code == 200, url
+
+
+def test_help_pages(excon):
+    assert b"operator manual" in excon.get("/help/").content
+    pa = participant("a")
+    assert b"SIMEX Mail: quick guide" in pa.get("/inbox/help/").content
+    assert pa.get("/help/").status_code == 403
+
+
 def test_backup_roundtrip(excon):
     do_import(excon, SAMPLE)
     arm()

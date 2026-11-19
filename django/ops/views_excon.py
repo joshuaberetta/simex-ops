@@ -73,7 +73,8 @@ def injects(request):
     att_counts = dict(Attachment.objects.values_list("inject_id").annotate(n=Count("id")).values_list("inject_id", "n"))
     groups = []
     for i in rows:
-        i.sender_obj = senders.get(i.sender_local)
+        snd = senders.get(i.sender_local)
+        i.from_display = i.from_name or (snd.display_name if snd else "")
         i.att_count = att_counts.get(i.id, "")
         i.delivery_label = DELIVERY_MODES.get(i.delivery, i.delivery).split("(")[0]
         key = timezone.localtime(i.send_at).strftime("%A %d %B %Y") if i.send_at else "No send time"
@@ -809,6 +810,43 @@ def replies_page(request):
         mins = sorted(ts["minutes"])
         ts["median"] = mins[len(mins) // 2] if mins else None
         ts["pct"] = round(100 * ts["score"] / ts["max"]) if ts["max"] else None
+    # Read / opens & clicks: per inject x team, from the delivering Messages.
+    eng_msgs = list(Message.objects.filter(kind__in=["live"] if kind == "live" else ["test", "oneoff"],
+                                           status="sent").exclude(inject=None).select_related("inject"))
+    if kind != "live":  # test deliveries all go to the Test team: group them under it
+        tt = delivery.test_team()
+        for m in eng_msgs:
+            m.team_id = tt.id if m.channel == "inapp" else m.team_id
+    eng_teams = list(teams) + ([None] if any(m.team_id is None for m in eng_msgs) else [])
+    eng = {}
+    for m in eng_msgs:
+        e = eng.setdefault((m.inject_id, m.team_id), {"n": 0, "read": 0, "opens": 0, "clicks": 0, "first": None,
+                                                     "sent": m.sent_at, "bounced": 0, "channel": m.channel})
+        e["n"] += 1
+        e["read"] += bool(m.opened_at)
+        e["opens"] += m.open_count
+        e["clicks"] += m.click_count
+        e["bounced"] += m.delivery in ("bounced", "complained")
+        if m.opened_at and (e["first"] is None or m.opened_at < e["first"]):
+            e["first"] = m.opened_at
+        e["sent"] = min(e["sent"], m.sent_at) if e["sent"] and m.sent_at else (e["sent"] or m.sent_at)
+    eng_rows = []
+    eng_injects = sorted({m.inject for m in eng_msgs}, key=lambda i: (i.send_at is None, i.send_at or now, i.seq))
+    for inj in eng_injects:
+        cells = []
+        for t in eng_teams:
+            e = eng.get((inj.id, t.id if t else None))
+            if e and e["first"] and e["sent"]:
+                e["minutes"] = max(0, int((e["first"] - e["sent"]).total_seconds() // 60))
+            cells.append(e)
+        eng_rows.append((inj, cells))
+    eng_team_sum = []
+    for t in eng_teams:
+        es = [v for (iid, tid), v in eng.items() if tid == (t.id if t else None)]
+        mins = sorted(v["minutes"] for v in es if v.get("minutes") is not None)
+        eng_team_sum.append({"team": t, "n": sum(v["n"] for v in es), "read": sum(v["read"] for v in es),
+                             "clicks": sum(v["clicks"] for v in es), "bounced": sum(v["bounced"] for v in es),
+                             "median": mins[len(mins) // 2] if mins else None})
     inbox = [r for r in reversed(all_in)
              if (not team_f or r.team_id == team_f) and (not inject_f or r.inject_id == inject_f)
              and (not status_f or r.status == status_f) and (matched_f != "no" or r.match == "none")]
@@ -820,7 +858,8 @@ def replies_page(request):
         "injects_all": Inject.objects.order_by("seq").values_list("id", "mel_id"),
         "webhook_ready": bool(settings.RESEND_WEBHOOK_SECRET),
         "webhook_url": settings.PUBLIC_URL.rstrip("/") + "/webhooks/resend",
-        "uses_email": Inject.objects.filter(channel="email").exists()})
+        "uses_email": Inject.objects.filter(channel="email").exists(),
+        "eng_rows": eng_rows, "eng_teams": eng_teams, "eng_team_sum": eng_team_sum})
 
 
 @excon_required
@@ -986,6 +1025,12 @@ def rubric_save(request, iid):
     audit("rubric_save", inj.mel_id, _u(request))
     messages.success(request, "Rubric saved.")
     return redirect(f"/injects/{iid}/#rubric")
+
+
+@excon_required
+def help_page(request):
+    from . import docs
+    return render(request, "ops/help.html", {"tab": "help", "manual": docs.html("MANUAL.md")})
 
 
 # --- log & settings --------------------------------------------------------------------------------

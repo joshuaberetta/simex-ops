@@ -292,8 +292,8 @@
           d = { to: [], subject: fw(m.subject), forward_of: id,
             body: `\n\n---------- Forwarded message ---------\nFrom: ${m.from} <${m.addr}>\nDate: ${m.date}\nSubject: ${m.subject}\nTo: ${m.to}\n\n${m.body}` };
         } else {
-          d = { to: mode === "all" ? tdata.replyAll : (m.reply && m.reply.length ? m.reply : tdata.reply), subject: re(m.subject), in_reply_to: id,
-            body: `\n\nOn ${m.date}, ${m.from} <${m.addr}> wrote:\n` + m.body.split("\n").map((l) => "> " + l).join("\n") };
+          // The conversation above is the context, so (as in webmail) the quote is not pasted in.
+          d = { to: mode === "all" ? tdata.replyAll : (m.reply && m.reply.length ? m.reply : tdata.reply), subject: re(m.subject), in_reply_to: id, body: "" };
         }
         inline.load(d);
         $(".gm-inline-form", box).dataset.mode = mode;

@@ -16,6 +16,7 @@ mail_patterns = [
     path("send/", p.send),
     path("poll/", p.poll),
     path("file/<int:fid>/", p.mail_file),
+    path("help/", p.guide),
 ]
 
 urlpatterns = [
@@ -63,6 +64,7 @@ urlpatterns = [
     path("replies/<int:rid>/answer/", x.reply_answer),
     path("response-files/<int:aid>/", x.response_attachment),
     path("grades/<int:iid>/<int:tid>/", x.grade_page),
+    path("help/", x.help_page),
     path("log/", x.log_page),
     path("log/<int:mid>/", x.message_page),
     path("settings/", x.settings_page),

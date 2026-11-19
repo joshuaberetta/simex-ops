@@ -16,7 +16,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from . import mailer
-from .models import Message, Person, Response, ResponseAttachment, audit
+from .models import Event, Message, Person, Response, ResponseAttachment, audit
 
 log = logging.getLogger("simex.inbound")
 MAX_ATTACHMENT = 25 * 1024 * 1024
@@ -151,11 +151,63 @@ def record_event(event):
     if kind.startswith("email.") and data.get("email_id"):
         m = Message.objects.filter(resend_id=data["email_id"]).first()
         if m:
-            m.delivery, m.delivery_at = kind.split(".", 1)[1], timezone.now()
-            m.save(update_fields=["delivery", "delivery_at"])
-            if m.delivery in ("bounced", "complained"):
-                audit(f"email_{m.delivery}", f"{', '.join(m.to)}: {m.subject[:80]}")
+            record_engagement(m, kind.split(".", 1)[1], data, event.get("created_at"))
     return None
+
+
+DELIVERY_STATES = {"sent", "delivered", "delivery_delayed", "bounced", "complained", "failed", "suppressed"}
+
+
+def _when(value):
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00")) if value else timezone.now()
+        return dt if dt.tzinfo else dt.replace(tzinfo=dt_tz.utc)
+    except (ValueError, AttributeError):
+        return timezone.now()
+
+
+def record_engagement(m, what, data, created_at=None):
+    """Delivery state, opens and clicks for one of our emails (Resend webhook)."""
+    click = data.get("click") or {}
+    at = _when(click.get("timestamp") or created_at or data.get("created_at"))
+    Event.objects.create(message=m, type=what, at=at, link=click.get("link"),
+                         user_agent=(click.get("userAgent") or click.get("user_agent") or "")[:400] or None)
+    if what in DELIVERY_STATES:
+        # A late "delivered" must never hide a bounce.
+        if not (m.delivery in ("bounced", "complained") and what in ("delivered", "delivery_delayed", "sent")):
+            m.delivery, m.delivery_at = what, at
+        if what in ("bounced", "complained"):
+            audit(f"email_{what}", f"{', '.join(m.to)}: {m.subject[:80]}")
+    elif what == "opened":
+        m.open_count += 1
+        m.opened_at = min(m.opened_at, at) if m.opened_at else at
+    elif what == "clicked":
+        m.click_count += 1
+        m.clicked_at = min(m.clicked_at, at) if m.clicked_at else at
+        if not m.opened_at:  # a click proves an open, even with the tracking pixel blocked
+            m.opened_at, m.open_count = at, max(m.open_count, 1)
+    m.save(update_fields=["delivery", "delivery_at", "open_count", "opened_at", "click_count", "clicked_at"])
+
+
+def record_read(mails, person, user_agent="", what="read", link=None):
+    """In-app: a participant opened a conversation (read) or downloaded a file (download).
+    Counts on the Message that delivered each item, first time kept."""
+    now = timezone.now()
+    for mail in mails:
+        m = mail.message
+        if not m or m.kind not in ("live", "reply", "test", "oneoff"):
+            continue
+        Event.objects.create(message=m, type=what, at=now, person=person, link=link, user_agent=(user_agent or "")[:400] or None)
+        if what == "read":
+            m.open_count += 1
+            m.opened_at = m.opened_at or now
+            m.save(update_fields=["open_count", "opened_at"])
+        else:
+            m.click_count += 1
+            m.clicked_at = m.clicked_at or now
+            if not m.opened_at:
+                m.opened_at, m.open_count = now, max(m.open_count, 1)
+            m.save(update_fields=["click_count", "clicked_at", "opened_at", "open_count"])
 
 
 def _new_email(rid, data):
