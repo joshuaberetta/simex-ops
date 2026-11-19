@@ -1,0 +1,33 @@
+{% extends "ops/base.html" %}{% load ops %}
+{% block title %}Log · SIMEX ops{% endblock %}
+{% block body %}
+<div class="bar"><h1>Log</h1>
+<form method="get" class="filters">
+  <select name="kind" onchange="this.form.submit()"><option value="">all kinds</option>
+    <option {% if kind == 'live' %}selected{% endif %}>live</option><option {% if kind == 'test' %}selected{% endif %}>test</option>
+    <option {% if kind == 'oneoff' %}selected{% endif %}>oneoff</option><option {% if kind == 'reply' %}selected{% endif %}>reply</option></select>
+  <select name="status" onchange="this.form.submit()"><option value="">all statuses</option>
+    <option {% if status == 'pending' %}selected{% endif %}>pending</option><option {% if status == 'sent' %}selected{% endif %}>sent</option>
+    <option {% if status == 'failed' %}selected{% endif %}>failed</option><option {% if status == 'dry' %}selected{% endif %}>dry</option></select>
+</form></div>
+<div class="cols">
+<section class="col-main">
+<h2>Deliveries <span class="muted small">latest 300</span></h2>
+<table class="list small">
+  <thead><tr><th>Created</th><th>Kind</th><th>Via</th><th>Inject</th><th>Target</th><th>To</th><th>Subject</th><th>Status</th></tr></thead>
+  {% for m in msgs %}
+  <tr><td class="nowrap"><a href="/log/{{ m.id }}/">{{ m.created_at|date:"d M H:i:s" }}</a></td><td>{{ m.kind }}</td><td>{{ m.channel }}</td>
+    <td>{% if m.inject %}<a href="/injects/{{ m.inject.id }}/">{{ m.inject.mel_id }}</a>{% endif %}</td><td>{{ m.target }}</td>
+    <td>{{ m.to|joinlist }}{% if m.bcc %} <span class="muted">+{{ m.bcc|length }} bcc</span>{% endif %}</td><td>{{ m.subject }}</td>
+    <td><span class="status {{ m.status }}">{{ m.status }}</span>{% if m.delivery and m.channel == 'email' %} <span class="muted">{{ m.delivery }}</span>{% endif %}{% if m.error %}<div class="err">{{ m.error|truncatechars:140 }}</div>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="8" class="muted">Nothing delivered yet.</td></tr>{% endfor %}
+</table>
+</section>
+<section class="col-side">
+<h2>Activity</h2>
+<table class="list small">
+  {% for a in audits %}<tr><td class="nowrap">{{ a.at|date:"d M H:i:s" }}</td><td><b>{{ a.action }}</b> {{ a.detail|default:'' }}{% if a.user %} <span class="muted">· {{ a.user }}</span>{% endif %}</td></tr>{% endfor %}
+</table>
+</section>
+</div>
+{% endblock %}

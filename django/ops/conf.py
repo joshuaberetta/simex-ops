@@ -1,0 +1,39 @@
+"""Operator settings stored in the database (Settings tab)."""
+
+from .models import Setting
+
+DEFAULTS = {
+    "footer": "EXERCISE EXERCISE EXERCISE\nThis message is part of the UNDAC SIMEX. It does not describe a real emergency.",
+    "subject_prefix": "",
+    "default_reply_to": "",  # email channel: leave empty so replies are tracked
+    "excon_bcc": "",  # email channel: copy of every live email
+    "test_address": "",
+    "test_redirect": "delivered+{key}@resend.dev",
+    "grace_minutes": "10",
+    "live_armed": "0",
+    "paused": "0",
+    "team_to_team": "0",  # participants may write to other teams' inboxes
+    "max_upload_mb": "10",  # participants' attachments
+}
+
+
+def get(key):
+    # A fresh query every time: a long-running send must see a pause straight away.
+    value = Setting.objects.filter(key=key).values_list("value", flat=True).first()
+    return value if value is not None else DEFAULTS.get(key, "")
+
+
+def get_all():
+    out = dict(DEFAULTS)
+    for key, value in Setting.objects.values_list("key", "value"):
+        if value is not None:
+            out[key] = value
+    return out
+
+
+def put(key, value):
+    Setting.objects.update_or_create(key=key, defaults={"value": value})
+
+
+def flag(key):
+    return get(key) == "1"

@@ -1,0 +1,32 @@
+{% extends "ops/base.html" %}
+{% block title %}Senders · SIMEX ops{% endblock %}
+{% block body %}
+<h1>Senders</h1>
+<p class="muted">The personas injects come from, and the address book participants write to. Shown as <i>name</i> &lt;<i>username</i>@{{ MAIL_DOMAIN }}&gt;.
+<code>{team}</code> in a username, and <code>{team_name}</code> in a name, are filled in per team. Reply-to only matters for the email channel (leave it empty so replies are tracked).</p>
+<table class="list">
+  <thead><tr><th colspan="6">Name shown · address · reply-to (email) · injects using it · active</th></tr></thead>
+  {% for x in senders %}
+  <tr><td colspan="6">
+      <form method="post" action="/senders/" class="rowform">{% csrf_token %}
+        <input type="hidden" name="id" value="{{ x.id }}">
+        <input name="display_name" value="{{ x.display_name }}" placeholder="CNN Breaking News">
+        <span class="addr"><input name="local_part" value="{{ x.local_part }}" required><span>@{{ MAIL_DOMAIN }}</span></span>
+        <input name="reply_to" value="{{ x.reply_to }}" placeholder="reply-to (email)">
+        <span class="count">{{ x.usage }}</span>
+        <label class="chk"><input type="checkbox" name="active" value="1" {% if x.active %}checked{% endif %}></label>
+        <label class="chk small" title="When the username changes, update the injects that use it"><input type="checkbox" name="rename_injects" value="1" checked> rename in injects</label>
+        <button class="btn small">Save</button>
+      </form>
+      <form method="post" action="/senders/{{ x.id }}/delete/" class="inline">{% csrf_token %}<button class="link" data-confirm="Delete sender {{ x.local_part }}? Injects using it keep the username.">delete</button></form>
+  </td></tr>
+  {% endfor %}
+</table>
+<form method="post" action="/senders/" class="card rowform">{% csrf_token %}
+  <b>Add</b>
+  <input name="display_name" placeholder="CNN Breaking News">
+  <span class="addr"><input name="local_part" placeholder="cnn" required><span>@{{ MAIL_DOMAIN }}</span></span>
+  <input name="reply_to" placeholder="reply-to (optional)">
+  <button class="btn small primary">Add sender</button>
+</form>
+{% endblock %}

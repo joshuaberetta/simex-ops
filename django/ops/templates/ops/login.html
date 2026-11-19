@@ -1,0 +1,16 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · SIMEX</title><link rel="stylesheet" href="{% static 'ops/app.css' %}"></head>
+<body class="login">
+<form method="post" class="card loginbox">{% csrf_token %}
+  <div class="brand big">SIMEX</div>
+  {% if form.errors %}<div class="flash error">Wrong username or password.</div>{% endif %}
+  {% for m in messages %}<div class="flash error">{{ m }}</div>{% endfor %}
+  <input type="hidden" name="next" value="{{ next }}">
+  <label>Username <input name="username" autocomplete="username" autofocus required autocapitalize="none"></label>
+  <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+  <button class="btn primary">Sign in</button>
+</form>
+</body>
+</html>

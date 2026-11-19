@@ -1,0 +1,102 @@
+{% extends "ops/mail/base.html" %}{% load ops %}
+{% block title %}{{ subject|default:"(no subject)" }}{% endblock %}
+{% block main %}
+<div class="gm-toolbar">
+  <a class="gm-icon-btn" href="{{ base }}/?folder={{ folder }}" title="Back to {{ folder }}" aria-label="Back" data-back>{% icon "back" %}</a>
+  {% if not readonly %}
+  <form method="post" action="{{ base }}/action/" class="inline" data-thread-actions>{% csrf_token %}
+    <input type="hidden" name="threads" value="{{ thread }}">
+    <input type="hidden" name="next" value="{{ base }}/?folder={{ folder }}">
+    {% if folder == 'trash' %}
+    <button class="gm-icon-btn" name="action" value="restore" title="Move to Inbox" aria-label="Move to Inbox">{% icon "restore" %}</button>
+    {% else %}
+    {% if in_inbox %}<button class="gm-icon-btn" name="action" value="archive" title="Archive (e)" aria-label="Archive" data-key-archive>{% icon "archive" %}</button>
+    {% else %}<button class="gm-icon-btn" name="action" value="unarchive" title="Move to Inbox" aria-label="Move to Inbox">{% icon "unarchive" %}</button>{% endif %}
+    <button class="gm-icon-btn" name="action" value="trash" title="Delete (#)" aria-label="Delete" data-key-trash>{% icon "trash" %}</button>
+    <span class="gm-tb-sep"></span>
+    <button class="gm-icon-btn" name="action" value="unread" title="Mark as unread" aria-label="Mark as unread">{% icon "unread" %}</button>
+    {% endif %}
+  </form>
+  {% endif %}
+  <span class="gm-tb-right">
+    {% if total %}<span class="gm-range">{{ pos }} of {{ total }}</span>{% endif %}
+    <a class="gm-icon-btn{% if not prev_t %} disabled{% endif %}" href="{% if prev_t %}{{ base }}/t/{{ prev_t }}/?folder={{ folder }}{% else %}#{% endif %}" aria-label="Newer" data-key-k>{% icon "prev" %}</a>
+    <a class="gm-icon-btn{% if not next_t %} disabled{% endif %}" href="{% if next_t %}{{ base }}/t/{{ next_t }}/?folder={{ folder }}{% else %}#{% endif %}" aria-label="Older" data-key-j>{% icon "next" %}</a>
+  </span>
+</div>
+<div class="gm-thread">
+  <h2 class="gm-thread-subject">{{ subject|default:"(no subject)" }}
+    {% if in_inbox %}<span class="gm-label">Inbox</span>{% endif %}{% if mails.0.is_test %}<span class="gm-label test">Test</span>{% endif %}</h2>
+  {% for m in mails %}
+  <article class="gm-msg {% if forloop.last %}open{% else %}closed{% endif %}" data-msg="{{ m.id }}">
+    <div class="gm-avatar" style="background: {{ m.from_name|default:m.from_addr|avatar_colour }}">{{ m.from_name|default:m.from_addr|initial }}</div>
+    <div class="gm-msg-main">
+      <div class="gm-msg-head" data-toggle-msg>
+        <div class="gm-msg-who">
+          <span class="gm-msg-name">{{ m.from_name|default:m.from_addr }}</span>
+          <span class="gm-msg-addr">&lt;{{ m.from_addr }}&gt;</span>
+          <div class="gm-msg-to">
+            <span class="gm-closed-only gm-msg-snip">{{ m.body|snippet:120 }}</span>
+            <span class="gm-open-only">
+              <button type="button" class="gm-to-btn" data-details>{% if m.folder == 'inbox' %}to {% if m.to_person %}{{ m.to_person.name }}{% else %}me{% endif %}{% if m.cc_label %}, {{ m.cc_label|name_only }}{% endif %}{% else %}to {{ m.to_label|name_only|default:"—" }}{% endif %} {% icon "drop" 18 %}</button>
+              <div class="gm-details" hidden>
+                <table>
+                  <tr><th>from:</th><td><b>{{ m.from_name }}</b> &lt;{{ m.from_addr }}&gt;</td></tr>
+                  <tr><th>to:</th><td>{% if m.folder == 'inbox' %}{% if m.to_label %}{{ m.to_label }}{% else %}{{ team.name }}{% endif %}{% else %}{{ m.to_label }}{% endif %}</td></tr>
+                  {% if m.cc_label %}<tr><th>cc:</th><td>{{ m.cc_label }}</td></tr>{% endif %}
+                  <tr><th>date:</th><td>{{ m.created_at|date:"D d M Y, H:i" }}</td></tr>
+                  <tr><th>subject:</th><td>{{ m.subject }}</td></tr>
+                  <tr><th>mailed-by:</th><td>{{ m.from_addr|domain }}</td></tr>
+                </table>
+              </div>
+            </span>
+          </div>
+        </div>
+        <div class="gm-msg-meta">
+          {% if m.files.all %}<span class="gm-att">{% icon "attach" 18 %}</span>{% endif %}
+          <span class="gm-msg-date" title="{{ m.created_at|date:'D d M Y H:i' }}">{{ m.created_at|fulldate }}</span>
+          <button type="button" class="gm-star sm{% if m.starred %} on{% endif %}" data-star-mail="{{ m.id }}" aria-label="Star" {% if readonly %}disabled{% endif %}>{% if m.starred %}{% icon "star" 20 %}{% else %}{% icon "star_border" 20 %}{% endif %}</button>
+          {% if not readonly %}
+          <button type="button" class="gm-icon-btn gm-open-only" data-reply="{{ m.id }}" title="Reply" aria-label="Reply">{% icon "reply" %}</button>
+          <button type="button" class="gm-icon-btn gm-open-only" data-forward="{{ m.id }}" title="Forward" aria-label="Forward">{% icon "forward" %}</button>
+          {% endif %}
+        </div>
+      </div>
+      <div class="gm-msg-body gm-open-only">
+        {% if m.banner %}<div class="gm-banner">{{ m.banner }}</div>{% endif %}
+        <div class="gm-text">{{ m.body|mailbody }}</div>
+        {% if m.footer %}<div class="gm-footer">{{ m.footer|mailbody }}</div>{% endif %}
+        {% if m.files.all %}
+        <div class="gm-files">
+          <div class="gm-files-head">{{ m.files.all|length }} attachment{{ m.files.all|length|pluralize }}</div>
+          {% for a in m.files.all %}
+          <a class="gm-file" href="{{ base }}/file/{{ a.id }}/" download title="Download {{ a.filename }}">
+            <span class="gm-file-icon {{ a.filename|file_kind }}">{{ a.filename|file_kind|upper }}</span>
+            <span class="gm-file-name">{{ a.filename }}</span>
+            <span class="gm-file-size">{{ a.size|kb }}</span>
+            <span class="gm-file-dl">{% icon "download" 18 %}</span>
+          </a>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </article>
+  {% endfor %}
+
+  {% if not readonly %}
+  <div class="gm-reply-actions" data-reply-actions>
+    <button type="button" class="gm-outline-btn" data-reply="{{ last.id }}">{% icon "reply" 18 %} Reply</button>
+    <button type="button" class="gm-outline-btn" data-reply-all="{{ last.id }}">{% icon "reply_all" 18 %} Reply all</button>
+    <button type="button" class="gm-outline-btn" data-forward="{{ last.id }}">{% icon "forward" 18 %} Forward</button>
+  </div>
+  <div class="gm-inline-reply" hidden>
+    <div class="gm-avatar" style="background: {{ team.name|avatar_colour }}">{% if me %}{{ me.name|initial }}{% else %}{{ team.name|initial }}{% endif %}</div>
+    <form class="gm-inline-form" data-composer data-inline enctype="multipart/form-data">
+      {% include "ops/mail/_composer_fields.html" %}
+    </form>
+  </div>
+  {% endif %}
+</div>
+{{ thread_js|json_script:"thread-data" }}
+{% endblock %}

@@ -1,0 +1,32 @@
+{% load ops %}{% csrf_token %}
+    <input type="hidden" name="draft_id" value="">
+    <input type="hidden" name="in_reply_to" value="">
+    <input type="hidden" name="forward_of" value="">
+    <div class="gm-field gm-recips" data-field="to">
+      <span class="gm-field-label">To</span>
+      <div class="gm-chips" data-chips="to"><input class="gm-chip-input" autocomplete="off" aria-label="To" data-chip-input="to"></div>
+      <span class="gm-cc-toggles"><button type="button" data-show="cc">Cc</button><button type="button" data-show="bcc">Bcc</button></span>
+      <input type="hidden" name="to">
+      <div class="gm-suggest" hidden></div>
+    </div>
+    <div class="gm-field gm-recips" data-field="cc" hidden>
+      <span class="gm-field-label">Cc</span>
+      <div class="gm-chips" data-chips="cc"><input class="gm-chip-input" autocomplete="off" aria-label="Cc" data-chip-input="cc"></div>
+      <input type="hidden" name="cc">
+      <div class="gm-suggest" hidden></div>
+    </div>
+    <div class="gm-field gm-recips" data-field="bcc" hidden>
+      <span class="gm-field-label">Bcc</span>
+      <div class="gm-chips" data-chips="bcc"><input class="gm-chip-input" autocomplete="off" aria-label="Bcc" data-chip-input="bcc"></div>
+      <input type="hidden" name="bcc">
+      <div class="gm-suggest" hidden></div>
+    </div>
+    <div class="gm-field gm-subject-field"><input name="subject" placeholder="Subject" autocomplete="off" aria-label="Subject"></div>
+    <textarea name="body" class="gm-body-input" aria-label="Message body"></textarea>
+    <div class="gm-att-chips" data-att-chips></div>
+    <div class="gm-compose-foot">
+      <button type="submit" class="gm-send">Send</button>
+      <label class="gm-icon-btn" title="Attach files" aria-label="Attach files">{% icon "attach" 20 %}<input type="file" name="files" multiple hidden data-files></label>
+      <span class="gm-draft-state" data-draft-state></span>
+      <button type="button" class="gm-icon-btn right" data-discard title="Discard draft" aria-label="Discard draft">{% icon "trash" 20 %}</button>
+    </div>

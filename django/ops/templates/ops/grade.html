@@ -1,0 +1,41 @@
+{% extends "ops/base.html" %}{% load ops %}
+{% block title %}Grade {{ team.name }} · {{ inj.mel_id }}{% endblock %}
+{% block body %}
+<div class="bar">
+  <h1><a href="/replies/" class="muted">Replies</a> / {{ inj.mel_id }} · {{ team.name }}</h1>
+  <nav class="seg">{% for t in teams %}<a href="/grades/{{ inj.id }}/{{ t.id }}/" class="{% if t.id == team.id %}on{% endif %}">{{ t.name }}</a>{% endfor %}</nav>
+</div>
+<div class="cols">
+<section class="col-main">
+<div class="card">
+  <h3>{{ inj.subject|default:'' }}</h3>
+  <p class="small muted">Delivered {% if sent_at %}{{ sent_at|date:"D d M H:i" }}{% else %}— (not sent live yet){% endif %}{% if inj.reply_due_minutes %} · reply expected within {{ inj.reply_due_minutes }} min{% endif %}</p>
+  {% for r in reps %}
+  <div class="replyblock">
+    <div class="small"><a href="/replies/{{ r.id }}/">{{ r.received_at|date:"D H:i" }}</a> · {% if r.person %}{{ r.person.name }}{% else %}{{ r.from_addr }}{% endif %}
+      {% if r.after is not None %} · {{ r.after }} min after delivery{% endif %} · {{ r.channel }}
+      {% if r.files %} · 📎 {% for a in r.files %}{% if r.channel == 'email' %}<a href="/response-files/{{ a.id }}/">{{ a.filename }}</a>{% else %}<a href="/inbox/file/{{ a.id }}/">{{ a.filename }}</a>{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</div>
+    <pre class="mailtext">{{ r.new_part }}</pre>
+  </div>
+  {% empty %}<p class="muted">No replies from {{ team.name }} to this inject. You can still grade (e.g. a non-response).</p>{% endfor %}
+</div>
+</section>
+<section class="col-side">
+<form method="post" action="/grades/{{ inj.id }}/{{ team.id }}/" class="card form">{% csrf_token %}
+  <h3>Grade</h3>
+  {% if not crit %}<p class="warn small">This inject has no rubric yet. <a href="/injects/{{ inj.id }}/#rubric">Add criteria</a>.</p>{% endif %}
+  {% for c in crit %}
+  <label>{{ c.label }} <span class="muted">/ {{ c.max_points }}</span>
+    {% if c.description %}<span class="hint">{{ c.description }}</span>{% endif %}
+    <span class="scale">{% for n, on in c.choices %}<label class="chk"><input type="radio" name="c{{ c.id }}" value="{{ n }}" {% if on %}checked{% endif %}> {{ n }}</label>{% endfor %}</span>
+  </label>
+  {% endfor %}
+  <label>Comment <textarea name="comment" rows="4">{{ g.comment|default:'' }}</textarea></label>
+  <label>Grader <input name="grader" value="{{ g.grader|default:'' }}" placeholder="your name"></label>
+  <button class="btn primary">Save</button>
+  {% if next_team %}<button class="btn" name="next" value="{{ next_team }}">Save and next team</button>{% endif %}
+  {% if g %}<p class="small muted">Last saved {{ g.updated_at|date:"D d M H:i" }}{% if g.grader %} by {{ g.grader }}{% endif %}</p>{% endif %}
+</form>
+</section>
+</div>
+{% endblock %}

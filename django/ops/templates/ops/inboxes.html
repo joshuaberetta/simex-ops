@@ -1,0 +1,15 @@
+{% extends "ops/base.html" %}
+{% block title %}Team inboxes · SIMEX ops{% endblock %}
+{% block body %}
+<h1>Team inboxes</h1>
+<p class="muted">"View as team" opens the participants' mail client exactly as that team sees it, read-only: nothing is marked read and nothing can be sent.</p>
+<table class="list">
+  <thead><tr><th>Team</th><th>Received</th><th>Unread</th><th>Sent</th><th>Last in</th><th>Last out</th><th>Logins</th><th>Last sign-in</th><th></th></tr></thead>
+  {% for t in teams %}
+  <tr><td>{{ t.name }}{% if t.is_test %} <span class="muted small">test</span>{% endif %}</td><td>{{ t.n_inbox }}</td><td>{% if t.n_unread %}<b>{{ t.n_unread }}</b>{% else %}0{% endif %}</td>
+    <td>{{ t.n_sent }}</td><td class="small">{{ t.last_in|date:"D H:i"|default:"—" }}</td><td class="small">{{ t.last_out|date:"D H:i"|default:"—" }}</td>
+    <td>{{ t.logins }}</td><td class="small">{{ t.last_login|date:"D H:i"|default:"—" }}</td>
+    <td><a class="btn small" href="/inbox/as/{{ t.id }}/">View as team</a></td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends "ops/base.html" %}
+{% block title %}Settings · SIMEX ops{% endblock %}
+{% block body %}
+<h1>Settings</h1>
+<div class="cols">
+<section class="col-main">
+<form method="post" action="/settings/" class="card form">{% csrf_token %}
+  <h3>Messages</h3>
+  <label>Default footer <span class="hint">Added to every inject unless it sets its own or none.</span>
+    <textarea name="footer" rows="3">{{ cfg.footer }}</textarea></label>
+  <label>Subject prefix <input name="subject_prefix" value="{{ cfg.subject_prefix }}" placeholder="e.g. [SIMEX] "></label>
+  <h3>Participants' mail client</h3>
+  <label class="chk"><input type="checkbox" name="team_to_team" value="1" {% if cfg.team_to_team == '1' %}checked{% endif %}> teams may write to other teams (otherwise only to personas)</label>
+  <label>Max attachments per message (MB) <input type="number" name="max_upload_mb" value="{{ cfg.max_upload_mb }}" min="1" class="narrow"></label>
+  <h3>Email channel</h3>
+  <label>Default reply-to <input name="default_reply_to" value="{{ cfg.default_reply_to }}" placeholder="leave empty">
+    <span class="hint">Leave empty: replies go to the persona's own address and appear on the Replies tab. An address here diverts them and they are not tracked.</span></label>
+  <label>ExCon Bcc <input name="excon_bcc" value="{{ cfg.excon_bcc }}" placeholder="addresses, comma-separated"></label>
+  <label>Default "Send test" address <input name="test_address" value="{{ cfg.test_address }}"></label>
+  <label>Default test-run address pattern <input name="test_redirect" value="{{ cfg.test_redirect }}"></label>
+  <h3>Scheduler</h3>
+  <label>Grace period (minutes) <input type="number" name="grace_minutes" value="{{ cfg.grace_minutes }}" min="0" class="narrow">
+    <span class="hint">A scheduled inject found later than this (after an outage, or when its time passed while disarmed) is marked <i>overdue</i> instead of being sent.</span></label>
+  <button class="btn primary">Save settings</button>
+</form>
+</section>
+<section class="col-side">
+<div class="card {% if cfg.live_armed == '1' %}live-card{% endif %}">
+  <h3>Live sending</h3>
+  {% if cfg.live_armed == '1' %}
+  <p><span class="pill live">ARMED</span> Scheduled injects go to participants at their send time.</p>
+  <form method="post" action="/settings/arm/">{% csrf_token %}<input type="hidden" name="arm" value="0"><button class="btn">Disarm</button></form>
+  {% else %}
+  <p><span class="pill safe">Disarmed</span> Nothing goes to participants. Test sends and test runs still work.</p>
+  <form method="post" action="/settings/arm/" class="form">{% csrf_token %}<input type="hidden" name="arm" value="1">
+    <label>Type <b>SEND LIVE</b> to arm <input name="confirm" autocomplete="off"></label>
+    <button class="btn danger">Arm live sending</button></form>
+  {% endif %}
+</div>
+<div class="card">
+  <h3>Backup</h3>
+  <p class="small">Everything, including attachments, inboxes and logins, as one JSON file. Download one before and after each exercise day.</p>
+  <a class="btn small" href="/settings/backup/">Download backup</a>
+  <form method="post" action="/settings/restore/" enctype="multipart/form-data" class="form" style="margin-top:12px">{% csrf_token %}
+    <label>Restore (replaces everything, including logins) <input type="file" name="file" accept=".json"></label>
+    <label>Type <b>RESTORE</b> <input name="confirm" autocomplete="off"></label>
+    <button class="btn small danger">Restore</button>
+  </form>
+</div>
+<div class="card">
+  <h3>Email (Resend)</h3>
+  <p class="small">Mailer: <b>{{ mailer_name }}</b>{% if not resend_configured %} (no RESEND_API_KEY: email-channel injects are logged, not sent){% endif %}. Domain: <b>{{ MAIL_DOMAIN }}</b>.</p>
+  <button class="btn small" data-domain-check>Check domain status</button>
+  <pre class="domain small" hidden></pre>
+</div>
+</section>
+</div>
+{% endblock %}

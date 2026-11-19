@@ -1,0 +1,174 @@
+{% extends "ops/base.html" %}{% load ops %}
+{% block title %}{{ inj.mel_id }} · SIMEX ops{% endblock %}
+{% block body %}
+{% with st=inj.status %}
+<div class="bar">
+  <h1><a href="/injects/" class="muted">Injects</a> / {{ inj.mel_id }} <span class="status {{ st }}">{{ st }}</span></h1>
+  <div class="actions">
+    {% if st == 'draft' or st == 'overdue' or st == 'cancelled' or st == 'failed' %}
+    <form method="post" action="/injects/{{ inj.id }}/status/" class="inline">{% csrf_token %}<button class="btn" name="action" value="schedule">Schedule</button></form>{% endif %}
+    {% if st == 'scheduled' or st == 'overdue' %}
+    <form method="post" action="/injects/{{ inj.id }}/status/" class="inline">{% csrf_token %}<button class="btn" name="action" value="unschedule">Back to draft</button></form>{% endif %}
+    {% if st == 'draft' or st == 'scheduled' or st == 'overdue' %}
+    <form method="post" action="/injects/{{ inj.id }}/status/" class="inline">{% csrf_token %}<button class="btn" name="action" value="cancel" data-confirm="Cancel this inject?">Cancel inject</button></form>{% endif %}
+    {% if st == 'sent' or st == 'partial' or st == 'failed' %}
+    <form method="post" action="/injects/{{ inj.id }}/status/" class="inline">{% csrf_token %}<button class="btn" name="action" value="reset" data-confirm="Move back to draft so it can be sent again?">Back to draft</button></form>{% endif %}
+  </div>
+</div>
+{% if inj.last_error %}<div class="flash error">Last send: {{ inj.last_error }}</div>{% endif %}
+{% if st == 'overdue' %}<div class="flash warn">This inject missed its send time by more than the grace period ({{ cfg.grace_minutes }} min) and was not sent. Send it now, or change the time and schedule it again.</div>{% endif %}
+
+<div class="cols">
+<section class="col-main">
+<form method="post" action="/injects/{{ inj.id }}/" class="card form">{% csrf_token %}
+  <div class="row">
+    <label>Inject id <input name="mel_id" value="{{ inj.mel_id }}" required></label>
+    <label>Send at (Africa/Nairobi) <input type="datetime-local" name="send_at" value="{{ send_at_input }}"></label>
+    <label>Scenario time <input name="scenario_dt" value="{{ inj.scenario_dt|default:'' }}" placeholder="2035-05-20T09:00"></label>
+  </div>
+  <div class="row">
+    <label>Channel
+      <select name="channel">{% for k, v in CHANNELS.items %}<option value="{{ k }}" {% if k == inj.channel %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+      <span class="hint">In-app: lands in the team inboxes on this site. Email: sent through Resend.</span>
+    </label>
+    <label>Sender username
+      <span class="addr"><input name="sender_local" value="{{ inj.sender_local|default:'' }}" list="senderlist" placeholder="cnn"><span>@{{ MAIL_DOMAIN|default:'simex.kobolabs.dev' }}</span></span>
+      <datalist id="senderlist">{% for x in senders %}<option value="{{ x.local_part }}">{{ x.display_name }}</option>{% endfor %}</datalist>
+    </label>
+    <label>Sender name <input name="from_name" value="{{ inj.from_name|default:'' }}" placeholder="{% if sender %}{{ sender.display_name }}{% else %}from the Senders list{% endif %}"></label>
+  </div>
+  <div class="row">
+    <label>Recipients
+      <select name="delivery">{% for k, v in DELIVERY_MODES.items %}<option value="{{ k }}" {% if k == inj.delivery %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+      {% if inj.recipients_label %}<span class="hint">MEL: {{ inj.recipients_label }}</span>{% endif %}
+    </label>
+    <fieldset class="teams"><legend>Teams</legend>
+      {% for t in teams %}{% if t.active %}<label class="chk"><input type="checkbox" name="team_ids" value="{{ t.id }}" {% if t.id in selected_teams %}checked{% endif %}> {{ t.name }}</label>{% endif %}{% endfor %}
+    </fieldset>
+  </div>
+  <details class="emailonly" {% if inj.channel == 'email' %}open{% endif %}><summary class="small">Email options (reply-to, extra recipients)</summary>
+  <div class="row">
+    <label>Reply-to <input name="reply_to" value="{{ inj.reply_to|default:'' }}" placeholder="empty = replies come into the app"></label>
+    <label>Extra To <input name="to_extra" value="{{ inj.to_extra|default:'' }}" placeholder="addresses, comma-separated"></label>
+    <label>Cc <input name="cc" value="{{ inj.cc|default:'' }}"></label>
+    <label>Bcc <input name="bcc" value="{{ inj.bcc|default:'' }}"></label>
+  </div>
+  </details>
+  <label>Subject <input name="subject" value="{{ inj.subject|default:'' }}"></label>
+  <label>Body <span class="hint">Plain text. Placeholders: {team} {team_name} {name} {first_name}</span>
+    <textarea name="body" rows="16">{{ inj.body|default:'' }}</textarea></label>
+  <div class="row">
+    <fieldset><legend>Footer</legend>
+      <label class="chk"><input type="radio" name="footer_mode" value="default" {% if inj.footer_mode == 'default' %}checked{% endif %}> Default (Settings)</label>
+      <label class="chk"><input type="radio" name="footer_mode" value="custom" {% if inj.footer_mode == 'custom' %}checked{% endif %}> Custom</label>
+      <label class="chk"><input type="radio" name="footer_mode" value="none" {% if inj.footer_mode == 'none' %}checked{% endif %}> None</label>
+    </fieldset>
+    <label class="grow">Custom footer <textarea name="footer" rows="2">{{ inj.footer|default:'' }}</textarea></label>
+  </div>
+  <p class="muted small">From the MEL: method {{ inj.method|default:'—' }} · mailbox {{ inj.mailbox|default:'—' }}</p>
+  <button class="btn primary" {% if st == 'sending' %}disabled{% endif %}>Save</button>
+</form>
+
+<form method="post" action="/injects/{{ inj.id }}/rubric/" class="card form" id="rubric">{% csrf_token %}
+  <h3>Replies &amp; rubric <span class="muted">ExCon only</span></h3>
+  <div class="row">
+    <label class="chk"><input type="checkbox" name="expects_reply" value="1" {% if inj.expects_reply %}checked{% endif %}> teams are expected to reply</label>
+    <label>within (minutes) <input type="number" name="reply_due_minutes" value="{{ inj.reply_due_minutes|default:'' }}" min="1" class="narrow"></label>
+    <p class="small"><a href="/replies/?inject={{ inj.id }}">{{ reply_count }} repl{{ reply_count|pluralize:"y,ies" }} received</a></p>
+  </div>
+  {% for c in rubric %}
+  <div class="rowform crit">
+    <input name="sort{{ c.id }}" value="{{ c.sort }}" class="narrow" title="order">
+    <input name="label{{ c.id }}" value="{{ c.label }}" required>
+    <input name="desc{{ c.id }}" value="{{ c.description|default:'' }}" placeholder="what a full score looks like" class="wide">
+    <span>max <input type="number" name="max{{ c.id }}" value="{{ c.max_points }}" min="1" class="narrow"></span>
+    <label class="chk small"><input type="checkbox" name="del{{ c.id }}" value="1"> remove</label>
+  </div>
+  {% endfor %}
+  <div class="rowform crit">
+    <span class="narrow"></span>
+    <input name="new_label" placeholder="New criterion, e.g. Timeliness">
+    <input name="new_desc" placeholder="what a full score looks like" class="wide">
+    <span>max <input type="number" name="new_max" value="3" min="1" class="narrow"></span>
+  </div>
+  {% if with_rubric %}<label>or copy the rubric of <select name="copy_from"><option value="">—</option>{% for w in with_rubric %}<option value="{{ w.id }}">{{ w.mel_id }}</option>{% endfor %}</select></label>{% endif %}
+  <button class="btn">Save rubric</button>
+</form>
+
+<div class="card">
+  <h3>Attachments</h3>
+  {% if atts %}<ul class="atts">{% for a in atts %}
+    <li><a href="/attachments/{{ a.id }}/">{{ a.filename }}</a> <span class="muted">{{ a.size|kb }}</span>
+      <form method="post" action="/attachments/{{ a.id }}/delete/" class="inline">{% csrf_token %}<button class="link" data-confirm="Remove {{ a.filename }}?">remove</button></form></li>
+  {% endfor %}</ul>{% endif %}
+  {% if missing_docs %}<p class="warn small">Listed in the MEL but not attached: {{ missing_docs|join:"; " }}</p>{% endif %}
+  <form method="post" action="/injects/{{ inj.id }}/attachments/" enctype="multipart/form-data" class="inline">{% csrf_token %}
+    <input type="file" name="files" multiple> <button class="btn small">Upload</button>
+  </form>
+</div>
+</section>
+
+<section class="col-side">
+<div class="card">
+  <h3>Test</h3>
+  <form method="post" action="/injects/{{ inj.id }}/test/" class="form">{% csrf_token %}
+    {% if inj.channel == 'email' %}
+    <label>Send a copy to <input type="email" name="address" value="{{ cfg.test_address }}" required></label>
+    {% endif %}
+    <label class="chk"><input type="checkbox" name="all" value="1"> one per recipient group ({{ drafts|length }})</label>
+    <button class="btn">Send test</button>
+    <p class="hint">{% if inj.channel == 'email' %}Subject starts with [TEST] and a banner lists the real recipients.{% else %}Lands in the <a href="/inboxes/?team={{ test_team_id }}">Test team inbox</a> with [TEST] in the subject.{% endif %} Does not change the inject's status.</p>
+  </form>
+</div>
+
+<div class="card live-card">
+  <h3>Send live now</h3>
+  {% if cfg.live_armed != '1' %}<p class="muted small">Live sending is disarmed (Settings).</p>{% endif %}
+  <form method="post" action="/injects/{{ inj.id }}/send/" class="form">{% csrf_token %}
+    {% if st == 'partial' or st == 'failed' %}<label class="chk"><input type="checkbox" name="retry" value="1" checked> only retry the failed deliveries</label>{% endif %}
+    <label>Type <b>{{ inj.mel_id }}</b> to confirm <input name="confirm" autocomplete="off"></label>
+    <button class="btn danger" {% if cfg.live_armed != '1' or st == 'sending' %}disabled{% endif %}>Send to participants</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Preview <span class="muted">{{ drafts|length }} {% if inj.channel == 'inapp' %}inbox item{% else %}email{% endif %}{{ drafts|length|pluralize }}</span></h3>
+  {% for w in warnings %}<p class="warn small">{{ w }}</p>{% endfor %}
+  {% for d in drafts %}
+  <details {% if forloop.first %}open{% endif %}>
+    <summary>{{ d.target }}{% if d.warnings %} <span class="warn">⚠ {{ d.warnings|length }}</span>{% endif %}</summary>
+    {% for w in d.warnings %}<p class="warn small">{{ w }}</p>{% endfor %}
+    <dl class="hdrs">
+      <dt>From</dt><dd>{{ d.from_addr }}</dd>
+      {% if d.channel == 'inapp' %}
+      <dt>Inbox</dt><dd>{{ d.target }}</dd><dt>To</dt><dd>{{ d.to_label }}</dd>
+      {% else %}
+      <dt>Reply-to</dt><dd>{{ d.reply_display }}</dd>
+      <dt>To</dt><dd>{{ d.to|joinlist }}</dd>
+      {% if d.cc %}<dt>Cc</dt><dd>{{ d.cc|joinlist }}</dd>{% endif %}
+      {% if d.bcc %}<dt>Bcc</dt><dd>{{ d.bcc|joinlist }}</dd>{% endif %}
+      {% endif %}
+      <dt>Subject</dt><dd>{{ d.subject }}</dd>
+      {% if d.attachment_ids %}<dt>Files</dt><dd>{{ d.attachment_ids|length }}</dd>{% endif %}
+    </dl>
+    <iframe class="mail" sandbox srcdoc="{{ d.html }}"></iframe>
+  </details>
+  {% endfor %}
+</div>
+
+{% if msgs %}
+<div class="card">
+  <h3>Deliveries for this inject</h3>
+  <table class="list small">
+    {% for m in msgs %}<tr><td><a href="/log/{{ m.id }}/">{{ m.created_at|date:"d M H:i" }}</a></td><td>{{ m.kind }}</td><td>{{ m.channel }}</td><td>{{ m.target }}</td><td><span class="status {{ m.status }}">{{ m.status }}</span></td></tr>{% endfor %}
+  </table>
+</div>
+{% endif %}
+
+<form method="post" action="/injects/{{ inj.id }}/delete/" class="card danger-zone">{% csrf_token %}
+  <label>Delete: type <b>{{ inj.mel_id }}</b> <input name="confirm" autocomplete="off"></label> <button class="btn small danger">Delete inject</button>
+</form>
+</section>
+</div>
+{% endwith %}
+{% endblock %}
