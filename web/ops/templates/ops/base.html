@@ -46,7 +46,8 @@
   {% if next_inject %}<span>Next: <a href="/injects/{{ next_inject.id }}/">{{ next_inject.mel_id }}</a> {{ next_inject.send_at|date:"D d M H:i" }}</span>{% endif %}
   {% if status_counts.overdue %}<a class="pill overdue" href="/injects/?status=overdue">{{ status_counts.overdue }} overdue</a>{% endif %}
   {% if failed_count %}<a class="pill failed" href="/injects/?status=failed">{{ failed_count }} failed</a>{% endif %}
-  <form method="post" action="/settings/pause/" class="inline right">{% csrf_token %}
+  <button type="button" class="btn small right" data-alerts title="Sound and desktop notifications for new replies">🔔 Alerts</button>
+  <form method="post" action="/settings/pause/" class="inline">{% csrf_token %}
     <input type="hidden" name="back" value="{{ request.path }}">
     {% if cfg.paused == '1' %}<input type="hidden" name="paused" value="0"><button class="btn small">Resume sending</button>
     {% else %}<input type="hidden" name="paused" value="1"><button class="btn small danger" title="Stops live and test deliveries immediately">Pause all sending</button>{% endif %}
@@ -57,6 +58,8 @@
   {% for m in messages %}<div class="flash {% if m.tags == 'success' %}ok{% elif m.tags == 'warning' %}warn{% elif m.tags == 'error' %}error{% else %}ok{% endif %}">{{ m }}</div>{% endfor %}
   {% block body %}{% endblock %}
 </main>
+{% if excon %}<div class="toasts" id="toasts" aria-live="polite"></div>
+<script src="{% static 'ops/notify.js' %}"></script>{% endif %}
 <script src="{% static 'ops/app.js' %}"></script>
 </body>
 </html>

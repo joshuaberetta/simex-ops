@@ -17,13 +17,16 @@
     return fetch(url, { method: "POST", body, headers: { "X-CSRFToken": csrf(), "X-Requested-With": "fetch" }, credentials: "same-origin" });
   }
 
-  function snack(text, action) {
+  function snack(text, action, loud) {
     const el = $("#snackbar");
-    el.innerHTML = esc(text) + (action ? ` <button type="button">${esc(action.label)}</button>` : "");
+    el.innerHTML = esc(text) + (action ? ` <button type="button">${esc(action.label)}</button>` : "") +
+      (loud ? ' <button type="button" data-close aria-label="Dismiss">✕</button>' : "");
+    el.classList.toggle("loud", !!loud);
     el.hidden = false;
     if (action) $("button", el).onclick = action.run;
+    if (loud) $("[data-close]", el).onclick = () => { el.hidden = true; };
     clearTimeout(snack.t);
-    snack.t = setTimeout(() => { el.hidden = true; }, 6000);
+    snack.t = setTimeout(() => { el.hidden = true; }, loud ? 30000 : 6000);
   }
 
   // --- sidebar, account card, menus --------------------------------------------------------------
@@ -345,49 +348,74 @@
     }
   });
 
-  // --- polling: unread count in the title and sidebar, sound, notification --------------------------
+  // --- polling: unread count, tab title and icon, chime, desktop notification ----------------------
+  const N = window.simexNotify;
   const soundBtn = $("[data-sound]");
-  const soundOn = () => localStorage.getItem("simex-sound") === "1";
-  const paintSound = () => { if (soundBtn) { soundBtn.style.color = soundOn() ? "#0b57d0" : ""; soundBtn.title = soundOn() ? "Notifications on (click to mute)" : "Turn on notification sound"; } };
-  if (soundBtn) soundBtn.onclick = () => {
-    localStorage.setItem("simex-sound", soundOn() ? "0" : "1"); paintSound();
-    if (soundOn()) { beep(); if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); }
+  const paintSound = () => {
+    if (!soundBtn) return;
+    soundBtn.classList.toggle("on", N.enabled());
+    soundBtn.title = N.enabled() ? "Alerts on: sound and notifications (click to mute)" : "Alerts muted (click to turn on)";
+  };
+  if (soundBtn) soundBtn.onclick = async () => {
+    N.setEnabled(!N.enabled()); paintSound();
+    if (N.enabled()) { await N.ask(); N.beep(); paintBanner(); }
   };
   paintSound();
-  function beep() {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      [0, 0.18].forEach((d, i) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = i ? 1046 : 784; g.gain.setValueAtTime(0.0001, ctx.currentTime + d);
-        g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + d + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + d + 0.25);
-        o.connect(g); g.connect(ctx.destination); o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + 0.3); });
-    } catch (e) { /* no audio */ }
+
+  // Ask once for desktop notifications (it needs a click), unless muted or already decided.
+  const banner = $("#gm-alerts");
+  function paintBanner() {
+    if (!banner) return;
+    banner.hidden = CFG.readonly || !N.enabled() || N.permission() !== "default" || localStorage.getItem("simex-alerts-asked") === "1";
   }
-  const baseTitle = document.title.replace(/^Inbox \(\d+\)/, "Inbox");
-  let latest = null;
+  if (banner) {
+    $("[data-alerts-on]", banner).onclick = async () => { await N.ask(); N.beep(); localStorage.setItem("simex-alerts-asked", "1"); paintBanner(); };
+    $("[data-alerts-later]", banner).onclick = () => { localStorage.setItem("simex-alerts-asked", "1"); paintBanner(); };
+    paintBanner();
+  }
+
+  const seenKey = `simex-latest:${BASE}`;
+  let latest = localStorage.getItem(seenKey) === null ? null : Number(localStorage.getItem(seenKey));
   async function poll() {
     try {
-      const r = await fetch(`${BASE}/poll/`, { credentials: "same-origin" });
+      const r = await fetch(latest === null ? `${BASE}/poll/` : `${BASE}/poll/?since=${latest}`, { credentials: "same-origin" });
       if (!r.ok) return;
       const j = await r.json();
       const n = j.unread;
       $$("[data-unread-count]").forEach((el) => el.textContent = n ? n : "");
       const inboxLink = $('[data-folder="inbox"]'); if (inboxLink) inboxLink.classList.toggle("bold", n > 0);
-      if (CFG.folder === "inbox" && !$("#thread-data")) document.title = n ? baseTitle.replace(/^Inbox/, `Inbox (${n})`) : baseTitle;
-      else document.title = (n ? `(${n}) ` : "") + baseTitle.replace(/^\(\d+\) /, "");
-      if (latest !== null && j.latest > latest) {
-        snack(`New message from ${j.from}`, { label: "View", run: () => { location.href = `${BASE}/`; } });
-        if (soundOn()) {
-          beep();
-          if ("Notification" in window && Notification.permission === "granted" && document.hidden) new Notification(j.from || "New message", { body: j.subject });
+      N.title(n);
+      N.favicon(n, "#0b57d0");
+      const fresh = latest !== null ? (j.new || []).filter((m) => m.id > latest) : [];
+      if (fresh.length) {
+        const m = fresh[0];
+        const more = fresh.length > 1 ? ` (+${fresh.length - 1} more)` : "";
+        snack(`New message from ${m.from}: ${m.subject}${more}`, { label: "Open", run: () => { location.href = `${BASE}/t/${m.thread}/`; } }, true);
+        if (!CFG.readonly) {
+          N.alert({ title: `${m.from}${more}`, body: m.subject, url: `${location.origin}${BASE}/t/${m.thread}/`, tag: `mail-${m.id}`,
+                    flashText: `New message from ${m.from}` });
         }
-        if (CFG.folder === "inbox" && bulk && !$$('input[name="threads"]:checked').length && (!win || win.hidden)) setTimeout(() => location.reload(), 1500);
+        if (CFG.folder === "inbox" && bulk && !$$('input[name="threads"]:checked').length && (!win || win.hidden)) {
+          setTimeout(() => {  // show the new row; the alert comes back after the reload
+            sessionStorage.setItem("simex-snack-new", JSON.stringify({ text: `New message from ${m.from}: ${m.subject}${more}`, url: `${BASE}/t/${m.thread}/` }));
+            location.reload();
+          }, 4000);
+        }
       }
-      latest = j.latest;
+      latest = latest !== null && j.latest < latest ? j.latest : Math.max(latest ?? 0, j.latest);  // lower: the data was restored
+      localStorage.setItem(seenKey, String(latest));
     } catch (e) { /* offline: try again next time */ }
   }
   poll();
-  setInterval(poll, 15000);
+  setInterval(poll, 10000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
 
+  const fresh = sessionStorage.getItem("simex-snack-new");
+  if (fresh) {
+    sessionStorage.removeItem("simex-snack-new");
+    const f = JSON.parse(fresh);
+    snack(f.text, { label: "Open", run: () => { location.href = f.url; } }, true);
+  }
   const pending = sessionStorage.getItem("simex-snack");
   if (pending) { sessionStorage.removeItem("simex-snack"); snack(pending); }
 })();

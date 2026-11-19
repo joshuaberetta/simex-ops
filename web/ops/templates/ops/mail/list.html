@@ -1,5 +1,5 @@
 {% extends "ops/mail/base.html" %}{% load ops %}
-{% block title %}{% if q %}Search results{% else %}{% for k, l in folders %}{% if k == folder %}{{ l }}{% endif %}{% endfor %}{% if folder == 'inbox' and inbox_unread %} ({{ inbox_unread }}){% endif %}{% endif %}{% endblock %}
+{% block title %}{% if q %}Search results{% else %}{% if folder == 'inbox' and inbox_unread %}({{ inbox_unread }}) {% endif %}{% for k, l in folders %}{% if k == folder %}{{ l }}{% endif %}{% endfor %}{% endif %}{% endblock %}
 {% block main %}
 <form method="post" action="{{ base }}/action/" class="gm-listform" data-bulk>{% csrf_token %}
   <input type="hidden" name="next" value="{{ request.get_full_path }}">

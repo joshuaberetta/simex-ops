@@ -471,8 +471,14 @@ def poll(request, as_team=None):
         return JsonResponse({"unread": 0, "latest": 0})
     qs = Mail.objects.filter(team=v.team, folder="inbox", trashed_at__isnull=True)
     latest = qs.order_by("-id").first()
+    try:
+        since = int(request.GET.get("since") or 0)
+    except ValueError:
+        since = 0
+    new = [{"id": m.id, "from": m.from_name or m.from_addr, "subject": m.subject, "thread": m.thread}
+           for m in (qs.filter(id__gt=since).order_by("-id")[:5] if "since" in request.GET else [])]
     return JsonResponse({"unread": qs.filter(archived=False, read_at__isnull=True).values("thread").distinct().count(),
-                         "latest": latest.id if latest else 0,
+                         "latest": latest.id if latest else 0, "new": new,
                          "subject": latest.subject if latest else "", "from": latest.from_name if latest else ""})
 
 

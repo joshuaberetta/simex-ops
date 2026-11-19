@@ -660,6 +660,43 @@ def inboxes(request):
 
 
 @excon_required
+def excon_poll(request):
+    """ExCon pages poll this for alerts without reloading: new replies since `since` (a
+    Response id), AI flags that need attention since `ai` (a ReplyAnalysis id), and the
+    counts in the status bar."""
+    from .models import ReplyAnalysis
+    def num(k):
+        try:
+            return int(request.GET.get(k) or 0)
+        except ValueError:
+            return 0
+    since, ai_since = num("since"), num("ai")
+    live = Response.objects.exclude(status="ignored")
+    items = []
+    if "since" in request.GET:
+        for r in live.filter(id__gt=since).select_related("team", "person").order_by("id")[:10]:
+            items.append({"id": r.id, "team": r.team.name if r.team else "Unknown team", "kind": r.kind,
+                          "who": r.person.name if r.person else (r.from_name or r.from_addr), "persona": r.persona or "",
+                          "subject": r.subject, "preview": inbound.split_quoted(r.text or "")[0][:160]})
+    flags = []
+    if "ai" in request.GET:
+        for a in (ReplyAnalysis.objects.filter(id__gt=ai_since, status="done").select_related("response__team")
+                  .order_by("id")[:20]):
+            urgent = [f for f in a.flags if f in ("escalate", "safety")]
+            if urgent:
+                flags.append({"id": a.id, "response": a.response_id, "flags": urgent, "summary": a.summary,
+                              "team": a.response.team.name if a.response.team else "Unknown team"})
+    counts = dict(Inject.objects.values_list("status").annotate(n=Count("id")).values_list("status", "n"))
+    return JsonResponse({
+        "max": Response.objects.order_by("-id").values_list("id", flat=True).first() or 0,
+        "ai_max": ReplyAnalysis.objects.order_by("-id").values_list("id", flat=True).first() or 0,
+        "items": items, "flags": flags,
+        "new": Response.objects.filter(status="new", kind="live").count(),
+        "overdue": counts.get("overdue", 0), "failed": counts.get("failed", 0) + counts.get("partial", 0),
+        "paused": conf.flag("paused")})
+
+
+@excon_required
 @require_POST
 def inbox_clear(request):
     """Empty a team's mailbox after testing: its mails, its replies (with their AI analysis),

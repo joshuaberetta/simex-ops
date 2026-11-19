@@ -187,3 +187,12 @@ table.heat td.cell a.muted { font-weight: 400; }
 .conv-item.from-persona { border-left-color: #c3c2b7; background: #fafbfc; }
 .conv-item.from-team.this { border-left-color: var(--accent); }
 .conv-item details { border-top: none; padding: 2px 0; }
+.toasts { position: fixed; right: 18px; bottom: 18px; display: flex; flex-direction: column; gap: 8px; z-index: 50; width: 360px; max-width: calc(100vw - 36px); }
+.toast { position: relative; background: #17202c; color: #fff; border-radius: 8px; padding: 10px 34px 10px 14px; font-size: 13px; box-shadow: 0 6px 20px rgba(0,0,0,.25); animation: toast-in .3s ease-out; }
+.toast .muted { color: #c9d2de; }
+.toast.reply { border-left: 4px solid #5fa8e8; }
+.toast.flag { border-left: 4px solid #fab219; }
+.toast.old { opacity: .8; }
+.toast .x { position: absolute; top: 6px; right: 8px; background: none; border: 0; color: #c9d2de; cursor: pointer; font-size: 13px; }
+@keyframes toast-in { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }

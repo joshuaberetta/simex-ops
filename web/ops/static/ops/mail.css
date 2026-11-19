@@ -288,3 +288,15 @@ body.readonly .gm-hover, body.readonly .gm-tb-selected { display: none !importan
   .gm-msg.closed .gm-msg-meta .gm-star, .gm-msg.closed .gm-msg-meta .gm-att { display: none; }
   .gm-msg.closed .gm-msg-date { display: inline; font-size: 12px; }
 }
+
+/* alerts */
+.gm-alerts { display: flex; align-items: center; gap: 12px; margin: 0 16px 8px; padding: 10px 16px; border-radius: 12px; background: #d3e3fd; color: #041e49; font-size: 14px; }
+.gm-alerts span { flex: 1; }
+.gm-alerts svg { flex: none; }
+.gm-alerts[hidden] { display: none; }
+.gm-pill-btn.primary { background: #0b57d0; border-color: #0b57d0; color: #fff; }
+.gm-icon-btn[data-sound].on { color: #0b57d0; }
+.gm-snackbar.loud { background: #0b57d0; font-size: 15px; padding: 16px 24px; border-radius: 12px; animation: gm-pop .35s ease-out; }
+.gm-snackbar.loud a, .gm-snackbar.loud button { color: #fff; text-decoration: underline; }
+@keyframes gm-pop { from { transform: translateY(20px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .gm-snackbar.loud { animation: none; } }

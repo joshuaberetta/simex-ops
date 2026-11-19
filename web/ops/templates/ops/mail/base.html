@@ -34,6 +34,11 @@
     </div>
   </div>
 </header>
+<div class="gm-alerts" id="gm-alerts" hidden>
+  {% icon "bell" 20 %} <span><b>Don't miss a message.</b> Turn on alerts to get a notification and a sound when new mail arrives, even when this tab is in the background.</span>
+  <button type="button" class="gm-pill-btn primary" data-alerts-on>Turn on alerts</button>
+  <button type="button" class="gm-pill-btn" data-alerts-later>Not now</button>
+</div>
 <div class="gm-body">
   <nav class="gm-side">
     <button class="gm-compose-btn" data-compose {% if readonly %}disabled title="Read-only view"{% endif %}>{% icon "edit" 24 %}<span>Compose</span></button>
@@ -74,6 +79,7 @@
 </div>
 <div class="gm-snackbar" id="snackbar" hidden></div>
 {{ simex_js|json_script:"simex-config" }}
+<script src="{% static 'ops/notify.js' %}"></script>
 <script src="{% static 'ops/mail.js' %}"></script>
 {% block scripts %}{% endblock %}
 </body>
