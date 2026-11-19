@@ -141,3 +141,11 @@ pre.mailtext { white-space: pre-wrap; font: 14px/1.5 system-ui, sans-serif; marg
 details.eng { margin: 18px 0; }
 details.eng summary { list-style: revert; }
 h2.inline-h { display: inline; }
+
+.manual { max-width: 900px; padding: 20px 28px; }
+.manual h1 { font-size: 22px; } .manual h2 { font-size: 18px; margin-top: 28px; border-top: 1px solid var(--line); padding-top: 16px; }
+.manual h3 { text-transform: none; letter-spacing: 0; color: var(--ink); font-size: 15px; margin-top: 18px; }
+.manual table { border-collapse: collapse; margin: 8px 0; } .manual td, .manual th { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+.manual pre { background: #f3f4f6; padding: 8px; border-radius: 5px; overflow-x: auto; }
+.manual li { margin-bottom: 3px; }
+.manual hr { display: none; }

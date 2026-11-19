@@ -1292,3 +1292,34 @@ async def rubric_save(request: Request, iid: int):
         s.commit()
     flash(request, "Rubric saved.")
     return back(f"/injects/{iid}#rubric")
+
+
+# --- help -------------------------------------------------------------------------------------
+
+MANUAL = HERE.parent / "docs" / "MANUAL.md"
+
+
+LIST_ITEM = re.compile(r"^(\s*)([-*]|\d+\.)\s")
+
+
+def _gfm_lists(text):
+    """Python-Markdown wants a blank line before a list and 4-space nesting; the manual is
+    written GitHub-style (2 spaces). Double every indent and add the blank lines."""
+    out, prev = [], ""
+    for line in text.splitlines():
+        indent = len(line) - len(line.lstrip(" "))
+        if indent:
+            line = " " * (indent * 2) + line.lstrip(" ")
+        if LIST_ITEM.match(line) and not indent and prev.strip() and not LIST_ITEM.match(prev):
+            out.append("")
+        out.append(line)
+        prev = line
+    return "\n".join(out)
+
+
+@app.get("/help", response_class=HTMLResponse)
+def help_page(request: Request):
+    import markdown
+    text = MANUAL.read_text(encoding="utf-8") if MANUAL.exists() else "Manual not found."
+    html = markdown.markdown(_gfm_lists(text), extensions=["tables", "fenced_code", "toc"])
+    return page(request, "help.html", tab="help", manual=html)

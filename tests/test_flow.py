@@ -407,3 +407,8 @@ def test_add_missing_columns(tmp_path):
     db.add_missing_columns(eng)
     cols = {c["name"] for c in sa.inspect(eng).get_columns("messages")}
     assert {"opened_at", "click_count", "delivery", "reply_token"} <= cols
+
+
+def test_help_page(client):
+    r = client.get("/help")
+    assert r.status_code == 200 and "operator manual" in r.text and "<table>" in r.text

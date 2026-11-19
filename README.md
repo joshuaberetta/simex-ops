@@ -7,6 +7,8 @@ senders, people, log, settings) support it, and more tools can be added as tabs 
 It is the hosted companion of the local knowledge base in `~/code/undac-simex`. Exercise content
 never goes into this repo. It reaches the app only through the import page.
 
+**Operator manual:** [docs/MANUAL.md](docs/MANUAL.md), also in the app under **Help**.
+
 ## What it does
 
 - **Injects**: imported from `MEL-MIL.xlsx` or an `injects.json` export, then editable. Each inject
