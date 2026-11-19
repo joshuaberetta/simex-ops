@@ -3,7 +3,7 @@ timezone (config.TZ). Tables are created at startup (no migrations yet)."""
 
 from datetime import datetime, timezone
 
-from sqlalchemy import (JSON, Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text,
+from sqlalchemy import (JSON, Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint,
                         create_engine, event)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
@@ -62,6 +62,9 @@ class Inject(Base):
     imported: Mapped[dict | None] = mapped_column(JSON)
     attempt: Mapped[int] = mapped_column(Integer, default=0)
     last_error: Mapped[str | None] = mapped_column(Text)
+    # Replies: whether a response is expected, and within how many minutes (typed in the app).
+    expects_reply: Mapped[bool] = mapped_column(Boolean, default=False)
+    reply_due_minutes: Mapped[int | None] = mapped_column(Integer)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
@@ -152,7 +155,7 @@ class Message(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     inject_id: Mapped[int | None] = mapped_column(ForeignKey("injects.id", ondelete="SET NULL"))
     run_id: Mapped[int | None] = mapped_column(ForeignKey("test_runs.id", ondelete="SET NULL"))
-    kind: Mapped[str] = mapped_column(String(10))  # live | test | oneoff
+    kind: Mapped[str] = mapped_column(String(10))  # live | test | oneoff | reply (ExCon answering a participant)
     target: Mapped[str] = mapped_column(String(200), default="")  # team / person / "all"
     idem_key: Mapped[str] = mapped_column(String(200), unique=True)
     from_addr: Mapped[str] = mapped_column(String(400))
@@ -170,7 +173,82 @@ class Message(Base):
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime)
+    # Who it was for (each-team / each-person emails), so replies can be attributed.
+    team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id", ondelete="SET NULL"))
+    person_id: Mapped[int | None] = mapped_column(ForeignKey("people.id", ondelete="SET NULL"))
+    # Replies come back to <persona>+<reply_token>@MAIL_DOMAIN and are matched on the token.
+    reply_token: Mapped[str | None] = mapped_column(String(20), unique=True)
+    delivery: Mapped[str | None] = mapped_column(String(30))  # last Resend event: delivered, bounced...
+    extra_headers: Mapped[dict | None] = mapped_column(JSON)  # e.g. In-Reply-To for ExCon replies
+    inbound_id: Mapped[int | None] = mapped_column(Integer)  # ExCon reply: the email it answers
+    delivery_at: Mapped[datetime | None] = mapped_column(DateTime)
     inject: Mapped[Inject | None] = relationship()
+
+
+class InboundEmail(Base):
+    """An email received at @MAIL_DOMAIN (a participant's reply or a fresh email to a persona)."""
+    __tablename__ = "inbound"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    resend_id: Mapped[str] = mapped_column(String(100), unique=True)
+    received_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    from_addr: Mapped[str] = mapped_column(String(320), default="")
+    from_name: Mapped[str | None] = mapped_column(String(200))
+    to: Mapped[list] = mapped_column(JSON, default=list)
+    cc: Mapped[list] = mapped_column(JSON, default=list)
+    subject: Mapped[str] = mapped_column(Text, default="")
+    text: Mapped[str | None] = mapped_column(Text)
+    html: Mapped[str | None] = mapped_column(Text)
+    headers: Mapped[dict | None] = mapped_column(JSON)
+    message_id_header: Mapped[str | None] = mapped_column(String(400))
+    persona: Mapped[str | None] = mapped_column(String(120))  # local part it was sent to
+    reply_token: Mapped[str | None] = mapped_column(String(20))
+    message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id", ondelete="SET NULL"))
+    inject_id: Mapped[int | None] = mapped_column(ForeignKey("injects.id", ondelete="SET NULL"))
+    team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id", ondelete="SET NULL"))
+    person_id: Mapped[int | None] = mapped_column(ForeignKey("people.id", ondelete="SET NULL"))
+    match: Mapped[str] = mapped_column(String(10), default="none")  # token | guess | manual | none
+    kind: Mapped[str] = mapped_column(String(10), default="live")  # live | test (reply to a test email)
+    status: Mapped[str] = mapped_column(String(10), default="new")  # new | reviewed | ignored
+    fetched: Mapped[bool] = mapped_column(Boolean, default=False)
+    error: Mapped[str | None] = mapped_column(Text)
+    inject: Mapped[Inject | None] = relationship()
+    team: Mapped["Team | None"] = relationship()
+    person: Mapped["Person | None"] = relationship()
+    attachments: Mapped[list["InboundAttachment"]] = relationship(cascade="all, delete-orphan",
+                                                                   order_by="InboundAttachment.filename")
+
+
+class InboundAttachment(Base):
+    __tablename__ = "inbound_attachments"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    inbound_id: Mapped[int] = mapped_column(ForeignKey("inbound.id", ondelete="CASCADE"))
+    filename: Mapped[str] = mapped_column(String(300))
+    content_type: Mapped[str] = mapped_column(String(120), default="application/octet-stream")
+    size: Mapped[int] = mapped_column(Integer, default=0)
+    data: Mapped[bytes | None] = mapped_column(LargeBinary)  # None if too big or not downloaded
+
+
+class RubricCriterion(Base):
+    __tablename__ = "rubric"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    inject_id: Mapped[int] = mapped_column(ForeignKey("injects.id", ondelete="CASCADE"))
+    label: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text)
+    max_points: Mapped[int] = mapped_column(Integer, default=3)
+    sort: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class Grade(Base):
+    """ExCon's score for one team's response to one inject (all its replies together)."""
+    __tablename__ = "grades"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    inject_id: Mapped[int] = mapped_column(ForeignKey("injects.id", ondelete="CASCADE"))
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"))
+    scores: Mapped[dict] = mapped_column(JSON, default=dict)  # criterion id (str) -> points
+    comment: Mapped[str | None] = mapped_column(Text)
+    grader: Mapped[str | None] = mapped_column(String(120))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (UniqueConstraint("inject_id", "team_id"),)
 
 
 class ImportBatch(Base):

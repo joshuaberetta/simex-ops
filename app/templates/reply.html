@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Reply · SIMEX ops{% endblock %}
+{% block body %}
+<h1><a href="/replies?kind={{ em.kind }}" class="muted">Replies</a> / {{ em.subject or '(no subject)' }}</h1>
+<div class="cols">
+<section class="col-main">
+<div class="card">
+  <dl class="hdrs">
+    <dt>From</dt><dd>{{ em.from_name or '' }} &lt;{{ em.from_addr }}&gt;{% if em.person %} · <b>{{ em.person.name }}</b>{% else %} <span class="warn">(not in the roster)</span>{% endif %}{% if em.team %} · {{ em.team.name }}{% endif %}</dd>
+    <dt>To</dt><dd>{{ em.to|join(', ') }}</dd>
+    {% if em.cc %}<dt>Cc</dt><dd>{{ em.cc|join(', ') }}</dd>{% endif %}
+    <dt>Received</dt><dd>{{ em.received_at|local('%a %d %b %H:%M:%S') }}{% if minutes is not none %} · <b>{{ minutes }} min</b> after the inject email{% endif %}</dd>
+    <dt>Inject</dt><dd>{% if em.inject %}<a href="/injects/{{ em.inject.id }}">{{ em.inject.mel_id }}</a> {{ em.inject.subject or '' }} <span class="muted">({{ em.match }})</span>{% else %}<span class="warn">not matched</span>{% endif %}</dd>
+    {% if em.attachments %}<dt>Files</dt><dd>{% for a in em.attachments %}{% if a.data is not none %}<a href="/inbound-attachments/{{ a.id }}">{{ a.filename }}</a>{% else %}{{ a.filename }} <span class="muted">(too large, not stored)</span>{% endif %} <span class="muted">{{ (a.size / 1024)|round|int }} KB</span>{{ ', ' if not loop.last }}{% endfor %}</dd>{% endif %}
+    {% if em.error %}<dt>Error</dt><dd class="err">{{ em.error }}</dd>{% endif %}
+  </dl>
+  {% if em.fetched %}
+    <pre class="mailtext">{{ new_part }}</pre>
+    {% if quoted %}<details><summary class="muted">quoted text</summary><pre class="mailtext muted">{{ quoted }}</pre></details>{% endif %}
+    {% if em.html and not em.text %}<iframe class="mail tall" sandbox srcdoc="{{ em.html }}"></iframe>{% endif %}
+  {% else %}<p class="muted">Content not fetched yet.</p>{% endif %}
+</div>
+
+{% if em.persona %}
+<form method="post" action="/replies/{{ em.id }}/answer" class="card form">
+  <h3>Answer as {{ sender.display_name if sender else em.persona }} &lt;{{ em.persona }}@{{ MAIL_DOMAIN }}&gt;</h3>
+  <textarea name="body" rows="6" placeholder="In character. The original is quoted below your text."></textarea>
+  <button class="btn" data-confirm="Send this reply to {{ em.from_addr }}?">Send reply</button>
+  {% for m in answers %}<p class="small">Answered {{ m.created_at|local('%a %H:%M') }}: <a href="/log/{{ m.id }}">{{ m.status }}</a></p>{% endfor %}
+</form>
+{% endif %}
+
+{% if thread %}
+<div class="card"><h3>Other replies from {{ em.team.name }} to {{ em.inject.mel_id }}</h3>
+  <ul>{% for t in thread %}<li><a href="/replies/{{ t.id }}">{{ t.received_at|local('%a %H:%M') }}</a> {{ t.from_addr }}: {{ t.subject }}</li>{% endfor %}</ul></div>
+{% endif %}
+</section>
+<section class="col-side">
+{% if em.inject and em.team %}<div class="card"><a class="btn primary" href="/grades/{{ em.inject.id }}/{{ em.team.id }}">Grade {{ em.team.name }} on {{ em.inject.mel_id }}</a></div>{% endif %}
+<form method="post" action="/replies/{{ em.id }}" class="card form">
+  <h3>Match</h3>
+  <label>Inject <select name="inject_id"><option value="">— none —</option>{% for id, mid, subj in injects_all %}<option value="{{ id }}" {{ 'selected' if id == em.inject_id }}>{{ mid }} {{ (subj or '')[:40] }}</option>{% endfor %}</select></label>
+  <label>Team <select name="team_id"><option value="">— none —</option>{% for t in teams %}<option value="{{ t.id }}" {{ 'selected' if t.id == em.team_id }}>{{ t.name }}</option>{% endfor %}</select></label>
+  <label>Person <select name="person_id"><option value="">— none —</option>{% for p in people %}<option value="{{ p.id }}" {{ 'selected' if p.id == em.person_id }}>{{ p.name }} ({{ p.email }})</option>{% endfor %}</select></label>
+  <button class="btn">Save match</button>
+</form>
+<form method="post" action="/replies/{{ em.id }}" class="card form">
+  <h3>Status</h3>
+  {% for st in ('new', 'reviewed', 'ignored') %}<label class="chk"><input type="radio" name="status" value="{{ st }}" {{ 'checked' if em.status == st }}> {{ st }}</label>{% endfor %}
+  <label class="chk"><input type="checkbox" name="refetch" value="1"> fetch the content again</label>
+  <button class="btn small">Save</button>
+</form>
+{% if original %}<div class="card"><h3>In reply to</h3><p class="small"><a href="/log/{{ original.id }}">{{ original.subject }}</a><br>sent {{ original.sent_at|local if original.sent_at }} to {{ original.target }}</p></div>{% endif %}
+</section>
+</div>
+{% endblock %}

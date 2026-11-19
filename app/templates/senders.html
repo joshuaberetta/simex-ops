@@ -2,7 +2,7 @@
 {% block title %}Senders · SIMEX ops{% endblock %}
 {% block body %}
 <h1>Senders</h1>
-<p class="muted">Every email is sent from <i>username</i>@{{ MAIL_DOMAIN }}. <code>{team}</code> in a username, and <code>{team_name}</code> in a name, are filled in per team. Nobody receives mail at these addresses: set a reply-to (here, per inject, or the default in Settings) so replies reach ExCon.</p>
+<p class="muted">Every email is sent from <i>username</i>@{{ MAIL_DOMAIN }}. <code>{team}</code> in a username, and <code>{team_name}</code> in a name, are filled in per team. Mail to these addresses arrives on the Replies tab. Leave reply-to empty so replies are tracked; an address there diverts them elsewhere.</p>
 <table class="list">
   <thead><tr><th colspan="6">Name shown · address · reply-to · injects using it · active</th></tr></thead>
   {% for x in senders %}

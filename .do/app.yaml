@@ -1,4 +1,4 @@
-# DigitalOcean App Platform: https://simex.kobolabs.dev
+# DigitalOcean App Platform: https://ops.simex.kobolabs.dev
 #
 # Secrets (APP_PASSWORD, SECRET_KEY, RESEND_API_KEY) have no value here on purpose. An
 # update replaces the whole spec, so never apply this file directly:
@@ -14,7 +14,9 @@ alerts:
   - rule: DOMAIN_FAILED
 # DNS for kobolabs.dev is managed by DigitalOcean; keep this block or the domain detaches.
 domains:
-  - domain: simex.kobolabs.dev
+  # The app lives on ops.: simex.kobolabs.dev itself carries the MX record for replies
+  # (a name can't have both a CNAME and an MX).
+  - domain: ops.simex.kobolabs.dev
     type: PRIMARY
     zone: kobolabs.dev
 databases:
@@ -33,10 +35,11 @@ services:
     health_check: { http_path: /healthz, initial_delay_seconds: 10, period_seconds: 10, failure_threshold: 6 }
     envs:
       - { key: DATABASE_URL, scope: RUN_TIME, value: "${db.DATABASE_URL}" }
-      - { key: PUBLIC_URL, scope: RUN_TIME, value: "https://simex.kobolabs.dev" }
+      - { key: PUBLIC_URL, scope: RUN_TIME, value: "https://ops.simex.kobolabs.dev" }
       - { key: MAIL_DOMAIN, scope: RUN_TIME, value: "simex.kobolabs.dev" }
       - { key: EXERCISE_TZ, scope: RUN_TIME, value: "Africa/Nairobi" }
       - { key: APP_USERNAME, scope: RUN_TIME, value: "undac" }
       - { key: APP_PASSWORD, scope: RUN_TIME, type: SECRET }
       - { key: SECRET_KEY, scope: RUN_TIME, type: SECRET }
       - { key: RESEND_API_KEY, scope: RUN_TIME, type: SECRET }
+      - { key: RESEND_WEBHOOK_SECRET, scope: RUN_TIME, type: SECRET }

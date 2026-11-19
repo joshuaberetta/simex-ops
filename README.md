@@ -1,6 +1,6 @@
 # SIMEX ops
 
-Web app for UNDAC SIMEX exercise control at **https://simex.kobolabs.dev**. The first tab schedules
+Web app for UNDAC SIMEX exercise control at **https://ops.simex.kobolabs.dev**. Personas send from and receive at `@simex.kobolabs.dev`. The first tab schedules
 and sends the email injects through [Resend](https://resend.com). The other tabs (test runs,
 senders, people, log, settings) support it, and more tools can be added as tabs later.
 
@@ -26,6 +26,32 @@ never goes into this repo. It reaches the app only through the import page.
   (`name,email,team code,role`).
 - **Only participant-facing fields are imported.** Expected outcomes, story, theme, key figures,
   relevance and the ExCon description are dropped at import and never stored.
+
+## Replies and grading
+
+- **Where replies go.** Each email's Reply-To is the persona's address tagged with a reference,
+  `cnn+3f9a1c2e@simex.kobolabs.dev`. Resend receives it and calls the webhook
+  `/webhooks/resend` (`email.received`, signature checked with `RESEND_WEBHOOK_SECRET`), and the
+  app fetches the body and attachments.
+- **How they are matched.** The tag identifies the inject and team. A fresh email typed to a
+  persona (no tag) is matched by the sender's roster entry plus the persona's latest email to
+  that team, preferring the same subject, and is marked "guess". Anything unmatched can be
+  assigned by hand. Mail from our own domain is ignored (the To: of all-Bcc emails). Replies to
+  test emails are kept separate.
+- **Replies tab.** A per-team summary (replies, expected injects answered, late or missing,
+  median time to first reply, score), an inject × team matrix (replied / late / waiting / no
+  reply), and an inbox. "Sync from Resend" catches anything a webhook missed.
+- **Answering in character.** From a reply's page, ExCon can answer as the persona. It is
+  threaded with In-Reply-To, and its own replies are tracked too.
+- **Rubrics.** Written per inject by ExCon, on the inject page under "Replies & rubric": mark
+  "teams are expected to reply", give a time limit, and add criteria with max points (or copy
+  another inject's rubric). Nothing comes from the MEL's expected outcomes.
+- **Grading.** Per team per inject, scoring all the team's replies together. "Save and next team"
+  moves through the teams. Export everything as CSV.
+- Delivery events (`email.delivered`, `email.bounced`, ...) on the same webhook update each sent
+  email's delivery status. Bounces are logged.
+- Setting an explicit reply-to (Settings, sender or inject) diverts replies away from the app,
+  and they are then not tracked.
 
 ## Safety
 
@@ -101,14 +127,15 @@ Environment: `DATABASE_URL` (default SQLite), `APP_USERNAME`, `APP_PASSWORD`, `S
   existing columns.
 
 ## Resend
+- Receiving: enable receiving on `simex.kobolabs.dev` (an MX record on that name, which is why the
+  app lives on `ops.`). Add a webhook to `https://ops.simex.kobolabs.dev/webhooks/resend` for
+  `email.received` plus the delivery events, and put its signing secret in `RESEND_WEBHOOK_SECRET`.
 
 - The sending domain is `simex.kobolabs.dev`, with DNS on DigitalOcean.
 - To set it up, add the domain in Resend (region eu-west-1, like the other kobolabs.dev
   subdomains), then add its DKIM/SPF/MX records with `doctl compute domain records create
   kobolabs.dev …`. Settings → "Check domain status" shows the records and whether they are
   verified.
-- Nobody receives mail at `@simex.kobolabs.dev`, so set a default reply-to (Settings) to an ExCon
-  inbox.
 - Check the plan's daily quota against the schedule. Roughly one email per team per inject, plus
   test runs.
 

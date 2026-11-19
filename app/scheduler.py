@@ -5,6 +5,7 @@ Resend with an idempotency key, so a restart mid-send resumes without duplicates
 """
 
 import logging
+import secrets
 import threading
 import time
 import uuid
@@ -50,10 +51,13 @@ def chunk(drafts):
 
 
 def _message(inj, d, kind, idem_key, run=None):
+    token = secrets.token_hex(4)
+    reply_to = d.reply_to or f"{d.reply_local}+{token}@{config.MAIL_DOMAIN}"
     return Message(inject_id=inj.id, run_id=run.id if run else None, kind=kind, target=d.target,
-                   idem_key=idem_key, from_addr=d.from_addr, reply_to=d.reply_to, to=d.to, cc=d.cc,
+                   idem_key=idem_key, from_addr=d.from_addr, reply_to=reply_to, to=d.to, cc=d.cc,
                    bcc=d.bcc, original_to=d.original_to, subject=d.subject, text=d.text, html=d.html,
-                   attachment_ids=d.attachment_ids)
+                   attachment_ids=d.attachment_ids, team_id=d.team_id, person_id=d.person_id,
+                   reply_token=None if d.reply_to else token)
 
 
 def deliver(s, msgs, dry_run=False, respect_pause=True):
@@ -75,7 +79,7 @@ def deliver(s, msgs, dry_run=False, respect_pause=True):
             continue
         atts = s.query(Attachment).filter(Attachment.id.in_(m.attachment_ids or [])).all() if m.attachment_ids else []
         try:
-            m.resend_id = m_.send(mailer.payload(m, atts), m.idem_key)
+            m.resend_id = m_.send(mailer.payload(m, atts, m.extra_headers), m.idem_key)
             m.status, m.sent_at, m.error = "sent", utcnow(), None
         except mailer.SendError as e:
             m.status, m.error = "failed", str(e)

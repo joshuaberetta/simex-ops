@@ -60,6 +60,32 @@ class ResendMailer:
             return r.json().get("id")
         raise SendError("Resend: gave up after retries", retryable=True)
 
+    def _get(self, path, **params):
+        self._wait()
+        r = self.client.get(path, params=params or None)
+        if r.status_code >= 400:
+            raise SendError(f"Resend {r.status_code}: {r.text[:300]}", retryable=r.status_code >= 500)
+        return r.json()
+
+    def get_received(self, email_id):
+        return self._get(f"/emails/receiving/{email_id}")
+
+    def list_received(self, limit=50):
+        return self._get("/emails/receiving", limit=limit).get("data", [])
+
+    def received_attachments(self, email_id):
+        return self._get(f"/emails/receiving/{email_id}/attachments").get("data", [])
+
+    def download(self, url, max_bytes):
+        with httpx.stream("GET", url, timeout=60, follow_redirects=True) as r:
+            r.raise_for_status()
+            data = b""
+            for chunk in r.iter_bytes():
+                data += chunk
+                if len(data) > max_bytes:
+                    return None
+            return data
+
     def domain_status(self, domain):
         r = self.client.get("/domains")
         if r.status_code >= 400:
@@ -77,6 +103,21 @@ class LogMailer:
 
     def __init__(self):
         self.sent = []
+        self.received = {}  # tests put fake received emails here: id -> retrieve-response dict
+
+    def get_received(self, email_id):
+        if email_id not in self.received:
+            raise SendError("MAILER=log: no such received email")
+        return self.received[email_id]
+
+    def list_received(self, limit=50):
+        return [{"id": k, **v} for k, v in self.received.items()]
+
+    def received_attachments(self, email_id):
+        return [{**a, "download_url": "log://" + a["filename"]} for a in self.received.get(email_id, {}).get("attachments", [])]
+
+    def download(self, url, max_bytes):
+        return b"log attachment " + url.encode()
 
     def send(self, payload, idem_key):
         self.sent.append((payload, idem_key))
@@ -86,9 +127,9 @@ class LogMailer:
         return {"error": "MAILER=log: emails are recorded, not sent (no RESEND_API_KEY)."}
 
 
-def payload(msg, attachments):
+def payload(msg, attachments, headers=None):
     p = {"from": msg.from_addr, "to": msg.to, "subject": msg.subject, "text": msg.text, "html": msg.html,
-         "headers": {"X-Simex-Inject": str(msg.inject_id or "")}}
+         "headers": {"X-Simex-Inject": str(msg.inject_id or ""), **(headers or {})}}
     if msg.cc:
         p["cc"] = msg.cc
     if msg.bcc:

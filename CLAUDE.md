@@ -1,9 +1,10 @@
 # SIMEX ops
 
-FastAPI + Jinja (server-rendered, no build step) + SQLAlchemy 2 (Postgres on DO, SQLite locally) web app at https://simex.kobolabs.dev that schedules and sends UNDAC SIMEX email injects via Resend. README.md is the human-facing version of this file; keep them in sync.
+FastAPI + Jinja (server-rendered, no build step) + SQLAlchemy 2 (Postgres on DO, SQLite locally) web app at https://ops.simex.kobolabs.dev that schedules and sends UNDAC SIMEX email injects via Resend (personas at @simex.kobolabs.dev, which also receives), and tracks and grades participants' replies. README.md is the human-facing version of this file; keep them in sync.
 
 - `app/main.py` routes (tabs: Injects, Test runs, Senders, People & teams, Log, Settings), auth (single login from env), CSRF origin check. New tools go in as new tabs.
 - `app/db.py` models; `app/importer.py` MEL/JSON import (participant-facing fields only, plan/apply with local-edit tracking); `app/render.py` inject -> concrete emails (placeholders, footer, test redirect); `app/scheduler.py` loop + live/test/one-off sending; `app/mailer.py` Resend client (idempotency keys) and log mailer; `app/settings.py` DB-backed operator settings.
+- `app/inbound.py` Resend webhook (Svix signature), fetch of received emails, matching to message/inject/team (reply-to token `persona+token@`, else a guess); grading (`RubricCriterion`, `Grade`) and the Replies tab are in `main.py`.
 - Tests: `.venv/bin/python -m pytest -q` (SQLite, log mailer, scheduler off; `tick()` is called directly).
 
 Rules:

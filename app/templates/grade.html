@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Grade {{ team.name }} · {{ inj.mel_id }}{% endblock %}
+{% block body %}
+<div class="bar">
+  <h1><a href="/replies" class="muted">Replies</a> / {{ inj.mel_id }} · {{ team.name }}</h1>
+  <nav class="seg">{% for t in teams %}<a href="/grades/{{ inj.id }}/{{ t.id }}" class="{{ 'on' if t.id == team.id }}">{{ t.name }}</a>{% endfor %}</nav>
+</div>
+<div class="cols">
+<section class="col-main">
+<div class="card">
+  <h3>{{ inj.subject or '' }}</h3>
+  <p class="small muted">Sent {{ sent_at|local if sent_at else '— (not sent live yet)' }}{% if inj.reply_due_minutes %} · reply expected within {{ inj.reply_due_minutes }} min{% endif %}</p>
+  {% for e, text in parts %}
+  <div class="replyblock">
+    <div class="small"><a href="/replies/{{ e.id }}">{{ e.received_at|local('%a %H:%M') }}</a> · {{ e.person.name if e.person else e.from_addr }}
+      {% if sent_at %} · {{ ((e.received_at - sent_at).total_seconds() // 60)|int }} min after sending{% endif %}
+      {% if e.attachments %} · 📎 {% for a in e.attachments %}{% if a.data is not none %}<a href="/inbound-attachments/{{ a.id }}">{{ a.filename }}</a>{% else %}{{ a.filename }}{% endif %}{{ ', ' if not loop.last }}{% endfor %}{% endif %}</div>
+    <pre class="mailtext">{{ text }}</pre>
+  </div>
+  {% else %}<p class="muted">No replies from {{ team.name }} to this inject. You can still grade (e.g. a non-response).</p>{% endfor %}
+</div>
+</section>
+<section class="col-side">
+<form method="post" action="/grades/{{ inj.id }}/{{ team.id }}" class="card form">
+  <h3>Grade</h3>
+  {% if not crit %}<p class="warn small">This inject has no rubric yet. <a href="/injects/{{ inj.id }}#rubric">Add criteria</a>.</p>{% endif %}
+  {% for c in crit %}
+  <label>{{ c.label }} <span class="muted">/ {{ c.max_points }}</span>
+    {% if c.description %}<span class="hint">{{ c.description }}</span>{% endif %}
+    <span class="scale">{% for n in range(c.max_points + 1) %}<label class="chk"><input type="radio" name="c{{ c.id }}" value="{{ n }}" {{ 'checked' if g and (g.scores.get(c.id|string)|int(-1)) == n and g.scores.get(c.id|string) is not none }}> {{ n }}</label>{% endfor %}</span>
+  </label>
+  {% endfor %}
+  <label>Comment <textarea name="comment" rows="4">{{ g.comment if g and g.comment else '' }}</textarea></label>
+  <label>Grader <input name="grader" value="{{ g.grader if g and g.grader else '' }}" placeholder="your name"></label>
+  {% set ns = namespace(next=None, found=False) %}{% for t in teams %}{% if ns.found and ns.next is none %}{% set ns.next = t.id %}{% endif %}{% if t.id == team.id %}{% set ns.found = True %}{% endif %}{% endfor %}
+  <button class="btn primary">Save</button>
+  {% if ns.next %}<button class="btn" name="next" value="{{ ns.next }}">Save and next team</button>{% endif %}
+  {% if g %}<p class="small muted">Last saved {{ g.updated_at|local }}{% if g.grader %} by {{ g.grader }}{% endif %}</p>{% endif %}
+</form>
+</section>
+</div>
+{% endblock %}

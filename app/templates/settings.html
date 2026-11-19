@@ -9,8 +9,9 @@
   <label>Default footer <span class="hint">Added to every email unless an inject sets its own or none.</span>
     <textarea name="footer" rows="3">{{ cfg.footer }}</textarea></label>
   <label>Subject prefix <input name="subject_prefix" value="{{ cfg.subject_prefix }}" placeholder="e.g. [SIMEX] "></label>
-  <label>Default reply-to <input name="default_reply_to" value="{{ cfg.default_reply_to }}" placeholder="excon inbox">
-    <span class="hint">Where replies go unless the sender or inject has its own. Nobody receives mail at @{{ MAIL_DOMAIN }}.</span></label>
+  <label>Default reply-to <input name="default_reply_to" value="{{ cfg.default_reply_to }}" placeholder="leave empty">
+    <span class="hint">Leave empty (recommended): replies go to the persona's own address and appear on the Replies tab, matched to the inject and team.
+    An address here (or on a sender or inject) sends replies there instead, and they are not tracked.</span></label>
   <label>ExCon Bcc <input name="excon_bcc" value="{{ cfg.excon_bcc }}" placeholder="addresses, comma-separated">
     <span class="hint">Gets a copy of every email (in test runs, redirected like everyone else).</span></label>
   <h3>Testing</h3>

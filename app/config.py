@@ -27,9 +27,11 @@ APP_USERNAME = _env("APP_USERNAME", "undac")
 APP_PASSWORD = _env("APP_PASSWORD")  # required in production; see main.py
 SECRET_KEY = _env("SECRET_KEY")
 RESEND_API_KEY = _env("RESEND_API_KEY")
+# Signing secret of the Resend webhook (email.received + delivery events) -> /webhooks/resend.
+RESEND_WEBHOOK_SECRET = _env("RESEND_WEBHOOK_SECRET")
 # Every sender address is <username>@MAIL_DOMAIN; the domain must be verified in Resend.
 MAIL_DOMAIN = _env("MAIL_DOMAIN", "simex.kobolabs.dev")
-PUBLIC_URL = _env("PUBLIC_URL", "http://127.0.0.1:8000")
+PUBLIC_URL = _env("PUBLIC_URL", "http://127.0.0.1:8000")  # production: https://ops.simex.kobolabs.dev
 TZ_NAME = _env("EXERCISE_TZ", "Africa/Nairobi")
 TZ = ZoneInfo(TZ_NAME)
 # Seconds between scheduler ticks, and minimum gap between Resend API calls.

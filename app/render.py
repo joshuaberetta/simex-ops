@@ -31,6 +31,13 @@ class Draft:
     warnings: list = field(default_factory=list)
     banner: str | None = None
     original_to: dict | None = None
+    team_id: int | None = None
+    person_id: int | None = None
+    reply_local: str = ""  # with reply_to None, replies go to <reply_local>+<token>@MAIL_DOMAIN
+
+    @property
+    def reply_display(self):
+        return self.reply_to or f"{self.reply_local}+<ref>@{config.MAIL_DOMAIN} (tracked in Replies)"
 
     @property
     def text(self):
@@ -85,7 +92,7 @@ def sender_for(s, inj):
 
 
 def _targets(s, inj, warnings):
-    """(target label, placeholder context, to-list) per email."""
+    """(target label, placeholder context, to-list, team id, person id) per email."""
     teams = s.query(Team).filter_by(active=True).order_by(Team.sort, Team.name).all()
     if inj.team_ids:
         teams = [t for t in teams if t.id in inj.team_ids]
@@ -100,7 +107,8 @@ def _targets(s, inj, warnings):
             if not to:
                 warnings.append(f"{t.name} has no members or team email.")
                 continue
-            out.append((t.name, {"team": t.code, "team_name": t.name, "name": t.name, "first_name": t.name}, to))
+            out.append((t.name, {"team": t.code, "team_name": t.name, "name": t.name, "first_name": t.name}, to,
+                        t.id, None))
         return out
     if inj.delivery == "each_person":
         out = []
@@ -108,11 +116,13 @@ def _targets(s, inj, warnings):
             for p in members(t):
                 first = p.name.split()[0] if p.name.split() else p.name
                 out.append((f"{p.name} ({t.name})",
-                            {"team": t.code, "team_name": t.name, "name": p.name, "first_name": first}, [p.email]))
+                            {"team": t.code, "team_name": t.name, "name": p.name, "first_name": first}, [p.email],
+                            t.id, p.id))
         if not inj.team_ids:  # people not in a team are included when sending to everyone
             for p in s.query(Person).filter_by(active=True, team_id=None).order_by(Person.name):
                 first = p.name.split()[0] if p.name.split() else p.name
-                out.append((p.name, {"team": "", "team_name": "", "name": p.name, "first_name": first}, [p.email]))
+                out.append((p.name, {"team": "", "team_name": "", "name": p.name, "first_name": first}, [p.email],
+                            None, p.id))
         if not out:
             warnings.append("No active participants to send to.")
         return out
@@ -123,8 +133,9 @@ def _targets(s, inj, warnings):
         if not people:
             warnings.append("No active participants to send to.")
             return []
-        return [("all participants (Bcc)", {"team": "", "team_name": "", "name": "", "first_name": ""}, ["__bcc__"] + people)]
-    return [("custom", {"team": "", "team_name": "", "name": "", "first_name": ""}, [])]
+        return [("all participants (Bcc)", {"team": "", "team_name": "", "name": "", "first_name": ""},
+                 ["__bcc__"] + people, None, None)]
+    return [("custom", {"team": "", "team_name": "", "name": "", "first_name": ""}, [], None, None)]
 
 
 def build(s, inj, cfg):
@@ -140,30 +151,30 @@ def build(s, inj, cfg):
     to_extra, cc, bcc = split_addresses(inj.to_extra), split_addresses(inj.cc), split_addresses(inj.bcc)
     excon = split_addresses(cfg.get("excon_bcc"))
     drafts = []
-    for target, ctx, to in _targets(s, inj, warnings):
+    for target, ctx, to, team_id, person_id in _targets(s, inj, warnings):
         local = fill(inj.sender_local or "", ctx).lower()
         name = fill(inj.from_name or (sender.display_name if sender else "") or local, ctx)
         name = name.replace('"', "'")
         from_addr = f'"{name}" <{local}@{config.MAIL_DOMAIN}>'
         this_bcc = list(bcc) + excon
         if to and to[0] == "__bcc__":
-            # Resend needs a To address. Use the reply-to inbox (ExCon), never the sender's
-            # own address: nothing receives mail there, so it would bounce.
+            # Resend needs a To address: the reply-to if one is set, else the persona itself
+            # (it arrives in Replies, where mail from our own domain is ignored).
             this_bcc = to[1:] + this_bcc
-            to = [reply_to] if reply_to else excon[:1]
+            to = [reply_to] if reply_to else [f"{local}@{config.MAIL_DOMAIN}"]
         to = to + to_extra
         subject = (cfg.get("subject_prefix") or "") + fill(inj.subject or "", ctx)
         d = Draft(target=target, from_addr=from_addr, reply_to=reply_to, to=_dedupe(to), cc=_dedupe(cc),
                   bcc=_dedupe(this_bcc), subject=subject, body=fill(inj.body or "", ctx), footer=footer,
-                  attachment_ids=[a.id for a in inj.attachments])
+                  attachment_ids=[a.id for a in inj.attachments], team_id=team_id, person_id=person_id,
+                  reply_local=local)
         total = sum(a.size for a in inj.attachments)
         if total > 28 * 1024 * 1024:  # Resend: 40 MB per email after base64 (+33%)
             d.warnings.append(f"Attachments total {total / 1e6:.0f} MB: over Resend's 40 MB per email once encoded.")
         if not LOCAL.match(local):
             d.warnings.append(f"Sender username '{local}' is not a valid email username.")
         if not d.to:
-            d.warnings.append("No To address." + (" All-Bcc emails go To the reply-to address: set one."
-                                                  if inj.delivery == "all_bcc" else ""))
+            d.warnings.append("No To address.")
         if not subject.strip():
             d.warnings.append("Empty subject.")
         for a in d.to + d.cc + d.bcc + ([reply_to] if reply_to else []):
@@ -199,7 +210,7 @@ def redirect(d: Draft, pattern, label="TEST"):
         if lst:
             lines.append(f"{lab}: {', '.join(lst)}")
     if not d.to:
-        lines.append("WARNING: no To address, so the live send would fail. Set a default reply-to (Settings).")
+        lines.append("WARNING: no To address, so the live send would fail.")
     d.banner = "\n".join(lines)
     d.original_to = {"to": d.to, "cc": d.cc, "bcc": d.bcc}
     d.to, d.cc, d.bcc = r(d.to) or [pattern.replace("{key}", "no-to")], r(d.cc), r(d.bcc)

@@ -8,6 +8,7 @@ import logging
 import mimetypes
 import re
 import time
+import uuid
 import zipfile
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -20,9 +21,10 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import backup, config, db, importer, mailer, render, scheduler, seed, settings
-from .db import (DELIVERY_MODES, STATUSES, Attachment, Audit, ImportBatch, Inject, Message, Person, SessionLocal,
-                 Sender, Team, TestRun, TestRunItem, audit, utcnow)
+from . import backup, config, db, importer, inbound, mailer, render, scheduler, seed, settings
+from .db import (DELIVERY_MODES, STATUSES, Attachment, Audit, Grade, ImportBatch, InboundAttachment, InboundEmail,
+                 Inject, Message, Person, RubricCriterion, SessionLocal, Sender, Team, TestRun, TestRunItem, audit,
+                 utcnow)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 HERE = Path(__file__).parent
@@ -90,7 +92,7 @@ templates.env.globals.update(TZ=config.TZ_NAME, MAIL_DOMAIN=config.MAIL_DOMAIN, 
 
 # --- auth, CSRF, flash -----------------------------------------------------------------------
 
-OPEN_PATHS = ("/login", "/healthz", "/static/")
+OPEN_PATHS = ("/login", "/healthz", "/static/", "/webhooks/")  # webhooks check their own signature
 _failed_logins: dict[str, list[float]] = {}
 
 
@@ -121,7 +123,8 @@ def page(request, name, **ctx):
         nxt = (s.query(Inject).filter(Inject.status == "scheduled", Inject.send_at.is_not(None))
                .order_by(Inject.send_at).first())
         counts = dict(s.query(Inject.status, func.count()).group_by(Inject.status).all())
-    ctx.update(request=request, cfg=cfg, next_inject=nxt, status_counts=counts, now=utcnow(),
+        new_replies = s.query(InboundEmail).filter_by(status="new", kind="live").count()
+    ctx.update(request=request, cfg=cfg, next_inject=nxt, status_counts=counts, now=utcnow(), new_replies=new_replies,
                sched=scheduler.state, mailer_name=mailer.get().name, flashes=request.session.pop("flash", []),
                tab=ctx.get("tab", ""))
     return templates.TemplateResponse(request, name, ctx)
@@ -265,8 +268,13 @@ def inject_page(request: Request, iid: int):
         atts = list(inj.attachments)
         docs = [d for d in (inj.supporting_documents or "").splitlines() if d.strip()]
         missing_docs = [d for d in docs if not any(_doc_matches(d, a.filename) for a in atts)]
+        rubric = s.query(RubricCriterion).filter_by(inject_id=iid).order_by(RubricCriterion.sort, RubricCriterion.id).all()
+        reply_count = s.query(InboundEmail).filter_by(inject_id=iid).filter(InboundEmail.status != "ignored").count()
+        with_rubric = (s.query(Inject.id, Inject.mel_id).join(RubricCriterion, RubricCriterion.inject_id == Inject.id)
+                       .filter(Inject.id != iid).distinct().order_by(Inject.mel_id).all())
     return page(request, "inject.html", tab="injects", inj=inj, drafts=drafts, warnings=warnings, msgs=msgs,
-                teams=teams, senders=senders, sender=sender, atts=atts, missing_docs=missing_docs)
+                teams=teams, senders=senders, sender=sender, atts=atts, missing_docs=missing_docs, rubric=rubric,
+                reply_count=reply_count, with_rubric=with_rubric)
 
 
 @app.post("/injects/{iid}")
@@ -944,3 +952,319 @@ async def settings_restore(request: Request):
         return back("/settings")
     flash(request, "Restored: " + ", ".join(f"{v} {k}" for k, v in counts.items()) + ". Live sending is disarmed.", "warn")
     return back("/settings")
+
+
+# --- replies: webhook, inbox, dashboard, grading -------------------------------------------------
+
+@app.post("/webhooks/resend")
+async def resend_webhook(request: Request):
+    body = await request.body()
+    if not config.RESEND_WEBHOOK_SECRET:
+        return Response("Webhook secret not configured.", status_code=503)
+    try:
+        inbound.verify(config.RESEND_WEBHOOK_SECRET, request.headers, body)
+    except inbound.BadSignature as e:
+        return Response(f"Bad signature: {e}", status_code=401)
+    try:
+        event = json.loads(body)
+    except ValueError:
+        return Response("Bad JSON.", status_code=400)
+    with SessionLocal() as s:
+        iid = inbound.record_event(s, event)
+    if iid:
+        inbound.fetch_async(iid)
+    return {"ok": True}
+
+
+def _first_sent(s, kind_filter):
+    """(inject id, team id or None) -> earliest sent time of the emails for it."""
+    out = {}
+    q = s.query(Message.inject_id, Message.team_id, func.min(Message.sent_at)).filter(
+        Message.status == "sent", Message.kind.in_(kind_filter)).group_by(Message.inject_id, Message.team_id)
+    for iid, tid, at in q:
+        out[(iid, tid)] = at
+    return out
+
+
+def _rubric_max(s):
+    return dict(s.query(RubricCriterion.inject_id, func.sum(RubricCriterion.max_points))
+                .group_by(RubricCriterion.inject_id).all())
+
+
+def _grade_total(g):
+    return sum(float(v) for v in (g.scores or {}).values() if v not in (None, ""))
+
+
+@app.get("/replies", response_class=HTMLResponse)
+def replies_page(request: Request, kind: str = "live", team: int = 0, inject: int = 0, status: str = "",
+                 matched: str = ""):
+    kinds = ["live", "reply"] if kind == "live" else ["test", "oneoff"]
+    with SessionLocal() as s:
+        teams = s.query(Team).filter_by(active=True).order_by(Team.sort, Team.name).all()
+        q = s.query(InboundEmail).filter(InboundEmail.kind == ("live" if kind == "live" else "test"))
+        all_in = q.order_by(InboundEmail.received_at).all()
+        for e in all_in:
+            _ = e.inject, e.team, e.person, e.attachments
+        sent = _first_sent(s, kinds)
+        maxes = _rubric_max(s)
+        grades = {(g.inject_id, g.team_id): g for g in s.query(Grade)}
+        rows_ids = {e.inject_id for e in all_in if e.inject_id and e.status != "ignored"}
+        rows_ids |= {i for (i,) in s.query(Inject.id).filter(Inject.expects_reply.is_(True))}
+        injects = (s.query(Inject).filter(Inject.id.in_(rows_ids)).order_by(Inject.send_at.is_(None), Inject.send_at,
+                                                                            Inject.seq).all() if rows_ids else [])
+        now = utcnow()
+        matrix, team_sum = [], {t.id: {"replies": 0, "answered": 0, "expected": 0, "minutes": [], "score": 0.0,
+                                       "max": 0.0, "late": 0} for t in teams}
+        for inj in injects:
+            cells = []
+            for t in teams:
+                reps = [e for e in all_in if e.inject_id == inj.id and e.team_id == t.id and e.status != "ignored"]
+                sent_at = sent.get((inj.id, t.id)) or sent.get((inj.id, None))
+                first = reps[0] if reps else None
+                minutes = int((first.received_at - sent_at).total_seconds() // 60) if first and sent_at else None
+                g = grades.get((inj.id, t.id))
+                due = (sent_at + timedelta(minutes=inj.reply_due_minutes)) if sent_at and inj.reply_due_minutes else None
+                if reps:
+                    state = "late" if due and first.received_at > due else "replied"
+                elif sent_at and inj.expects_reply:
+                    state = "missing" if due and now > due else "waiting"
+                elif sent_at:
+                    state = "none"
+                else:
+                    state = "unsent"
+                cell = {"team": t, "replies": reps, "minutes": minutes, "grade": g, "state": state,
+                        "score": _grade_total(g) if g else None, "max": maxes.get(inj.id)}
+                cells.append(cell)
+                ts = team_sum[t.id]
+                ts["replies"] += len(reps)
+                if inj.expects_reply and sent_at:
+                    ts["expected"] += 1
+                    ts["answered"] += bool(reps)
+                if minutes is not None:
+                    ts["minutes"].append(minutes)
+                if state in ("late", "missing"):
+                    ts["late"] += 1
+                if g and maxes.get(inj.id):
+                    ts["score"] += cell["score"]
+                    ts["max"] += float(maxes[inj.id])
+            matrix.append((inj, cells))
+        inbox = [e for e in reversed(all_in)
+                 if (not team or e.team_id == team) and (not inject or e.inject_id == inject)
+                 and (not status or e.status == status) and (matched != "no" or e.match == "none")]
+        new_count = sum(1 for e in all_in if e.status == "new")
+        unmatched = sum(1 for e in all_in if e.match == "none" and e.status != "ignored")
+        injects_all = s.query(Inject.id, Inject.mel_id).order_by(Inject.seq).all()
+    return page(request, "replies.html", tab="replies", kind=kind, teams=teams, matrix=matrix, team_sum=team_sum,
+                inbox=inbox[:300], new_count=new_count, unmatched=unmatched, team=team, inject=inject,
+                status=status, matched=matched, injects_all=injects_all,
+                webhook_ready=bool(config.RESEND_WEBHOOK_SECRET),
+                webhook_url=config.PUBLIC_URL.rstrip("/") + "/webhooks/resend")
+
+
+@app.post("/replies/sync")
+def replies_sync(request: Request):
+    try:
+        added, fetched = inbound.sync()
+        flash(request, f"Sync: {added} new received email(s), {fetched} fetched.")
+    except Exception as e:
+        flash(request, f"Sync failed: {e}", "error")
+    return back("/replies")
+
+
+@app.get("/replies/export.csv")
+def replies_export():
+    with SessionLocal() as s:
+        teams = {t.id: t for t in s.query(Team)}
+        crit = {}
+        for c in s.query(RubricCriterion).order_by(RubricCriterion.sort, RubricCriterion.id):
+            crit.setdefault(c.inject_id, []).append(c)
+        out = io.StringIO()
+        w = csv.writer(out)
+        w.writerow(["inject", "subject", "team", "criterion", "points", "max", "comment", "grader", "updated (UTC)"])
+        for g in s.query(Grade).order_by(Grade.inject_id, Grade.team_id):
+            inj = s.get(Inject, g.inject_id)
+            team = teams.get(g.team_id)
+            for c in crit.get(g.inject_id, []):
+                w.writerow([inj.mel_id, inj.subject, team.name if team else g.team_id, c.label,
+                            (g.scores or {}).get(str(c.id), ""), c.max_points, g.comment or "", g.grader or "",
+                            g.updated_at.isoformat(timespec="minutes")])
+    return Response(out.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": 'attachment; filename="simex-grades.csv"'})
+
+
+@app.get("/replies/{rid}", response_class=HTMLResponse)
+def reply_page(request: Request, rid: int):
+    with SessionLocal() as s:
+        em = s.get(InboundEmail, rid)
+        if not em:
+            raise HTTPException(404)
+        _ = em.inject, em.team, em.person, em.attachments
+        if em.status == "new":
+            em.status = "reviewed"
+            s.commit()
+        original = s.get(Message, em.message_id) if em.message_id else None
+        minutes = inbound.response_minutes(em, s)
+        thread = (s.query(InboundEmail).filter(InboundEmail.inject_id == em.inject_id, InboundEmail.team_id == em.team_id,
+                                               InboundEmail.id != em.id).order_by(InboundEmail.received_at).all()
+                  if em.inject_id and em.team_id else [])
+        answers = s.query(Message).filter_by(inbound_id=em.id).order_by(Message.id).all()
+        teams = s.query(Team).order_by(Team.sort, Team.name).all()
+        people = s.query(Person).order_by(Person.name).all()
+        injects_all = s.query(Inject.id, Inject.mel_id, Inject.subject).order_by(Inject.seq).all()
+        sender = s.query(Sender).filter_by(local_part=em.persona).first() if em.persona else None
+    new_part, quoted = inbound.split_quoted(em.text or "")
+    return page(request, "reply.html", tab="replies", em=em, original=original, minutes=minutes, thread=thread,
+                answers=answers, teams=teams, people=people, injects_all=injects_all, new_part=new_part,
+                quoted=quoted, sender=sender)
+
+
+@app.post("/replies/{rid}")
+async def reply_update(request: Request, rid: int):
+    form = await request.form()
+    with SessionLocal() as s:
+        em = s.get(InboundEmail, rid)
+        if not em:
+            raise HTTPException(404)
+        if "inject_id" in form:
+            em.inject_id = int(form.get("inject_id")) if form.get("inject_id") else None
+            em.team_id = int(form.get("team_id")) if form.get("team_id") else None
+            em.person_id = int(form.get("person_id")) if form.get("person_id") else None
+            em.match = "manual" if em.inject_id else "none"
+        if form.get("status") in ("new", "reviewed", "ignored"):
+            em.status = form.get("status")
+        if form.get("refetch") == "1":
+            em.fetched = False
+        audit(s, "reply_update", f"#{rid}")
+        s.commit()
+    if form.get("refetch") == "1":
+        inbound.fetch(rid)
+    return back(f"/replies/{rid}")
+
+
+@app.post("/replies/{rid}/answer")
+async def reply_answer(request: Request, rid: int):
+    """ExCon answers a participant in character, from the persona the email was sent to."""
+    form = await request.form()
+    body = str(form.get("body") or "").replace("\r\n", "\n").strip()
+    if not body:
+        flash(request, "Write a reply first.", "error")
+        return back(f"/replies/{rid}")
+    with SessionLocal() as s:
+        if settings.flag(s, "paused"):
+            flash(request, "Sending is paused.", "error")
+            return back(f"/replies/{rid}")
+        em = s.get(InboundEmail, rid)
+        if not em or not em.persona:
+            raise HTTPException(404)
+        sender = s.query(Sender).filter_by(local_part=em.persona).first()
+        name = (sender.display_name if sender else em.persona).replace('"', "'")
+        cfg = settings.get_all(s)
+        footer = cfg.get("footer", "")
+        subject = em.subject if em.subject.lower().startswith("re:") else f"Re: {em.subject}"
+        quoted = "\n".join("> " + line for line in (em.text or "").splitlines()[:60])
+        text_body = body + (f"\n\nOn {fmt(em.received_at)}, {em.from_name or em.from_addr} wrote:\n{quoted}" if quoted else "")
+        d = render.Draft(target=em.team.name if em.team else em.from_addr, from_addr=f'"{name}" <{em.persona}@{config.MAIL_DOMAIN}>',
+                         reply_to=None, to=[em.from_addr], cc=[], bcc=render.split_addresses(cfg.get("excon_bcc")),
+                         subject=subject, body=text_body, footer=footer, attachment_ids=[], team_id=em.team_id,
+                         person_id=em.person_id, reply_local=em.persona)
+        m = scheduler._message(em.inject or Inject(id=None), d, "reply", f"reply-{em.id}-{uuid.uuid4().hex}")
+        m.inject_id, m.inbound_id = em.inject_id, em.id
+        if em.message_id_header:
+            m.extra_headers = {"In-Reply-To": em.message_id_header, "References": em.message_id_header}
+        s.add(m)
+        audit(s, "reply_answer", f"#{rid} to {em.from_addr}")
+        s.commit()
+        scheduler.deliver(s, [m])
+        ok = m.status == "sent"
+    flash(request, "Reply sent." if ok else f"Reply failed: {m.error}", "ok" if ok else "error")
+    return back(f"/replies/{rid}")
+
+
+@app.get("/inbound-attachments/{aid}")
+def inbound_attachment(aid: int):
+    with SessionLocal() as s:
+        a = s.get(InboundAttachment, aid)
+        if not a or a.data is None:
+            raise HTTPException(404)
+        safe = a.filename.replace('"', "'")
+        return Response(a.data, media_type="application/octet-stream",  # never render participant files inline
+                        headers={"Content-Disposition": f'attachment; filename="{safe}"'})
+
+
+@app.get("/grades/{iid}/{tid}", response_class=HTMLResponse)
+def grade_page(request: Request, iid: int, tid: int):
+    with SessionLocal() as s:
+        inj, team = s.get(Inject, iid), s.get(Team, tid)
+        if not inj or not team:
+            raise HTTPException(404)
+        crit = s.query(RubricCriterion).filter_by(inject_id=iid).order_by(RubricCriterion.sort, RubricCriterion.id).all()
+        g = s.query(Grade).filter_by(inject_id=iid, team_id=tid).first()
+        reps = (s.query(InboundEmail).filter_by(inject_id=iid, team_id=tid).filter(InboundEmail.status != "ignored")
+                .order_by(InboundEmail.received_at).all())
+        for e in reps:
+            _ = e.person, e.attachments
+        sent = _first_sent(s, ["live", "reply"])
+        sent_at = sent.get((iid, tid)) or sent.get((iid, None))
+        parts = [(e, inbound.split_quoted(e.text or "")[0]) for e in reps]
+        teams = s.query(Team).filter_by(active=True).order_by(Team.sort, Team.name).all()
+    return page(request, "grade.html", tab="replies", inj=inj, team=team, crit=crit, g=g, parts=parts,
+                sent_at=sent_at, teams=teams)
+
+
+@app.post("/grades/{iid}/{tid}")
+async def grade_save(request: Request, iid: int, tid: int):
+    form = await request.form()
+    with SessionLocal() as s:
+        crit = s.query(RubricCriterion).filter_by(inject_id=iid).all()
+        g = s.query(Grade).filter_by(inject_id=iid, team_id=tid).first() or Grade(inject_id=iid, team_id=tid)
+        scores = {}
+        for c in crit:
+            v = str(form.get(f"c{c.id}") or "").strip()
+            if v:
+                try:
+                    scores[str(c.id)] = max(0.0, min(float(v), float(c.max_points)))
+                except ValueError:
+                    pass
+        g.scores, g.comment = scores, str(form.get("comment") or "").strip() or None
+        g.grader = str(form.get("grader") or "").strip() or None
+        if not g.id:
+            s.add(g)
+        audit(s, "grade", f"inject {iid} team {tid}: {sum(scores.values()):g}")
+        s.commit()
+    flash(request, "Grade saved.")
+    nxt = form.get("next")
+    return back(f"/grades/{iid}/{nxt}" if nxt else "/replies")
+
+
+@app.post("/injects/{iid}/rubric")
+async def rubric_save(request: Request, iid: int):
+    form = await request.form()
+    with SessionLocal() as s:
+        inj = _inject_or_404(s, iid)
+        inj.expects_reply = form.get("expects_reply") == "1"
+        try:
+            inj.reply_due_minutes = int(form.get("reply_due_minutes")) if form.get("reply_due_minutes") else None
+        except ValueError:
+            inj.reply_due_minutes = None
+        for c in s.query(RubricCriterion).filter_by(inject_id=iid):
+            if form.get(f"del{c.id}") == "1":
+                s.delete(c)
+                continue
+            c.label = str(form.get(f"label{c.id}") or c.label).strip()
+            c.description = str(form.get(f"desc{c.id}") or "").strip() or None
+            c.max_points = max(1, int(form.get(f"max{c.id}") or c.max_points))
+            c.sort = int(form.get(f"sort{c.id}") or c.sort)
+        label = str(form.get("new_label") or "").strip()
+        if label:
+            s.add(RubricCriterion(inject_id=iid, label=label, description=str(form.get("new_desc") or "").strip() or None,
+                                  max_points=max(1, int(form.get("new_max") or 3)),
+                                  sort=s.query(RubricCriterion).filter_by(inject_id=iid).count()))
+        src = form.get("copy_from")
+        if src:
+            for c in s.query(RubricCriterion).filter_by(inject_id=int(src)).order_by(RubricCriterion.sort):
+                s.add(RubricCriterion(inject_id=iid, label=c.label, description=c.description,
+                                      max_points=c.max_points, sort=c.sort))
+        audit(s, "rubric_save", inj.mel_id)
+        s.commit()
+    flash(request, "Rubric saved.")
+    return back(f"/injects/{iid}#rubric")

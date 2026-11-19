@@ -253,3 +253,119 @@ def test_attachments_are_sent(client):
     import base64
     assert payload["attachments"] == [{"filename": "1-15 Plan.pdf",
                                        "content": base64.b64encode(b"%PDF-1 plan").decode()}]
+
+
+# --- replies -----------------------------------------------------------------------------------
+
+import time as _time
+
+from app import inbound
+from app.db import Grade, InboundEmail, RubricCriterion
+
+SECRET = "whsec_dGVzdC1zZWNyZXQtMTIzNDU2"
+
+
+def webhook(client, event):
+    body = json.dumps(event).encode()
+    ts = str(int(_time.time()))
+    return client.post("/webhooks/resend", content=body, headers={
+        "svix-id": "msg_1", "svix-timestamp": ts, "svix-signature": inbound.sign(SECRET, "msg_1", ts, body),
+        "content-type": "application/json"})
+
+
+def send_live_1_15(client):
+    do_import(client, SAMPLE)
+    with SessionLocal() as s:
+        for t in s.query(Team).all():
+            s.add(Person(name=f"Real {t.code}", email=f"real-{t.code}@kobotoolbox.org", team_id=t.id))
+        settings.put(s, "live_armed", "1")
+        inj = s.query(Inject).filter_by(mel_id="1-15").one()
+        inj.send_at = utcnow()
+        inj.expects_reply, inj.reply_due_minutes = True, 30
+        s.add(RubricCriterion(inject_id=inj.id, label="Accuracy", max_points=3))
+        s.add(RubricCriterion(inject_id=inj.id, label="Timeliness", max_points=2))
+        s.commit()
+    scheduler.tick()
+    with SessionLocal() as s:
+        return {m.target: m for m in s.query(Message).filter_by(kind="live")}
+
+
+def test_reply_is_matched_by_token(client, monkeypatch):
+    monkeypatch.setattr(inbound, "fetch_async", inbound.fetch)
+    msgs = send_live_1_15(client)
+    m = msgs["Team B"]
+    assert m.reply_to == f"undac-b-tl+{m.reply_token}@simex.kobolabs.dev"
+    payload = next(p for p, k in mailer.get().sent if p["to"] == m.to)
+    assert payload["reply_to"] == m.reply_to
+    mailer.get().received["rcv-1"] = {"text": "We will send the plan by 15:00.\n\nOn Mon, X wrote:\n> Hello",
+                                      "html": None, "headers": {}, "message_id": "<abc@mail>",
+                                      "attachments": [{"filename": "plan.docx", "size": 10}]}
+    r = webhook(client, {"type": "email.received", "data": {
+        "email_id": "rcv-1", "from": "Real B <real-b@kobotoolbox.org>", "to": [m.reply_to],
+        "subject": "Re: Update for Team B", "created_at": "2099-01-01T00:00:00Z"}})
+    assert r.status_code == 200, r.text
+    with SessionLocal() as s:
+        em = s.query(InboundEmail).one()
+        assert (em.match, em.kind, em.persona, em.fetched) == ("token", "live", "undac-b-tl", True)
+        assert em.inject.mel_id == "1-15" and em.team.name == "Team B" and em.person.name == "Real b"
+        assert em.attachments[0].filename == "plan.docx" and em.attachments[0].data
+    page = client.get("/replies").text
+    assert "1 reply" in page and "Team B" in page
+    assert webhook(client, {"type": "email.received", "data": {"email_id": "rcv-1", "to": []}}).status_code == 200
+    with SessionLocal() as s:
+        assert s.query(InboundEmail).count() == 1  # retried webhook is not duplicated
+
+
+def test_bad_signature_rejected(client):
+    body = b'{"type":"email.received","data":{"email_id":"x"}}'
+    r = client.post("/webhooks/resend", content=body, headers={"svix-id": "a", "svix-timestamp": str(int(_time.time())),
+                                                              "svix-signature": "v1,AAAA"})
+    assert r.status_code == 401
+
+
+def test_fresh_email_is_guessed_and_own_mail_ignored(client):
+    send_live_1_15(client)
+    with SessionLocal() as s:
+        inbound.record_event(s, {"type": "email.received", "data": {
+            "email_id": "rcv-2", "from": "real-c@kobotoolbox.org", "to": ["undac-c-tl@simex.kobolabs.dev"],
+            "subject": "Question about the update", "created_at": "2099-01-01T00:00:00Z"}})
+        inbound.record_event(s, {"type": "email.received", "data": {
+            "email_id": "rcv-3", "from": "donotreply@simex.kobolabs.dev", "to": ["donotreply@simex.kobolabs.dev"],
+            "subject": "News"}})
+        a, b = s.query(InboundEmail).order_by(InboundEmail.id).all()
+        assert a.match == "guess" and a.team.name == "Team C" and a.inject.mel_id == "1-15"
+        assert b.status == "ignored"
+
+
+def test_grade_and_export(client):
+    send_live_1_15(client)
+    with SessionLocal() as s:
+        inj = s.query(Inject).filter_by(mel_id="1-15").one()
+        team = s.query(Team).filter_by(code="a").one()
+        c1, c2 = s.query(RubricCriterion).order_by(RubricCriterion.id).all()
+    client.post(f"/grades/{inj.id}/{team.id}", data={f"c{c1.id}": "2", f"c{c2.id}": "9", "comment": "ok", "grader": "J"})
+    with SessionLocal() as s:
+        g = s.query(Grade).one()
+        assert g.scores == {str(c1.id): 2.0, str(c2.id): 2.0}  # clamped to the max
+    csv_text = client.get("/replies/export.csv").text
+    assert "Accuracy,2.0,3" in csv_text and "Team A" in csv_text
+    assert "4 / 5" in client.get("/replies").text
+
+
+def test_answer_as_persona(client):
+    msgs = send_live_1_15(client)
+    m = msgs["Team A"]
+    with SessionLocal() as s:
+        inbound.record_event(s, {"type": "email.received", "data": {
+            "email_id": "rcv-4", "from": "real-a@kobotoolbox.org", "to": [m.reply_to], "subject": "Re: Update"}})
+        em = s.query(InboundEmail).one()
+        em.message_id_header, em.text, em.fetched = "<orig@mail>", "Our answer", True
+        s.commit()
+        rid = em.id
+    before = len(mailer.get().sent)
+    r = client.post(f"/replies/{rid}/answer", data={"body": "Thanks, noted."})
+    assert "Reply sent" in r.text
+    payload, _ = mailer.get().sent[before]
+    assert payload["to"] == ["real-a@kobotoolbox.org"] and payload["headers"]["In-Reply-To"] == "<orig@mail>"
+    assert payload["from"].endswith("<undac-a-tl@simex.kobolabs.dev>") and payload["subject"] == "Re: Update"
+    assert payload["reply_to"].startswith("undac-a-tl+")

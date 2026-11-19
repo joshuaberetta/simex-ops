@@ -117,3 +117,23 @@ body.login { display: grid; place-items: center; min-height: 100vh; }
 .loginbox label { display: block; margin-bottom: 12px; font-size: 12px; font-weight: 600; }
 .loginbox input { display: block; width: 100%; margin-top: 4px; }
 .loginbox .btn { width: 100%; }
+
+.badge { background: #e8590c; color: #fff; border-radius: 9px; padding: 0 6px; font-size: 11px; margin-left: 4px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #fff; }
+.seg a { padding: 5px 12px; color: var(--ink); border-right: 1px solid var(--line); }
+.seg a:last-child { border-right: none; }
+.seg a.on { background: #17202c; color: #fff; }
+.scroll { overflow-x: auto; }
+table.matrix td.cell { text-align: center; font-size: 12px; min-width: 110px; }
+table.matrix td.cell a { display: block; color: inherit; }
+td.cell.replied { background: #e5f3eb; }
+td.cell.late { background: #fff4d6; }
+td.cell.missing { background: #fbe1df; }
+td.cell.waiting { background: #eef4fb; }
+tr.in-new td { font-weight: 600; }
+tr.in-ignored td { color: var(--muted); }
+pre.mailtext { white-space: pre-wrap; font: 14px/1.5 system-ui, sans-serif; margin: 10px 0; }
+.replyblock { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
+.crit { display: flex; margin-bottom: 6px; }
+.crit .wide { flex: 1; min-width: 200px; }
+.scale { display: flex; gap: 4px; margin-top: 4px; }
