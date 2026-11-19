@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+sqlalchemy>=2
+psycopg[binary]
+httpx
+itsdangerous
+openpyxl
+tzdata

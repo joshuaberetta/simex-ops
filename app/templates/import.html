@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Import · SIMEX ops{% endblock %}
+{% block body %}
+<h1><a href="/injects" class="muted">Injects</a> / Import</h1>
+<div class="cols">
+<section class="col-main">
+<form method="post" action="/import" enctype="multipart/form-data" class="card form">
+  <h3>1. Injects</h3>
+  <p>Upload <b>MEL-MIL.xlsx</b> or an <b>injects .json</b> export. Only email injects are imported, and only the fields participants see
+  (send time, sender, recipients, subject, content, document names). Expected outcomes, story, theme, key figures and the ExCon description are dropped and never stored.</p>
+  <p>You will see what changes before anything is saved. Injects already sent are never touched; fields you edited here are kept unless you choose to overwrite them.</p>
+  <input type="file" name="file" accept=".xlsx,.json" required> <button class="btn primary">Check file</button>
+</form>
+<form method="post" action="/import/attachments" enctype="multipart/form-data" class="card form">
+  <h3>2. Inject documents</h3>
+  <p>Upload a <b>.zip</b> of the inject documents (e.g. the SIMEX <i>4. Injects</i> folder). Files are matched to injects by the names in the MEL's
+  <i>Supporting documents</i> column; a file with the same name replaces the earlier one. Max 30 MB per file.</p>
+  <input type="file" name="file" accept=".zip" required> <button class="btn primary">Upload and match</button>
+</form>
+</section>
+<section class="col-side">
+  <div class="card"><h3>Recent imports</h3>
+  {% if batches %}<table class="list small">{% for id, fn, at, applied, n in batches %}<tr><td>{{ at|local('%d %b %H:%M') }}</td><td>{{ fn }}</td><td>{{ n }}</td><td>{{ 'applied' if applied else 'not applied' }}</td></tr>{% endfor %}</table>
+  {% else %}<p class="muted">None yet.</p>{% endif %}
+  </div>
+</section>
+</div>
+{% endblock %}

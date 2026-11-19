@@ -1,0 +1,6 @@
+.venv
+.git
+tests
+*.db
+__pycache__
+.do/app.rendered.yaml

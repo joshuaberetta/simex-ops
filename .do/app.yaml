@@ -1,0 +1,43 @@
+# DigitalOcean App Platform: https://simex.kobolabs.dev
+#
+# Secrets (APP_PASSWORD, SECRET_KEY, RESEND_API_KEY) have no value here on purpose. An
+# update replaces the whole spec, so never apply this file directly:
+#   .venv/bin/python .do/render_spec.py <app-id>    # writes .do/app.rendered.yaml (git-ignored)
+#   doctl apps update <app-id> --spec .do/app.rendered.yaml && rm .do/app.rendered.yaml
+#
+# The database must exist before the first deploy:
+#   doctl databases create simex-ops-db --engine pg --version 17 --region fra1 --size db-s-1vcpu-1gb --num-nodes 1
+name: simex-ops
+region: fra
+alerts:
+  - rule: DEPLOYMENT_FAILED
+  - rule: DOMAIN_FAILED
+# DNS for kobolabs.dev is managed by DigitalOcean; keep this block or the domain detaches.
+domains:
+  - domain: simex.kobolabs.dev
+    type: PRIMARY
+    zone: kobolabs.dev
+databases:
+  - name: db
+    engine: PG
+    production: true
+    cluster_name: simex-ops-db
+services:
+  - name: web
+    github: { repo: joshuaberetta/simex-ops, branch: main, deploy_on_push: true }
+    dockerfile_path: Dockerfile
+    http_port: 8080
+    instance_size_slug: apps-s-1vcpu-1gb
+    # Exactly one instance: the scheduler runs in-process. Two would both send (the
+    # database claim prevents most duplicates, but don't rely on it).
+    instance_count: 1
+    health_check: { http_path: /healthz, initial_delay_seconds: 10, period_seconds: 10, failure_threshold: 6 }
+    envs:
+      - { key: DATABASE_URL, scope: RUN_TIME, value: "${db.DATABASE_URL}" }
+      - { key: PUBLIC_URL, scope: RUN_TIME, value: "https://simex.kobolabs.dev" }
+      - { key: MAIL_DOMAIN, scope: RUN_TIME, value: "simex.kobolabs.dev" }
+      - { key: EXERCISE_TZ, scope: RUN_TIME, value: "Africa/Nairobi" }
+      - { key: APP_USERNAME, scope: RUN_TIME, value: "undac" }
+      - { key: APP_PASSWORD, scope: RUN_TIME, type: SECRET }
+      - { key: SECRET_KEY, scope: RUN_TIME, type: SECRET }
+      - { key: RESEND_API_KEY, scope: RUN_TIME, type: SECRET }

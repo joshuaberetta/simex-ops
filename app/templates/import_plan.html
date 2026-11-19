@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Import check · SIMEX ops{% endblock %}
+{% block body %}
+<h1><a href="/import" class="muted">Import</a> / {{ filename }}</h1>
+<div class="card">
+  <p><b>{{ summary.new }}</b> new · <b>{{ summary.update }}</b> updated · <b>{{ summary.conflict }}</b> with local edits · {{ summary.unchanged }} unchanged
+  {% if missing %} · <b>{{ missing|length }}</b> in the app but not in this file (left as they are){% endif %}</p>
+  <form method="post" action="/import/{{ batch_id }}/apply">
+    {% if summary.conflict %}<label class="chk"><input type="checkbox" name="overwrite" value="1"> Overwrite my local edits with the file's values</label>{% endif %}
+    <button class="btn primary">Apply import</button> <a href="/import" class="btn">Cancel</a>
+  </form>
+</div>
+<table class="list">
+  <thead><tr><th>Id</th><th>Action</th><th>Subject</th><th>Changes</th></tr></thead>
+  {% for r in rows if r.action != 'unchanged' %}
+  <tr><td>{{ r.mel_id }}</td><td><span class="status {{ 'scheduled' if r.action == 'new' else ('overdue' if r.action == 'conflict' else 'draft') }}">{{ r.action }}</span>{% if r.status in ('sent', 'partial', 'sending') %} <span class="muted small">already {{ r.status }}: skipped</span>{% endif %}</td>
+    <td>{{ r.subject or '' }}</td>
+    <td class="small">{% for c in r.changes %}<div><b>{{ c.field }}</b>{% if c.local_edit %} <span class="warn">(edited here)</span>{% endif %}:
+      <span class="old">{{ (c.current|string)[:120] if c.current is not none else '—' }}</span> → <span class="new">{{ (c.new|string)[:120] if c.new is not none else '—' }}</span></div>{% endfor %}</td></tr>
+  {% endfor %}
+</table>
+{% if missing %}<h3>Not in this file</h3><ul>{% for m in missing %}<li>{{ m.mel_id }} {{ m.subject or '' }} <span class="muted">({{ m.status }})</span></li>{% endfor %}</ul>{% endif %}
+{% endblock %}

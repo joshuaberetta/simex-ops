@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Log · SIMEX ops{% endblock %}
+{% block body %}
+<div class="bar"><h1>Log</h1>
+<form method="get" class="filters">
+  <select name="kind" onchange="this.form.submit()"><option value="">all kinds</option>{% for k in ('live', 'test', 'oneoff') %}<option {{ 'selected' if k == kind }}>{{ k }}</option>{% endfor %}</select>
+  <select name="status" onchange="this.form.submit()"><option value="">all statuses</option>{% for k in ('pending', 'sent', 'failed', 'dry') %}<option {{ 'selected' if k == status }}>{{ k }}</option>{% endfor %}</select>
+</form></div>
+<div class="cols">
+<section class="col-main">
+<h2>Emails <span class="muted small">latest 300</span></h2>
+<table class="list small">
+  <thead><tr><th>Created</th><th>Kind</th><th>Inject</th><th>Target</th><th>To</th><th>Subject</th><th>Status</th></tr></thead>
+  {% for m in msgs %}
+  <tr><td class="nowrap"><a href="/log/{{ m.id }}">{{ m.created_at|local('%d %b %H:%M:%S') }}</a></td><td>{{ m.kind }}</td>
+    <td>{% if m.inject %}<a href="/injects/{{ m.inject.id }}">{{ m.inject.mel_id }}</a>{% endif %}</td><td>{{ m.target }}</td>
+    <td>{{ m.to|join(', ') }}{% if m.bcc %} <span class="muted">+{{ m.bcc|length }} bcc</span>{% endif %}</td><td>{{ m.subject }}</td>
+    <td><span class="status {{ m.status }}">{{ m.status }}</span>{% if m.error %}<div class="err">{{ m.error[:140] }}</div>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="7" class="muted">Nothing sent yet.</td></tr>{% endfor %}
+</table>
+</section>
+<section class="col-side">
+<h2>Activity</h2>
+<table class="list small">
+  {% for a in audits %}<tr><td class="nowrap">{{ a.at|local('%d %b %H:%M:%S') }}</td><td><b>{{ a.action }}</b> {{ a.detail or '' }}</td></tr>{% endfor %}
+</table>
+</section>
+</div>
+{% endblock %}

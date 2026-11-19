@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.db
+*.pyc
+.pytest_cache/
+.do/app.rendered.yaml
+# Exercise content never goes in git (control-side material): import it through the app.
+*.xlsx
+injects*.json
+bundle/

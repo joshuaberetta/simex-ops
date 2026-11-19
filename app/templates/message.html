@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Email {{ m.id }} · SIMEX ops{% endblock %}
+{% block body %}
+<h1><a href="/log" class="muted">Log</a> / email {{ m.id }} <span class="status {{ m.status }}">{{ m.status }}</span></h1>
+<div class="card">
+<dl class="hdrs">
+  <dt>Kind</dt><dd>{{ m.kind }}{% if m.inject %} · inject <a href="/injects/{{ m.inject.id }}">{{ m.inject.mel_id }}</a>{% endif %}{% if m.run_id %} · <a href="/tests/{{ m.run_id }}">test run</a>{% endif %} · {{ m.target }}</dd>
+  <dt>Created</dt><dd>{{ m.created_at|local('%d %b %H:%M:%S') }}{% if m.sent_at %} · sent {{ m.sent_at|local('%d %b %H:%M:%S') }}{% endif %}</dd>
+  <dt>From</dt><dd>{{ m.from_addr }}</dd>
+  {% if m.reply_to %}<dt>Reply-to</dt><dd>{{ m.reply_to }}</dd>{% endif %}
+  <dt>To</dt><dd>{{ m.to|join(', ') }}</dd>
+  {% if m.cc %}<dt>Cc</dt><dd>{{ m.cc|join(', ') }}</dd>{% endif %}
+  {% if m.bcc %}<dt>Bcc</dt><dd>{{ m.bcc|join(', ') }}</dd>{% endif %}
+  {% if m.original_to %}<dt>Instead of</dt><dd>{% for k, v in m.original_to.items() if v %}{{ k }}: {{ v|join(', ') }}<br>{% endfor %}</dd>{% endif %}
+  <dt>Subject</dt><dd>{{ m.subject }}</dd>
+  {% if atts %}<dt>Files</dt><dd>{% for id, fn in atts %}<a href="/attachments/{{ id }}">{{ fn }}</a>{{ ', ' if not loop.last }}{% endfor %}</dd>{% endif %}
+  {% if m.resend_id %}<dt>Resend id</dt><dd><code>{{ m.resend_id }}</code></dd>{% endif %}
+  {% if m.error %}<dt>Error</dt><dd class="err">{{ m.error }}</dd>{% endif %}
+</dl>
+<iframe class="mail tall" sandbox srcdoc="{{ m.html }}"></iframe>
+</div>
+{% endblock %}

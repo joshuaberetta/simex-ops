@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Injects · SIMEX ops{% endblock %}
+{% block body %}
+<div class="bar">
+  <h1>Injects <span class="muted">{{ total }}</span></h1>
+  <form method="get" class="filters">
+    <select name="day" onchange="this.form.submit()">
+      <option value="">All days</option>
+      {% for d in days %}<option value="{{ d }}" {{ 'selected' if d == day }}>{{ d }}</option>{% endfor %}
+      <option value="none" {{ 'selected' if day == 'none' }}>No send time</option>
+    </select>
+    <select name="status" onchange="this.form.submit()">
+      <option value="">All statuses</option>
+      {% for st in STATUSES %}<option {{ 'selected' if st == status }}>{{ st }}</option>{% endfor %}
+    </select>
+    <input type="search" name="q" value="{{ q }}" placeholder="Search id, subject, body">
+    <button class="btn small">Filter</button>
+  </form>
+  <div class="actions">
+    <a class="btn" href="/import">Import / update</a>
+    <form method="post" action="/injects/new" class="inline"><button class="btn">New inject</button></form>
+  </div>
+</div>
+
+{% if not groups %}
+<div class="card empty">
+  <p>No injects yet. <a href="/import">Import MEL-MIL.xlsx or injects.json</a>, then upload the inject documents as a zip on the same page.</p>
+</div>
+{% else %}
+<form method="post" action="/injects/bulk" id="bulk">
+  <input type="hidden" name="back" value="{{ request.url.path }}{{ '?' + request.url.query if request.url.query }}">
+  <div class="bulkbar">
+    <label><input type="checkbox" data-select-all> all</label>
+    <button class="btn small" name="action" value="schedule">Schedule</button>
+    <button class="btn small" name="action" value="unschedule">Back to draft</button>
+    <button class="btn small" name="action" value="cancel" data-confirm="Cancel the selected injects?">Cancel</button>
+    <span class="sep"></span>
+    Shift by <input type="number" name="minutes" value="30" step="5" class="narrow"> min
+    <button class="btn small" name="action" value="shift" data-confirm="Move the selected injects' send times?">Shift</button>
+  </div>
+  {% for label, items in groups %}
+  <h2 class="day">{{ label }}</h2>
+  <table class="list">
+    <thead><tr><th></th><th>Send</th><th>Id</th><th>Subject</th><th>From</th><th>To</th><th>Att.</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for i in items %}
+      <tr class="st-{{ i.status }}">
+        <td><input type="checkbox" name="ids" value="{{ i.id }}"></td>
+        <td class="nowrap">{{ i.send_at|local('%H:%M') if i.send_at else '—' }}</td>
+        <td class="nowrap"><a href="/injects/{{ i.id }}">{{ i.mel_id }}</a></td>
+        <td><a href="/injects/{{ i.id }}">{{ i.subject or '(no subject)' }}</a>
+            {% if i.scenario_dt %}<div class="muted small">scenario {{ i.scenario_dt.replace('T', ' ') }}</div>{% endif %}</td>
+        <td class="small">{% set snd = senders.get(i.sender_local) %}{{ i.from_name or (snd.display_name if snd else '') }}<div class="muted">{{ i.sender_local or '—' }}@</div></td>
+        <td class="small">{{ DELIVERY_MODES[i.delivery].split('(')[0] }}{% if i.team_ids %} <span class="muted">({{ i.team_ids|length }} teams)</span>{% endif %}</td>
+        <td class="small">{{ att_counts.get(i.id, '') }}</td>
+        <td><span class="status {{ i.status }}">{{ i.status }}</span></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+</form>
+{% endif %}
+{% endblock %}
