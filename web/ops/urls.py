@@ -1,6 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
+from . import views_ai as a
 from . import views_excon as x
 from . import views_inbox as p
 
@@ -62,8 +63,12 @@ urlpatterns = [
     path("replies/export.csv", x.replies_export),
     path("replies/<int:rid>/", x.reply_page),
     path("replies/<int:rid>/answer/", x.reply_answer),
+    path("replies/<int:rid>/analyse/", a.reply_analyse),
     path("response-files/<int:aid>/", x.response_attachment),
     path("grades/<int:iid>/<int:tid>/", x.grade_page),
+    path("grades/<int:iid>/<int:tid>/analyse/", a.grade_analyse),
+    path("dashboard/", a.dashboard),
+    path("dashboard/summary/", a.dashboard_summary),
     path("help/", x.help_page),
     path("log/", x.log_page),
     path("log/<int:mid>/", x.message_page),
@@ -71,6 +76,7 @@ urlpatterns = [
     path("settings/arm/", x.settings_arm),
     path("settings/pause/", x.settings_pause),
     path("settings/channel/", x.settings_channel),
+    path("settings/ai/", a.settings_ai),
     path("settings/domain/", x.settings_domain),
     path("settings/backup/", x.settings_backup),
     path("settings/restore/", x.settings_restore),

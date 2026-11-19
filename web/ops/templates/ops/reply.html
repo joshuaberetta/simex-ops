@@ -38,6 +38,7 @@
 </section>
 <section class="col-side">
 {% if r.inject and r.team %}<div class="card"><a class="btn primary" href="/grades/{{ r.inject.id }}/{{ r.team.id }}/">Grade {{ r.team.name }} on {{ r.inject.mel_id }}</a></div>{% endif %}
+{% include "ops/_analysis.html" with a=analysis %}
 <form method="post" action="/replies/{{ r.id }}/" class="card form">{% csrf_token %}
   <h3>Match</h3>
   <label>Inject <select name="inject_id"><option value="">— none —</option>{% for i in injects_all %}<option value="{{ i.id }}" {% if i.id == r.inject_id %}selected{% endif %}>{{ i.mel_id }} {{ i.subject|default:''|truncatechars:40 }}</option>{% endfor %}</select></label>

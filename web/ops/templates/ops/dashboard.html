@@ -1,0 +1,142 @@
+{% extends "ops/base.html" %}{% load ops %}
+{% block title %}Dashboard · SIMEX ops{% endblock %}
+{% block head %}<meta http-equiv="refresh" content="{% if report.status == 'running' %}20{% else %}120{% endif %}">{% endblock %}
+{% block body %}
+<div class="bar">
+  <h1>Dashboard</h1>
+  <nav class="seg">
+    <a href="/dashboard/?kind=live&score={{ source }}" class="{% if kind == 'live' %}on{% endif %}">Exercise</a>
+    <a href="/dashboard/?kind=test&score={{ source }}" class="{% if kind != 'live' %}on{% endif %}">Test team</a>
+  </nav>
+  <span class="small muted">
+    {% if not ai_available %}AI analysis: no provider configured{% elif not ai_enabled %}AI analysis is off (<a href="/settings/#ai">Settings</a>){% else %}AI analysis on · {{ ai_unanalysed }} repl{{ ai_unanalysed|pluralize:"y,ies" }} waiting{% if ai_pending %}, {{ ai_pending }} queued{% endif %} · about ${{ ai_spent|floatformat:2 }} of ${{ ai_cap|num }} today{% endif %}
+  </span>
+</div>
+<p class="small muted">Response figures come from the app's own records. Tone, quality, flags and "AI-written" are Claude's reading of each reply; "AI" scores are suggestions, never part of the grades. The page refreshes every two minutes.</p>
+
+<h2>Teams</h2>
+{% if tiles %}
+<div class="tiles">
+{% for t in tiles %}
+<div class="card tile">
+  <div class="tile-head"><a href="/replies/?kind={{ kind }}&team={{ t.team.id }}"><b>{{ t.team.name }}</b></a>
+    {% if t.flags %}<a class="status partial" href="#flags">{{ t.flags }} flag{{ t.flags|pluralize }}</a>{% endif %}</div>
+  <div class="stats">
+    <div><span class="stat">{{ t.answered }}<span class="of">/{{ t.expected }}</span></span><span class="lab">expected injects answered</span></div>
+    <div><span class="stat">{% if t.median is not None %}{{ t.median }}<span class="of"> min</span>{% else %}—{% endif %}</span><span class="lab">median first reply</span></div>
+    <div><span class="stat">{% if t.pct is not None %}{{ t.pct }}<span class="of">%</span>{% else %}—{% endif %}</span><span class="lab">score (graded)</span></div>
+    <div><span class="stat muted">{% if t.ai_pct is not None %}{{ t.ai_pct }}<span class="of">%</span>{% else %}—{% endif %}</span><span class="lab">AI-suggested score</span></div>
+  </div>
+  {% if t.spark %}
+  <figure class="spark">
+    <figcaption class="small muted">Sentiment of each reply over the exercise{% if t.sentiment_now %} · latest: <b>{{ t.sentiment_now }}</b>{% endif %}</figcaption>
+    <svg viewBox="0 0 {{ t.spark.w }} {{ t.spark.h }}" width="100%" role="img" aria-label="Sentiment of {{ t.team.name }}'s replies over time">
+      <line x1="0" x2="{{ t.spark.w }}" y1="{{ t.spark.top }}" y2="{{ t.spark.top }}" class="grid"/>
+      <line x1="0" x2="{{ t.spark.w }}" y1="{{ t.spark.bottom }}" y2="{{ t.spark.bottom }}" class="grid"/>
+      <line x1="0" x2="{{ t.spark.w }}" y1="{{ t.spark.zero }}" y2="{{ t.spark.zero }}" class="axis"/>
+      <text x="2" y="{{ t.spark.top }}" dy="-1" class="tick">+2</text><text x="2" y="{{ t.spark.bottom }}" dy="9" class="tick">−2</text>
+      <path d="{{ t.spark.path }}" class="line"/>
+      {% for d in t.spark.dots %}
+      <a href="/replies/{{ d.a.response_id }}/"><g class="dot"><circle cx="{{ d.x }}" cy="{{ d.y }}" r="9" class="hit"/><circle cx="{{ d.x }}" cy="{{ d.y }}" r="4" class="mark"/>
+        <title>{{ d.at|date:"D H:i" }} · {{ d.label }} · {{ d.a.tone }}&#10;{{ d.a.summary }}</title></g></a>
+      {% endfor %}
+    </svg>
+    <div class="spark-x small muted"><span>{{ t0|date:"D H:i" }}</span><span>{{ t1|date:"D H:i" }}</span></div>
+  </figure>
+  {% elif t.replies %}<p class="small muted">{{ t.replies }} repl{{ t.replies|pluralize:"y,ies" }}, none analysed yet.</p>{% endif %}
+  {% if t.tones %}<p class="small">Tone: {% for tone, n in t.tones %}{{ tone }} <span class="muted">{{ n }}</span>{% if not forloop.last %} · {% endif %}{% endfor %}
+    {% if t.quality %} · quality <b>{{ t.quality }}</b><span class="muted">/5</span>{% endif %}</p>{% endif %}
+  <table class="funnel small">
+    {% for label, n, pct in t.funnel %}<tr><td>{{ label }}</td><td class="barcell"><span class="bar" style="width:{{ pct }}%"></span></td><td class="num">{{ n }}</td></tr>{% endfor %}
+  </table>
+</div>
+{% endfor %}
+</div>
+<p class="muted small">Funnel, in injects: delivered to the team, read (in-app) or opened (email, a lower bound), answered, graded. Dots: hover for the reply's summary, click to open it.</p>
+{% else %}<p class="muted">No active teams.</p>{% endif %}
+
+<div class="bar"><h2>Rubric results</h2>
+  <nav class="seg small">
+    <a href="/dashboard/?kind={{ kind }}&score=human" class="{% if source == 'human' %}on{% endif %}">Graded</a>
+    <a href="/dashboard/?kind={{ kind }}&score=ai" class="{% if source == 'ai' %}on{% endif %}">AI suggested</a>
+  </nav>
+  <span class="legend small">{% for label, bg, ink in heat_legend %}<span class="key" style="background:{{ bg }}"></span>{{ label }} {% endfor %}</span>
+</div>
+{% if heat_rows %}
+<div class="scroll">
+<table class="list matrix heat">
+  <thead><tr><th>Inject</th>{% for t in teams %}<th>{{ t.name }}</th>{% endfor %}</tr></thead>
+  {% for inj, row in heat_rows %}
+  <tr><td><a href="/injects/{{ inj.id }}/#rubric">{{ inj.mel_id }}</a> <span class="small">{{ inj.subject|default:''|truncatechars:44 }}</span></td>
+    {% for c in row %}
+    {% if c.v is not None %}<td class="cell" style="background:{{ c.bg }};color:{{ c.ink }}" title="{{ c.team.name }} · {{ inj.mel_id }}: {{ c.v|num }} / {{ c.max }} ({{ c.pct }}%)"><a href="/grades/{{ inj.id }}/{{ c.team.id }}/" style="color:inherit">{{ c.pct }}%</a></td>
+    {% else %}<td class="cell"><a href="/grades/{{ inj.id }}/{{ c.team.id }}/" class="muted">{% if c.n %}not {% if source == 'human' %}graded{% else %}scored{% endif %}{% else %}—{% endif %}</a></td>{% endif %}
+    {% endfor %}
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% else %}<p class="muted">No injects with a rubric yet.</p>{% endif %}
+
+{% if disagree %}
+<h2>Where the AI and the graders disagree</h2>
+<table class="list small">
+  <thead><tr><th>Inject</th><th>Team</th><th>Graded</th><th>AI suggested</th><th>Difference</th></tr></thead>
+  {% for d in disagree %}<tr><td><a href="/grades/{{ d.inj.id }}/{{ d.team.id }}/">{{ d.inj.mel_id }}</a> {{ d.inj.subject|default:''|truncatechars:40 }}</td><td>{{ d.team.name }}</td>
+    <td>{{ d.human|num }} / {{ d.max }}</td><td>{{ d.ai|num }} / {{ d.max }}</td><td>{% if d.gap > 0 %}AI {{ d.gap }} points of 100 higher{% else %}AI {{ d.gap|cut:'-' }} points of 100 lower{% endif %}</td></tr>{% endfor %}
+</table>
+<p class="muted small">Differences of a quarter of the inject's points or more. Worth a second look: either the rubric is ambiguous or one reading missed something.</p>
+{% endif %}
+
+<div class="cols2">
+<section>
+<h2 id="flags">Flags</h2>
+<table class="list small">
+  {% for r in flagged %}<tr><td class="nowrap"><a href="/replies/{{ r.id }}/">{{ r.received_at|date:"D H:i" }}</a></td><td class="nowrap">{{ r.team.name|default:"?" }}</td>
+    <td>{% for f in r.flag_labels %}<span class="status partial">{{ f }}</span> {% endfor %}<div>{{ r.ai.summary }}</div></td></tr>
+  {% empty %}<tr><td class="muted">No flags.</td></tr>{% endfor %}
+</table>
+</section>
+<section>
+<h2>Possibly AI-written</h2>
+<table class="list small">
+  {% for r in ai_written %}<tr><td class="nowrap"><a href="/replies/{{ r.id }}/">{{ r.received_at|date:"D H:i" }}</a></td><td>{{ r.team.name|default:'?' }}{% if r.person %}<div class="muted">{{ r.person.name }}</div>{% endif %}</td>
+    <td class="nowrap"><b>{{ r.ai.ai_written }}%</b><div class="muted">{{ r.ai.words }} words{% if r.ai.wpm %} · {{ r.ai.wpm|floatformat:0 }}/min{% endif %}</div></td><td>{{ r.ai.ai_signals }}</td></tr>
+  {% empty %}<tr><td class="muted">None above 60%.</td></tr>{% endfor %}
+</table>
+<p class="muted small">An estimate from the text and the time taken to write it. Short messages and non-native English make it unreliable: a hint to look closer, never proof. Not shown to participants.</p>
+</section>
+</div>
+
+<div class="cols2">
+<section>
+<h2>What teams are asking for</h2>
+<table class="list small">{% for r, x in asks %}<tr><td class="nowrap"><a href="/replies/{{ r.id }}/">{{ r.received_at|date:"D H:i" }}</a></td><td class="nowrap">{{ r.team.name|default:"?" }}</td><td>{{ x }}{% if r.persona %} <span class="muted">→ {{ r.persona }}</span>{% endif %}</td></tr>
+  {% empty %}<tr><td class="muted">Nothing yet.</td></tr>{% endfor %}</table>
+</section>
+<section>
+<h2>Decisions and commitments</h2>
+<table class="list small">{% for r, x in commitments %}<tr><td class="nowrap"><a href="/replies/{{ r.id }}/">{{ r.received_at|date:"D H:i" }}</a></td><td class="nowrap">{{ r.team.name|default:"?" }}</td><td>{{ x }}</td></tr>
+  {% empty %}<tr><td class="muted">Nothing yet.</td></tr>{% endfor %}</table>
+</section>
+</div>
+
+<h2 id="summary">Exercise summary</h2>
+<div class="card">
+  {% if report and report.status == 'done' %}
+    {% with b=report.body %}
+    <p><b>{{ b.headline }}</b></p>
+    {% if b.watch %}<h3>For ExCon now</h3><ul>{% for x in b.watch %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+    {% if b.themes %}<h3>Themes</h3><ul>{% for x in b.themes %}<li><b>{{ x.title }}.</b> {{ x.detail }}</li>{% endfor %}</ul>{% endif %}
+    {% if b.teams %}<h3>Teams</h3><table class="list small"><thead><tr><th>Team</th><th>Strengths</th><th>Concerns</th></tr></thead>
+      {% for x in b.teams %}<tr><td>{{ x.team }}</td><td>{{ x.strengths }}</td><td>{{ x.concerns }}</td></tr>{% endfor %}</table>{% endif %}
+    {% if b.hotwash %}<h3>For the hotwash</h3><ul>{% for x in b.hotwash %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+    {% endwith %}
+    <p class="small muted">Written {{ report.created_at|date:"D d M H:i" }}{% if report.user %} for {{ report.user }}{% endif %} by {{ report.model }}, from the replies analysed by then.</p>
+  {% elif report and report.status == 'running' %}<p class="muted">Writing the summary (started {{ report.created_at|date:"H:i" }})…</p>
+  {% elif report and report.status == 'failed' %}<p class="err small">The last summary failed: {{ report.error }}</p>
+  {% else %}<p class="muted small">A situation summary across all teams: themes, each team's strengths and concerns, what ExCon may want to act on, and points for the hotwash.</p>{% endif %}
+  <form method="post" action="/dashboard/summary/">{% csrf_token %}<input type="hidden" name="kind" value="{{ kind }}">
+    <button class="btn small" {% if not ai_enabled or report.status == 'running' %}disabled{% endif %}>{% if report %}Write a new summary{% else %}Write the summary{% endif %}</button></form>
+</div>
+{% endblock %}

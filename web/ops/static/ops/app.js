@@ -36,3 +36,14 @@ if (clock) {
   tick();
   setInterval(tick, 1000);
 }
+
+// Grade page: copy the AI's suggested points into the radios (the grader still saves).
+const fill = document.querySelector("[data-ai-fill]");
+if (fill) {
+  fill.addEventListener("click", () => {
+    document.querySelectorAll("[data-ai-score]").forEach((tag) => {
+      const radio = document.querySelector(`input[name="${tag.dataset.aiScore}"][value="${tag.dataset.value}"]`);
+      if (radio) radio.checked = true;
+    });
+  });
+}

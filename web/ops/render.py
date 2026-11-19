@@ -164,6 +164,12 @@ def build(inj, cfg):
     return build_inapp(inj, cfg) if inj.effective_channel == "inapp" else build_email(inj, cfg)
 
 
+def subject_for(inj, cfg, ctx):
+    """Subject prefix, then "[<inject code>] " when Settings asks for it, then the subject."""
+    code = f"[{inj.mel_id}] " if cfg.get("subject_inject_code") == "1" and inj.mel_id else ""
+    return (cfg.get("subject_prefix") or "") + code + fill(inj.subject or "", ctx)
+
+
 def _identity(inj, sender, ctx):
     local = fill(inj.sender_local or "", ctx).lower()
     name = fill(inj.from_name or (sender.display_name if sender else "") or local, ctx).replace('"', "'")
@@ -197,7 +203,7 @@ def build_inapp(inj, cfg):
     drafts = []
     for target, ctx, team, person, to_label in targets:
         local, name = _identity(inj, sender, ctx)
-        subject = (cfg.get("subject_prefix") or "") + fill(inj.subject or "", ctx)
+        subject = subject_for(inj, cfg, ctx)
         d = Draft(target=target, from_addr=f'"{name}" <{local}@{config.MAIL_DOMAIN}>', reply_to=None, to=[], cc=[],
                   bcc=[], subject=subject, body=fill(inj.body or "", ctx), footer=footer,
                   attachment_ids=[a.id for a in atts], team_id=team.id, person_id=person.id if person else None,
@@ -234,7 +240,7 @@ def build_email(inj, cfg):
             this_bcc = to[1:] + this_bcc
             to = [reply_to] if reply_to else [f"{local}@{config.MAIL_DOMAIN}"]
         to = to + to_extra
-        subject = (cfg.get("subject_prefix") or "") + fill(inj.subject or "", ctx)
+        subject = subject_for(inj, cfg, ctx)
         d = Draft(target=target, from_addr=from_addr, reply_to=reply_to, to=_dedupe(to), cc=_dedupe(cc),
                   bcc=_dedupe(this_bcc), subject=subject, body=fill(inj.body or "", ctx), footer=footer,
                   attachment_ids=[a.id for a in atts], team_id=team_id, person_id=person_id,

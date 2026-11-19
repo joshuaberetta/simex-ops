@@ -1,0 +1,22 @@
+{% load ops %}<div class="card">
+  <h3>AI analysis</h3>
+  {% if a and a.status == 'done' %}
+    <p class="small">{{ a.summary }}</p>
+    <dl class="hdrs">
+      <dt>Tone</dt><dd>{{ a.tone|default:'—' }} · sentiment {% if a.sentiment > 0 %}+{% endif %}{{ a.sentiment }}</dd>
+      <dt>Quality</dt><dd>clarity {{ a.clarity }}/5 · completeness {{ a.completeness }}/5 · actionability {{ a.actionability }}/5</dd>
+      {% if a.flags %}<dt>Flags</dt><dd>{% for f in a.flags %}<span class="status partial">{{ FLAGS|get:f }}</span> {% endfor %}</dd>{% endif %}
+      {% if a.asks %}<dt>Asks</dt><dd>{{ a.asks|joinlist:"; " }}</dd>{% endif %}
+      {% if a.commitments %}<dt>Commits</dt><dd>{{ a.commitments|joinlist:"; " }}</dd>{% endif %}
+      {% if a.facts %}<dt>Facts</dt><dd>{{ a.facts|joinlist:"; " }}</dd>{% endif %}
+      <dt>AI-written</dt><dd><b class="{% if a.ai_written >= 60 %}warn{% endif %}">{{ a.ai_written }}%</b>{% if a.ai_signals %} · {{ a.ai_signals }}{% endif %}
+        <div class="muted">{{ a.words }} words{% if a.wpm %} · {{ a.wpm|floatformat:0 }} words/min since the team opened the message{% endif %}</div></dd>
+      {% if a.language and a.language|lower != 'english' %}<dt>Language</dt><dd>{{ a.language }}</dd>{% endif %}
+    </dl>
+    <p class="hint">An estimate from {{ a.model }}, {{ a.updated_at|date:"D H:i" }}. Treat "AI-written" as a hint to look closer, never as proof.</p>
+  {% elif a and a.status == 'queued' %}<p class="small muted">Queued: refresh in a minute.</p>
+  {% elif a and a.status == 'failed' %}<p class="small err">Failed: {{ a.error }}</p>
+  {% elif ai_on %}<p class="small muted">Not analysed yet.</p>
+  {% else %}<p class="small muted">AI analysis is off (Settings → AI analysis).</p>{% endif %}
+  <form method="post" action="/replies/{{ r.id }}/analyse/">{% csrf_token %}<button class="btn small">{% if a %}Re-run{% else %}Analyse now{% endif %}</button></form>
+</div>

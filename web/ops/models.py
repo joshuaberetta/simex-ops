@@ -363,3 +363,82 @@ class Audit(models.Model):
 
 def audit(action, detail=None, user=""):
     Audit.objects.create(action=action, detail=detail, user=str(user or ""))
+
+
+# --- Claude analysis (ops/ai.py). Suggestions for ExCon only: never shown to participants,
+# never counted in Grade totals. ------------------------------------------------------------
+
+class ReplyAnalysis(models.Model):
+    """One participant message read by the fast model: summary, tone, quality, flags."""
+    response = models.OneToOneField(Response, on_delete=models.CASCADE, related_name="analysis")
+    status = models.CharField(max_length=10, default="done")  # queued | done | failed
+    model = models.CharField(max_length=120, default="")
+    prompt_version = models.IntegerField(default=0)
+    input_hash = models.CharField(max_length=64, default="")
+    attempts = models.IntegerField(default=0)
+    error = models.TextField(blank=True, null=True)
+    summary = models.TextField(blank=True, default="")
+    sentiment = models.IntegerField(null=True, blank=True)  # -2 (very negative) .. 2 (very positive)
+    tone = models.CharField(max_length=20, blank=True, default="")  # calm | urgent | stressed | ...
+    clarity = models.IntegerField(null=True, blank=True)  # 1..5
+    completeness = models.IntegerField(null=True, blank=True)
+    actionability = models.IntegerField(null=True, blank=True)
+    asks = models.JSONField(default=list, blank=True)  # what the team requests
+    commitments = models.JSONField(default=list, blank=True)  # decisions / actions it commits to
+    facts = models.JSONField(default=list, blank=True)  # figures, places, times it states
+    flags = models.JSONField(default=list, blank=True)  # see ai.FLAGS
+    ai_written = models.IntegerField(null=True, blank=True)  # 0..100, the model's estimate
+    ai_signals = models.TextField(blank=True, default="")
+    language = models.CharField(max_length=20, blank=True, default="")
+    words = models.IntegerField(default=0)
+    wpm = models.FloatField(null=True, blank=True)  # words per minute since the team first read the inject
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class AiGrade(models.Model):
+    """The deep model's suggested rubric scores for one inject x team thread."""
+    inject = models.ForeignKey(Inject, on_delete=models.CASCADE, related_name="+")
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="+")
+    status = models.CharField(max_length=10, default="done")  # queued | done | failed
+    model = models.CharField(max_length=120, default="")
+    prompt_version = models.IntegerField(default=0)
+    input_hash = models.CharField(max_length=64, default="")
+    attempts = models.IntegerField(default=0)
+    error = models.TextField(blank=True, null=True)
+    scores = models.JSONField(default=dict, blank=True)  # criterion id (str) -> points
+    notes = models.JSONField(default=dict, blank=True)  # criterion id (str) -> {"rationale", "evidence"}
+    overall = models.TextField(blank=True, default="")
+    strengths = models.JSONField(default=list, blank=True)
+    gaps = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("inject", "team")]
+
+    def total(self):
+        return sum(float(v) for v in (self.scores or {}).values() if v not in (None, ""))
+
+
+class AiReport(models.Model):
+    """An exercise-wide write-up (Dashboard → Exercise summary)."""
+    kind = models.CharField(max_length=10, default="live")  # live | test
+    status = models.CharField(max_length=10, default="running")  # running | done | failed
+    model = models.CharField(max_length=120, default="")
+    body = models.JSONField(default=dict)
+    error = models.TextField(blank=True, null=True)
+    user = models.CharField(max_length=150, blank=True, default="")
+    created_at = models.DateTimeField(default=timezone.now)
+
+
+class AiCall(models.Model):
+    """Every model call, for the spend cap and the Settings usage line."""
+    at = models.DateTimeField(default=timezone.now)
+    purpose = models.CharField(max_length=10)  # reply | grade | summary
+    ref = models.CharField(max_length=40, blank=True, default="")
+    model = models.CharField(max_length=120, default="")
+    input_tokens = models.IntegerField(default=0)
+    output_tokens = models.IntegerField(default=0)
+    cache_read_tokens = models.IntegerField(default=0)
+    cost_usd = models.FloatField(default=0)
+    ok = models.BooleanField(default=True)
+    error = models.TextField(blank=True, null=True)

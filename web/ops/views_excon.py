@@ -20,10 +20,10 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from . import legacy_import, backup, conf, delivery, importer, inbound, mailer, render as rnd
+from . import ai, legacy_import, backup, conf, delivery, importer, inbound, mailer, render as rnd
 from .access import excon_required
-from .models import (CHANNELS, DELIVERY_MODES, STATUSES, Attachment, Audit, Grade, ImportBatch, Inject, Mail,
-                     Message, Person, Response, ResponseAttachment, RubricCriterion, Sender, Team, TestRun,
+from .models import (CHANNELS, DELIVERY_MODES, STATUSES, AiGrade, Attachment, Audit, Grade, ImportBatch, Inject, Mail,
+                     Message, Person, ReplyAnalysis, Response, ResponseAttachment, RubricCriterion, Sender, Team, TestRun,
                      TestRunItem, audit)
 
 MAX_ATTACHMENT = 30 * 1024 * 1024
@@ -752,11 +752,9 @@ def test_run_action(request, rid):
 
 # --- replies & grading ------------------------------------------------------------------------------
 
-@excon_required
-def replies_page(request):
-    kind = request.GET.get("kind", "live")
-    team_f, inject_f = int(request.GET.get("team") or 0), int(request.GET.get("inject") or 0)
-    status_f, matched_f = request.GET.get("status", ""), request.GET.get("matched", "")
+def reply_grid(kind):
+    """Teams, every Response of this kind, the inject x team matrix and per-team totals
+    (Replies tab and Dashboard)."""
     kinds = ["live", "reply"] if kind == "live" else ["test", "oneoff"]
     teams = list(Team.objects.filter(active=True, is_test=(kind != "live")) if kind != "live"
                  else Team.objects.filter(active=True, is_test=False))
@@ -766,12 +764,13 @@ def replies_page(request):
     maxes = dict(RubricCriterion.objects.values_list("inject_id").annotate(s=Sum("max_points"))
                  .values_list("inject_id", "s"))
     grades = {(g.inject_id, g.team_id): g for g in Grade.objects.all()}
+    ai_grades = {(g.inject_id, g.team_id): g for g in AiGrade.objects.filter(status="done")}
     row_ids = {r.inject_id for r in all_in if r.inject_id and r.status != "ignored"}
     row_ids |= set(Inject.objects.filter(expects_reply=True).values_list("id", flat=True))
     injects_rows = sorted(Inject.objects.filter(id__in=row_ids), key=lambda i: (i.send_at is None, i.send_at or timezone.now(), i.seq))
     now = timezone.now()
     team_sum = {t.id: {"team": t, "replies": 0, "answered": 0, "expected": 0, "minutes": [], "score": 0.0, "max": 0.0,
-                       "late": 0} for t in teams}
+                       "late": 0, "ai_score": 0.0, "ai_max": 0.0} for t in teams}
     matrix = []
     for inj in injects_rows:
         cells = []
@@ -791,8 +790,9 @@ def replies_page(request):
             else:
                 state = "unsent"
             score = g.total() if g else None
+            ag = ai_grades.get((inj.id, t.id))
             cells.append({"team": t, "replies": reps, "n": len(reps), "minutes": minutes, "grade": g, "state": state,
-                          "score": score, "max": maxes.get(inj.id)})
+                          "score": score, "max": maxes.get(inj.id), "ai": ag.total() if ag else None})
             ts = team_sum[t.id]
             ts["replies"] += len(reps)
             if inj.expects_reply and sent_at:
@@ -805,11 +805,25 @@ def replies_page(request):
             if g and maxes.get(inj.id):
                 ts["score"] += score
                 ts["max"] += float(maxes[inj.id])
+            if ag and maxes.get(inj.id):
+                ts["ai_score"] += ag.total()
+                ts["ai_max"] += float(maxes[inj.id])
         matrix.append((inj, cells))
     for ts in team_sum.values():
         mins = sorted(ts["minutes"])
         ts["median"] = mins[len(mins) // 2] if mins else None
         ts["pct"] = round(100 * ts["score"] / ts["max"]) if ts["max"] else None
+        ts["ai_pct"] = round(100 * ts["ai_score"] / ts["ai_max"]) if ts["ai_max"] else None
+    return teams, all_in, matrix, list(team_sum.values())
+
+
+@excon_required
+def replies_page(request):
+    kind = request.GET.get("kind", "live")
+    team_f, inject_f = int(request.GET.get("team") or 0), int(request.GET.get("inject") or 0)
+    status_f, matched_f = request.GET.get("status", ""), request.GET.get("matched", "")
+    kinds = ["live", "reply"] if kind == "live" else ["test", "oneoff"]
+    teams, all_in, matrix, team_sum = reply_grid(kind)
     # Read / opens & clicks: per inject x team, from the delivering Messages.
     eng_msgs = list(Message.objects.filter(kind__in=["live"] if kind == "live" else ["test", "oneoff"],
                                            status="sent").exclude(inject=None).select_related("inject"))
@@ -851,7 +865,7 @@ def replies_page(request):
              if (not team_f or r.team_id == team_f) and (not inject_f or r.inject_id == inject_f)
              and (not status_f or r.status == status_f) and (matched_f != "no" or r.match == "none")]
     return render(request, "ops/replies.html", {
-        "tab": "replies", "kind": kind, "teams": teams, "matrix": matrix, "team_sum": list(team_sum.values()),
+        "tab": "replies", "kind": kind, "teams": teams, "matrix": matrix, "team_sum": team_sum,
         "inbox": inbox[:300], "new_count": sum(1 for r in all_in if r.status == "new"),
         "unmatched": sum(1 for r in all_in if r.match == "none" and r.status != "ignored"),
         "team_f": team_f, "inject_f": inject_f, "status_f": status_f, "matched_f": matched_f,
@@ -921,6 +935,7 @@ def reply_page(request, rid):
         "answers": r.answers.order_by("id"), "teams": Team.objects.all(), "people": Person.objects.order_by("name"),
         "injects_all": Inject.objects.order_by("seq"), "new_part": new_part, "quoted": quoted,
         "sender": Sender.objects.filter(local_part=r.persona).first() if r.persona else None,
+        "analysis": ReplyAnalysis.objects.filter(response=r).first(), "ai_on": ai.enabled(), "FLAGS": ai.FLAGS,
         "files": ResponseAttachment.objects.filter(response=r) if r.channel == "email" else
         (r.mail.files.all() if r.mail else [])})
 
@@ -980,18 +995,25 @@ def grade_page(request, iid, tid):
                 .select_related("person", "mail").order_by("received_at"))
     sent = inbound.first_sent(["live", "reply", "test", "oneoff"] if team.is_test else ["live", "reply"])
     sent_at = sent.get((iid, tid)) or sent.get((iid, None))
+    tags = {a.response_id: a for a in ReplyAnalysis.objects.filter(response__in=reps, status="done")}
     for r in reps:
+        r.ai = tags.get(r.id)
         r.new_part = inbound.split_quoted(r.text or "")[0]
         r.after = int((r.received_at - sent_at).total_seconds() // 60) if sent_at else None
         r.files = list(r.attachments.all()) if r.channel == "email" else (list(r.mail.files.all()) if r.mail else [])
     teams = list(Team.objects.filter(active=True, is_test=team.is_test))
     ids = [t.id for t in teams]
     nxt = ids[ids.index(tid) + 1] if tid in ids and ids.index(tid) + 1 < len(ids) else None
+    sug = AiGrade.objects.filter(inject=inj, team=team).first()
+    stale = bool(sug and sug.status == "done" and sug.input_hash != ai.grade_hash(inj, crit, ai.thread(inj, team)))
     for c in crit:
         c.current = (g.scores or {}).get(str(c.id)) if g else None
+        c.ai = (sug.scores or {}).get(str(c.id)) if sug and sug.status == "done" else None
+        c.ai_note = (sug.notes or {}).get(str(c.id)) if sug and sug.status == "done" else None
         c.choices = [(n, c.current is not None and int(c.current) == n) for n in range(c.max_points + 1)]
     return render(request, "ops/grade.html", {"tab": "replies", "inj": inj, "team": team, "crit": crit, "g": g,
-                                              "reps": reps, "sent_at": sent_at, "teams": teams, "next_team": nxt})
+                                              "reps": reps, "sent_at": sent_at, "teams": teams, "next_team": nxt,
+                                              "sug": sug, "stale": stale, "ai_on": ai.enabled()})
 
 
 @excon_required
@@ -1079,11 +1101,14 @@ def settings_page(request):
                     v = "10"
             conf.put(k, v if k == "footer" else v.strip())
         conf.put("team_to_team", "1" if P.get("team_to_team") == "1" else "0")
+        conf.put("subject_inject_code", "1" if P.get("subject_inject_code") == "1" else "0")
         audit("settings_save", None, _u(request))
         messages.success(request, "Settings saved.")
         return redirect("/settings/")
+    from .views_ai import ai_settings_context
     return render(request, "ops/settings.html", {"tab": "settings", "resend_configured": bool(settings.RESEND_API_KEY),
-                                                 "mailer_name": mailer.get().name, "MAIL_DOMAIN": settings.MAIL_DOMAIN})
+                                                 "mailer_name": mailer.get().name, "MAIL_DOMAIN": settings.MAIL_DOMAIN,
+                                                 **ai_settings_context()})
 
 
 @excon_required

@@ -7,3 +7,4 @@ httpx
 openpyxl
 tzdata
 markdown
+anthropic[bedrock]

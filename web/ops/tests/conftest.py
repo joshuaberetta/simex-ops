@@ -14,6 +14,10 @@ def _setup(db, settings):
     settings.STORAGES = {"staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}}
     from ops import mailer
     mailer.set_mailer(mailer.LogMailer())
+    settings.AI_PROVIDER = "off"  # never call a real model (a developer's AWS profile would work)
+    from ops import ai
+    ai.set_client(None)
+    ai.RUN_INLINE = True
     call_command("seed_simex", verbosity=0)
     # Most tests exercise each inject's own channel; the global switch has its own tests.
     from ops import conf

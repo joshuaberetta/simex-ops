@@ -9,6 +9,7 @@
   <label>Default footer <span class="hint">Added to every inject unless it sets its own or none.</span>
     <textarea name="footer" rows="3">{{ cfg.footer }}</textarea></label>
   <label>Subject prefix <input name="subject_prefix" value="{{ cfg.subject_prefix }}" placeholder="e.g. [SIMEX] "></label>
+  <label class="chk"><input type="checkbox" name="subject_inject_code" value="1" {% if cfg.subject_inject_code == '1' %}checked{% endif %}> put the inject code in the subject, e.g. “[1-15] Request for assessment”</label>
   <h3>Participants' mail client</h3>
   <label class="chk"><input type="checkbox" name="team_to_team" value="1" {% if cfg.team_to_team == '1' %}checked{% endif %}> teams may write to other teams (otherwise only to personas)</label>
   <label>Max attachments per message (MB) <input type="number" name="max_upload_mb" value="{{ cfg.max_upload_mb }}" min="1" class="narrow"></label>
@@ -36,6 +37,27 @@
     <button class="btn {% if channel_mode == 'inapp' %}{% else %}danger{% endif %}">Apply</button>
   </form>
   <p class="hint">Before switching to SIMEX Mail: create participant logins (People &amp; logins → paste roster, print the credentials sheet) and give teams the address of this site.</p>
+</div>
+<div class="card" id="ai">
+  <h3>AI analysis</h3>
+  <p class="small">Claude reads each reply (summary, tone, quality, flags, how likely it is AI-written) and suggests rubric points for each
+  team's thread. For ExCon only: participants never see it, and suggested points never count in the grades.</p>
+  {% if not ai_available %}
+  <p class="small warn">No provider configured: set <code>ANTHROPIC_API_KEY</code>, or <code>AI_PROVIDER=bedrock</code> with AWS credentials, on the web and scheduler components.</p>
+  {% else %}
+  <p class="small">Provider: <b>{% if ai_provider == 'bedrock' %}Amazon Bedrock ({{ ai_region }}){% else %}Claude API{% endif %}</b> ·
+    replies: <code>{{ ai_model_fast }}</code> · rubric &amp; summary: <code>{{ ai_model_deep }}</code></p>
+  {% endif %}
+  <form method="post" action="/settings/ai/" class="form">{% csrf_token %}
+    <label class="chk"><input type="checkbox" name="ai_enabled" value="1" {% if cfg.ai_enabled == '1' %}checked{% endif %}> AI analysis on</label><br>
+    <label class="chk"><input type="checkbox" name="ai_auto" value="1" {% if cfg.ai_auto == '1' %}checked{% endif %}> analyse every reply as it arrives (otherwise only when you click Analyse now)</label><br>
+    <label class="chk"><input type="checkbox" name="ai_tests" value="1" {% if cfg.ai_tests == '1' %}checked{% endif %}> include Test team replies</label>
+    <label>Daily spending cap (USD, estimated) <input type="number" name="ai_daily_usd" value="{{ cfg.ai_daily_usd }}" min="0" step="0.5" class="narrow"></label>
+    <button class="btn small">Save</button>
+  </form>
+  <p class="small muted">Today: {{ ai_calls_today }} call{{ ai_calls_today|pluralize }}{% if ai_failed_today %}, <span class="err">{{ ai_failed_today }} failed</span>{% endif %},
+    about ${{ ai_spent|floatformat:2 }} of ${{ cfg.ai_daily_usd }}.{% if ai_pending %} {{ ai_pending }} queued.{% endif %}</p>
+  {% if ai_last_error %}<p class="small err">Last error ({{ ai_last_error.at|date:"H:i" }}): {{ ai_last_error.error|truncatechars:200 }}</p>{% endif %}
 </div>
 <div class="card {% if cfg.live_armed == '1' %}live-card{% endif %}">
   <h3>Live sending</h3>

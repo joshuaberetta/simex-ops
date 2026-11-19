@@ -38,6 +38,8 @@ uv venv -p 3.12 .venv && uv pip install -p .venv -r requirements.txt pytest pyte
 
 Environment: `DATABASE_URL` (default SQLite), `SECRET_KEY`, `APP_USERNAME`, `APP_PASSWORD`, `PUBLIC_URL` (an `https://` URL switches on production settings), `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `MAIL_DOMAIN`, `EXERCISE_TZ`, `TICK_SECONDS`.
 
+AI analysis (`ops/ai.py`, Dashboard tab, manual 5.7): `AI_PROVIDER` = `anthropic` (with `ANTHROPIC_API_KEY`), `bedrock` (AWS credentials: `AWS_BEARER_TOKEN_BEDROCK`, or a profile / SSO session locally; `AWS_REGION`, default us-east-1) or `off`; when unset it is `anthropic` if `ANTHROPIC_API_KEY` is set, else `bedrock` if `AWS_BEARER_TOKEN_BEDROCK` is, else off. `AI_MODEL_FAST` / `AI_MODEL_DEEP` override the models (default Claude Haiku 5.5 for each reply, Claude Sonnet 5.5 for rubric suggestions and the summary; on Bedrock the `us.anthropic.` inference profiles). It runs in a thread of `run_scheduler` (`--no-ai` to skip). Locally with AWS SSO: `aws sso login`, then `AI_PROVIDER=bedrock .venv/bin/python manage.py run_scheduler`, and turn it on in Settings → AI analysis. Tests use a fake client and never call a model.
+
 ## Deploy
 
 `.do/app-django.yaml` (app `simex-inbox`, components `web` and `scheduler`). Render the secrets into a copy before `doctl apps create --spec`, then add the app to the database cluster's trusted sources. Not deployed yet.

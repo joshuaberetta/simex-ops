@@ -5,6 +5,7 @@ from .models import Setting
 DEFAULTS = {
     "footer": "EXERCISE EXERCISE EXERCISE\nThis message is part of the UNDAC SIMEX. It does not describe a real emergency.",
     "subject_prefix": "",
+    "subject_inject_code": "0",  # "[<inject code>] " before every inject's subject
     "default_reply_to": "",  # email channel: leave empty so replies are tracked
     "excon_bcc": "",  # email channel: copy of every live email
     "test_address": "",
@@ -17,6 +18,11 @@ DEFAULTS = {
     # How injects are delivered: "email" (Resend, the main flow), "inapp" (SIMEX Mail, the
     # backup if email has problems) or "per_inject" (each inject's own channel field).
     "channel_mode": "email",
+    # Claude analysis of replies (ops/ai.py): off until ExCon turns it on.
+    "ai_enabled": "0",
+    "ai_auto": "1",  # analyse every reply as it arrives (else only on request)
+    "ai_tests": "1",  # include Test team replies
+    "ai_daily_usd": "5",  # spend cap per day (Nairobi), estimated
 }
 CHANNEL_MODES = {"email": "Email (Resend)", "inapp": "SIMEX Mail (in-app inboxes)", "per_inject": "Per inject"}
 

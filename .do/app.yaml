@@ -14,6 +14,12 @@
 # is at its database limit), given as the DATABASE_URL secret, with the app added to the
 # cluster's trusted sources:  doctl databases firewalls append <cluster-id> --rule app:<app-id>
 #
+# AI analysis (optional, Settings → AI analysis): add to envs, then render as above, either
+#   - { key: ANTHROPIC_API_KEY, scope: RUN_TIME, type: SECRET }            (Claude API), or
+#   - { key: AWS_BEARER_TOKEN_BEDROCK, scope: RUN_TIME, type: SECRET }     (Bedrock API key)
+#   - { key: AWS_REGION, scope: RUN_TIME, value: "us-east-1" }
+# and add the key's name to SECRETS in .do/render_spec.py.
+#
 # Two components share the image: web (gunicorn, migrations at start) and scheduler (a
 # worker running `manage.py run_scheduler`). Exactly one scheduler instance.
 name: simex-ops

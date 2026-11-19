@@ -18,12 +18,13 @@
 
 <h2>Teams</h2>
 <table class="list">
-  <thead><tr><th>Team</th><th>Replies</th><th>Expected injects answered</th><th>Late / missing</th><th>Median first reply</th><th>Score</th></tr></thead>
+  <thead><tr><th>Team</th><th>Replies</th><th>Expected injects answered</th><th>Late / missing</th><th>Median first reply</th><th>Score</th><th>AI suggested</th></tr></thead>
   {% for ts in team_sum %}
   <tr><td><a href="/replies/?kind={{ kind }}&team={{ ts.team.id }}">{{ ts.team.name }}</a></td><td>{{ ts.replies }}</td>
     <td>{{ ts.answered }} / {{ ts.expected }}</td><td>{{ ts.late|default:'' }}</td>
     <td>{% if ts.median is not None %}{{ ts.median }} min{% endif %}</td>
-    <td>{% if ts.max %}{{ ts.score|num }} / {{ ts.max|num }} <span class="muted">({{ ts.pct }}%)</span>{% endif %}</td></tr>
+    <td>{% if ts.max %}{{ ts.score|num }} / {{ ts.max|num }} <span class="muted">({{ ts.pct }}%)</span>{% endif %}</td>
+    <td class="muted">{% if ts.ai_max %}{{ ts.ai_pct }}%{% endif %}</td></tr>
   {% endfor %}
 </table>
 
@@ -40,6 +41,7 @@
       {% if c.n %}{{ c.n }} repl{{ c.n|pluralize:"y,ies" }}{% if c.minutes is not None %} · {{ c.minutes }} min{% endif %}
       {% elif c.state == 'missing' %}no reply (overdue){% elif c.state == 'waiting' %}waiting{% elif c.state == 'unsent' %}<span class="muted">not sent</span>{% else %}<span class="muted">—</span>{% endif %}
       {% if c.grade %}<div><b>{{ c.score|num }}{% if c.max %} / {{ c.max }}{% endif %}</b></div>{% elif c.n and c.max %}<div class="muted">grade</div>{% endif %}
+      {% if c.ai is not None and c.max %}<div class="muted" title="Suggested by AI">AI {{ c.ai|num }} / {{ c.max }}</div>{% endif %}
     </a></td>
     {% endfor %}
   </tr>

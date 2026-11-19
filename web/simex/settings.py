@@ -36,6 +36,15 @@ MAILER = env("MAILER", "resend" if RESEND_API_KEY else "log")
 RESEND_MIN_INTERVAL = float(env("RESEND_MIN_INTERVAL", "0.6"))
 TICK_SECONDS = float(env("TICK_SECONDS", "10"))
 
+# Claude analysis of replies (optional, ops/ai.py): "anthropic" (ANTHROPIC_API_KEY), "bedrock"
+# (AWS credentials: AWS_BEARER_TOKEN_BEDROCK, or a profile / SSO session locally) or "off".
+ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY")
+AI_PROVIDER = env("AI_PROVIDER") or ("anthropic" if ANTHROPIC_API_KEY else
+                                     "bedrock" if env("AWS_BEARER_TOKEN_BEDROCK") else "off")
+AI_REGION = env("AWS_REGION", "us-east-1")
+AI_MODEL_FAST = env("AI_MODEL_FAST")  # default: Claude Haiku 5.5 (us.anthropic.claude-haiku-5-5 on Bedrock)
+AI_MODEL_DEEP = env("AI_MODEL_DEEP")  # default: Claude Sonnet 5.5
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",

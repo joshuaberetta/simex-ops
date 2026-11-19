@@ -26,12 +26,13 @@ Read section 7, "Safety controls", before your first shift.
 |---|---|
 | **Injects** | The schedule. Filter by day or status; open an inject to edit, preview, test or send it; change the channel in bulk. Import from the MEL is here too. |
 | **Replies** | Everything participants sent: team summary, inject × team grid, **Read / opens & clicks**, the inbox, and grading. |
+| **Dashboard** | The exercise at a glance: per team, replies, response times, scores, sentiment over time and a funnel; the rubric heatmap; flags, possibly AI-written replies, what teams ask for and commit to; an AI-written exercise summary (5.7). |
 | **Team inboxes** | Each team's mailbox at a glance (received, unread, sent, last sign-in) and **View as team**. |
 | **Test runs** | Replays injects on a fast clock into the **Test team** mailbox (and, for email injects, to a test address). |
 | **Senders** | The personas: username (`cnn`), display name ("CNN Breaking News"). They are also the participants' address book. |
 | **People & logins** | Teams, participants, and their logins (create, reset password, disable, printable credential sheet). |
 | **Log** | Every delivery the app made, with content and status, plus the activity log of every action. |
-| **Settings** | **Delivery channel**, footer, subject prefix, team-to-team messaging, attachment limit, email options, grace period, **live sending switch**, backup and restore. |
+| **Settings** | **Delivery channel**, footer, subject prefix and inject code in the subject, **AI analysis**, team-to-team messaging, attachment limit, email options, grace period, **live sending switch**, backup and restore. |
 | **Help** | This manual. |
 
 The status bar under the tabs shows the Nairobi clock, **Live disarmed** (green) or **LIVE ARMED** (red), **ALL SENDING PAUSED** when paused, when the scheduler last ran (red if it stopped), the next inject due, counts of overdue and failed injects, and the **Pause all sending** button.
@@ -72,6 +73,8 @@ Active senders are the participants' **address book**: they can write to any of 
 
 ### 3.4 Settings
 - **Default footer:** "EXERCISE EXERCISE EXERCISE …" at the bottom of every message.
+- **Subject prefix** (e.g. `[SIMEX] `) and **put the inject code in the subject**: every inject's subject then starts with its code, e.g. `[1-15] Request for assessment`, so teams and ExCon can refer to it. Off by default; it applies to injects delivered after you turn it on (both channels).
+- **AI analysis:** off by default; see 5.7.
 - **Teams may write to other teams:** off by default (teams write only to personas). Turn it on if the scenario wants OSOCC-to-OSOCC traffic; those messages show under Team inboxes but are not "replies".
 - **Max attachments per message:** what participants may attach (default 10 MB).
 - **Email channel:** reply-to (leave empty), ExCon Bcc, test addresses. Only matters for injects on the email channel.
@@ -158,6 +161,15 @@ Switch when teams don't receive emails (spam folders, bounces, the venue network
 
 Replies to emails sent earlier keep arriving on the Replies tab. To go back to email, switch the channel back the same way. **Per inject** mode lets you mix: e.g. personal emails (attestations) by email, everything else in-app.
 
+### 5.7 AI analysis and the Dashboard
+When **Settings → AI analysis** is on, Claude reads what teams send. It is for ExCon only: participants never see any of it, and it never changes a grade.
+- **Each reply** (Claude Haiku, within a minute of arriving): a one-line summary, tone and sentiment, clarity / completeness / actionability (1–5), what the team asks for and commits to, the figures it states, flags (*misreads the inject*, *needs ExCon attention*, *safety or duty-of-care issue*, *sent to the wrong persona*, *steps out of the exercise*, *no action or decision*), and how likely the text is **AI-written** (0–100 %). It shows on the reply's page under **AI analysis**, with **Re-run**.
+- **Each team's thread on an inject with a rubric** (Claude Sonnet, once the thread has been quiet for 3 minutes, and again if the team writes more): suggested points per criterion with a reason and a quote from the reply. On the grade page each criterion shows **AI n** with the reason; **Fill in the AI suggestions** copies them into the form, and nothing is saved until you click **Save**. The grid on the Replies tab shows *AI n / max* under the grade.
+- **"AI-written"** is a hint to look closer, never proof: it is judged from the style of the text and how fast it was written after the team opened the inject. Short messages and non-native English make it unreliable. Don't confront a participant on this alone.
+- **Dashboard tab:** a tile per team (expected injects answered, median first reply, graded score, AI-suggested score, sentiment of each reply over the exercise, tone mix, a delivered → read → answered → graded funnel), the **rubric results** heatmap (switch between *Graded* and *AI suggested*), **where the AI and the graders disagree** (a quarter of the points or more: check the rubric or the reply), **Flags**, **Possibly AI-written** (60 % and above), **What teams are asking for** and **Decisions and commitments**. **Write the summary** produces a situation summary across teams (themes, each team's strengths and concerns, what ExCon may want to act on now, points for the hotwash) in about a minute.
+- **Settings → AI analysis:** on/off; *analyse every reply as it arrives* (off: only when you click **Analyse now**); include Test team replies (useful in rehearsals); a **daily spending cap** in USD (default 5; a full exercise day costs well under a dollar). The card shows today's calls, spend and the last error.
+- What Claude sees: the inject as the team received it, the rubric you wrote, and the teams' replies. Nothing else is stored in the app to send.
+
 ## 6. After the exercise
 Export grades and a final backup, disarm, and disable the participant logins (People & logins) once the debrief no longer needs them.
 
@@ -185,12 +197,14 @@ Export grades and a final backup, disarm, and disable the participant logins (Pe
 | A reply is "unmatched" or a "guess" | Open it and set the inject and team under **Match**. |
 | Email channel: "Mailer: log" | `RESEND_API_KEY` is missing; email injects are only logged. In-app is unaffected. |
 | Emails aren't arriving / bouncing | Log → the email → delivery status. If it can't be fixed quickly, switch to SIMEX Mail (5.6). |
+| AI analysis says "No provider configured" or calls fail | The web and scheduler components need `ANTHROPIC_API_KEY`, or `AI_PROVIDER=bedrock` with `AWS_BEARER_TOKEN_BEDROCK` (and `AWS_REGION`). The last error is on Settings → AI analysis. Grading by hand is unaffected. |
+| AI analysis stopped for the day | The daily cap was reached: raise it on Settings → AI analysis. |
 | Need to undo a big mistake | Settings → Restore a backup (type RESTORE). A backup of this app replaces everything, including logins. A backup from the first (email-only) version of the app is merged in instead: settings, senders, roster, injects with attachments, rubrics and grades. |
 
 ## 9. Quick reference: a day of the exercise
 1. Status bar OK (scheduler recent).
 2. Today's injects scheduled, times right, no warnings.
 3. Teams signed in. Arm live sending.
-4. Watch **Replies** and **Team inboxes**; answer in character; grade as answers arrive.
+4. Watch **Replies**, **Dashboard** and **Team inboxes**; answer in character; grade as answers arrive.
 5. Handle overdue or failed injects; pause if anything looks wrong.
 6. End of day: disarm, download a backup.
