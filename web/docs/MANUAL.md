@@ -63,7 +63,7 @@ Only participant-facing fields are imported. Expected outcomes, story, theme, ke
 
 - **Team code** fills `{team}` in addresses (`undac-{team}-tl` → `undac-a-tl@…`); **team name** fills `{team_name}`.
 - **Disable** blocks a login without deleting the person; **delete** removes both.
-- More ExCon logins: Django admin (`/django-admin/`, staff users or the `excon` group).
+- More ExCon logins: Django admin (`/admin/`, staff users or the `excon` group).
 
 ### 3.3 Personas (Senders)
 One row per persona, created from the MEL's sender aliases. Fix display names (e.g. `CCDPR` → "CCDPR Deputy Director"); **rename in injects** keeps injects in step when a username changes. Add personas the MEL lacks (e.g. `cnn` / "CNN Breaking News").

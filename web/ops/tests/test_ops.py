@@ -162,7 +162,7 @@ def test_participant_blocked_from_every_excon_url():
         checked += 1
     assert checked > 40
     # Django admin is staff-only too
-    assert pa.get("/django-admin/").status_code == 302
+    assert pa.get("/admin/").status_code == 302
 
 
 def test_view_as_team_is_read_only(excon):
@@ -505,3 +505,8 @@ def test_import_backup_from_email_app(excon):
     assert Person.objects.get(email="real@kobotoolbox.org").team == team
     assert not Person.objects.filter(email__endswith="placeholder.invalid").exists()
     assert conf.get("footer") == "OLD FOOTER" and conf.get("live_armed") == "0"
+
+
+def test_admin_at_admin(excon):
+    assert excon.get("/admin/").status_code == 200
+    assert excon.get("/django-admin/ops/inject/").url == "/admin/ops/inject/"
