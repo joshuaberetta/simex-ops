@@ -48,7 +48,7 @@
   <h3>Answer as {% if sender %}{{ sender.display_name }}{% else %}{{ r.persona }}{% endif %} &lt;{{ persona_addr }}&gt;</h3>
   {% if ai_draft %}<p class="small"><span class="flag ai">AI draft</span> Filled in from <a href="/injects/drafts/{{ ai_draft.id }}/">your AI draft</a>: read it before sending.</p>{% endif %}
   <textarea name="body" rows="6" placeholder="In character.{% if r.channel == 'email' %} The original is quoted below your text.{% else %} It appears in the team's inbox in the same conversation.{% endif %}">{% if ai_draft %}{{ ai_draft.body.body }}{% endif %}</textarea>
-  <button class="btn" data-confirm="Send this reply to {% if r.team %}{{ r.team.name }}{% else %}{{ r.from_addr }}{% endif %}?">Send reply</button>
+  <button class="btn">Send reply</button>
   {% for m in answers %}<p class="small">Answered {{ m.created_at|date:"D H:i" }}: <a href="/log/{{ m.id }}/">{{ m.status }}</a></p>{% endfor %}
 </form>
 {% endif %}
