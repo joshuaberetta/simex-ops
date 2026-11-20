@@ -596,7 +596,7 @@ def test_backup_roundtrip(excon):
 
 
 MEL = Path("/Users/josh/code/undac-simex/extracted/UNDAC Induction Course - MASTER COURSE PACKAGE/"
-           "5. SIMEX Master 2025/MEL-MIL.xlsx")
+           "5. SIMEX Master 2026/MEL-MIL 2026.xlsx")
 JSON = Path("/Users/josh/code/undac-simex/registers/injects.json")
 
 
@@ -605,7 +605,7 @@ def test_xlsx_and_json_import_agree():
     a = importer.parse_upload("MEL-MIL.xlsx", MEL.read_bytes())
     b = importer.parse_upload("injects.json", JSON.read_bytes())
     strip = lambda rs: [{k: v for k, v in r.items() if k != "seq"} for r in rs]  # noqa: E731
-    assert strip(a) == strip(b) and len(a) == 103
+    assert strip(a) == strip(b) and len(a) == 102
 
 
 # --- global delivery channel switch -------------------------------------------------------------
