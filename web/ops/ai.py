@@ -834,7 +834,10 @@ length, greeting, signature and level of detail. Plain text, no markdown. {team_
 dates and times, and what the teams themselves said or decided. Don't pre-empt a planned inject or \
 contradict one. Take facts from the input; when the message needs a new one (a figure, a name, a \
 place, an event), invent a plausible fictional one and list it in new_facts so ExCon can check it \
-against the scenario. Real organisations (OCHA, WFP, IFRC...) keep their real roles.
+against the scenario. Official figures (casualties, displaced people, damage, stocks, funding) are \
+the exception: use those the injects already give, or ExCon's request; don't invent new ones \
+(the persona can say they are still being compiled). Real organisations (OCHA, WFP, IFRC...) keep \
+their real roles.
 - sender: the username of the persona that fits best, from the list. Only when none fits, propose \
 a new username (lowercase, letters, digits and dashes) and its from_name, and say so in questions.
 - The message itself never contains notes for ExCon, what the teams are expected to do, or \
@@ -999,6 +1002,14 @@ def draft_request(d):
                      f"Subject: {p.get('subject', '')}\n\n{p.get('body', '')}\n\nRevise it as ExCon asks below.")
     parts.append("ExCon's request: " + (d.prompt.strip() or "(none: use your judgement from the context)"))
     return "\n\n".join(parts)
+
+
+DRAFT_STALE = timedelta(minutes=5)  # a draft takes seconds; still running after this, the web process restarted
+
+
+def expire_drafts():
+    InjectDraft.objects.filter(status="running", created_at__lt=timezone.now() - DRAFT_STALE).update(
+        status="failed", error="Interrupted (the app restarted while drafting). Draft again.")
 
 
 def run_draft(draft_id):

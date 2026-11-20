@@ -248,6 +248,7 @@ def drafts_page(request):
         inj, team = resp.inject, resp.team
     elif mode == "answer" or (mode == "followup" and not inj):
         mode = "new"
+    ai.expire_drafts()
     if request.method == "POST":
         prompt = (src.get("prompt") or "").strip()[:4000]
         if not ai.enabled():
@@ -272,6 +273,7 @@ def drafts_page(request):
 
 @excon_required
 def draft_page(request, did):
+    ai.expire_drafts()
     d = get_object_or_404(InjectDraft.objects.select_related("inject", "team", "response", "created"), pk=did)
     known = {s.local_part: s for s in Sender.objects.all()}
     b = d.body or {}

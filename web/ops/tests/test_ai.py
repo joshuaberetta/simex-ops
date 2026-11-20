@@ -280,3 +280,9 @@ def test_draft_needs_ai_on(excon):
     assert not InjectDraft.objects.exists()
     assert "Draft with AI" not in excon.get("/injects/").content.decode()
     assert excon.get("/injects/drafts/").status_code == 200
+
+
+def test_draft_left_running_by_a_restart_fails(excon):
+    from ops.models import InjectDraft
+    d = InjectDraft.objects.create(created_at=timezone.now() - timedelta(minutes=10))
+    assert "Interrupted" in excon.get(f"/injects/drafts/{d.id}/").content.decode()
