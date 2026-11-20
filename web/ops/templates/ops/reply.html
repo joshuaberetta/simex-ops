@@ -44,9 +44,10 @@
 </div>
 
 {% if r.persona %}
-<form method="post" action="/replies/{{ latest.id }}/answer/" class="card form">{% csrf_token %}
+<form method="post" action="/replies/{{ latest.id }}/answer/" class="card form" id="answer">{% csrf_token %}
   <h3>Answer as {% if sender %}{{ sender.display_name }}{% else %}{{ r.persona }}{% endif %} &lt;{{ persona_addr }}&gt;</h3>
-  <textarea name="body" rows="6" placeholder="In character.{% if r.channel == 'email' %} The original is quoted below your text.{% else %} It appears in the team's inbox in the same conversation.{% endif %}"></textarea>
+  {% if ai_draft %}<p class="small"><span class="flag ai">AI draft</span> Filled in from <a href="/injects/drafts/{{ ai_draft.id }}/">your AI draft</a>: read it before sending.</p>{% endif %}
+  <textarea name="body" rows="6" placeholder="In character.{% if r.channel == 'email' %} The original is quoted below your text.{% else %} It appears in the team's inbox in the same conversation.{% endif %}">{% if ai_draft %}{{ ai_draft.body.body }}{% endif %}</textarea>
   <button class="btn" data-confirm="Send this reply to {% if r.team %}{{ r.team.name }}{% else %}{{ r.from_addr }}{% endif %}?">Send reply</button>
   {% for m in answers %}<p class="small">Answered {{ m.created_at|date:"D H:i" }}: <a href="/log/{{ m.id }}/">{{ m.status }}</a></p>{% endfor %}
 </form>
@@ -56,6 +57,16 @@
 <section class="col-side">
 {% if r.inject and r.team %}<div class="card"><a class="btn primary" href="/grades/{{ r.inject.id }}/{{ r.team.id }}/">Grade {{ r.team.name }} on {{ r.inject.mel_id }}</a></div>{% endif %}
 {% include "ops/_analysis.html" with a=analysis %}
+{% if ai_on and r.persona %}
+<form method="post" action="/injects/drafts/" class="card form">{% csrf_token %}
+  <h3>Draft with AI</h3>
+  <input type="hidden" name="response" value="{{ latest.id }}">{% if r.inject %}<input type="hidden" name="inject" value="{{ r.inject_id }}">{% endif %}{% if r.team %}<input type="hidden" name="team" value="{{ r.team_id }}">{% endif %}
+  <textarea name="prompt" rows="3" placeholder="What should it say? e.g. agree, but only one helicopter until Friday"></textarea>
+  <button class="btn small" name="mode" value="answer">Draft an answer</button>
+  <button class="btn small" name="mode" value="new">Draft a new inject reacting to this</button>
+  <p class="hint">Nothing is sent: you get a draft to read and edit.</p>
+</form>
+{% endif %}
 <form method="post" action="/replies/{{ r.id }}/" class="card form">{% csrf_token %}
   <h3>Match</h3>
   <label>Inject <select name="inject_id"><option value="">— none —</option>{% for i in injects_all %}<option value="{{ i.id }}" {% if i.id == r.inject_id %}selected{% endif %}>{{ i.mel_id }} {{ i.subject|default:''|truncatechars:40 }}</option>{% endfor %}</select></label>

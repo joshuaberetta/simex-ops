@@ -21,6 +21,7 @@
     {% if ai_on and ai_stats.unsent %}<form method="post" action="/injects/ai-check/" class="inline">{% csrf_token %}<input type="hidden" name="back" value="{{ request.get_full_path }}">
       <span class="small muted" title="Unsent injects the AI has read as they are now">AI checked {{ ai_stats.checked }}/{{ ai_stats.unsent }}{% if ai_stats.queued %}, {{ ai_stats.queued }} queued{% endif %}</span>
       <button class="btn" data-confirm="Have the AI read every unsent inject again?">Check all with AI</button></form>{% endif %}
+    {% if ai_on %}<a class="btn" href="/injects/drafts/">Draft with AI</a>{% endif %}
     <a class="btn" href="/import/">Import / update</a>
     <form method="post" action="/injects/new/" class="inline">{% csrf_token %}<button class="btn">New inject</button></form>
   </div>

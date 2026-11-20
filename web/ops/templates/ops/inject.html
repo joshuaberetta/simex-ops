@@ -39,6 +39,7 @@
   </div>
 </div>
 {% endif %}{% endif %}
+{% if drafted_from %}<p class="small"><span class="flag ai">AI draft</span> Drafted by Claude (<a href="/injects/drafts/{{ drafted_from.id }}/">the draft and its reasons</a>{% if drafted_from.body.new_facts %}; it invented {{ drafted_from.body.new_facts|length }} fact{{ drafted_from.body.new_facts|length|pluralize }} to check{% endif %}).</p>{% endif %}
 {% if st == 'overdue' %}<div class="flash warn">This inject missed its send time by more than the grace period ({{ cfg.grace_minutes }} min) and was not sent. Send it now, or change the time and schedule it again.</div>{% endif %}
 
 <div class="cols">
@@ -135,16 +136,17 @@
 {% if followup_targets %}
 <form method="post" action="/injects/{{ inj.id }}/followup/" enctype="multipart/form-data" class="card form live-card" id="followup">{% csrf_token %}
   <h3>Send a follow-up <span class="muted">in the same conversation</span></h3>
+  {% if ai_draft %}<p class="small"><span class="flag ai">AI draft</span> Filled in from <a href="/injects/drafts/{{ ai_draft.id }}/">your AI draft</a>{% if ai_draft.team %}, ticked for {{ ai_draft.team.name }}{% endif %}: read it before sending.</p>{% endif %}
   <p class="small">A correction or a missing document after this inject went out: {{ inj.sender_local|default:"the persona" }} writes again to the recipients you tick, in their existing
   conversation (in-app) or email thread. Replies to it count as replies to this inject. This is a live send.</p>
   <fieldset><legend>To</legend>
-    {% for m in followup_targets %}<label class="chk"><input type="checkbox" name="to" value="{{ m.id }}" checked> {{ m.target }}
+    {% for m in followup_targets %}<label class="chk"><input type="checkbox" name="to" value="{{ m.id }}" {% if not followup_checked or m.id in followup_checked %}checked{% endif %}> {{ m.target }}
       <span class="muted small">{% if m.channel == 'inapp' %}inbox{% else %}email{% endif %}, {{ m.sent_at|date:"D H:i" }}</span></label>{% endfor %}
   </fieldset>
   <label>Subject <span class="hint">{subject} is the original subject; keep it so mail clients group the follow-up with it</span>
-    <input name="subject" value="Re: {subject}" required></label>
+    <input name="subject" value="{% if ai_draft %}{{ ai_draft.body.subject|default:'Re: {subject}' }}{% else %}Re: {subject}{% endif %}" required></label>
   <label>Message <span class="hint">Placeholders: {team} {team_name} {name} {first_name}</span>
-    <textarea name="body" rows="5" required placeholder="Apologies, the annex was missing from my earlier message. Please find it attached."></textarea></label>
+    <textarea name="body" rows="5" required placeholder="Apologies, the annex was missing from my earlier message. Please find it attached.">{% if ai_draft %}{{ ai_draft.body.body }}{% endif %}</textarea></label>
   {% if atts %}<fieldset><legend>Attach</legend>
     {% for a in atts %}<label class="chk"><input type="checkbox" name="att" value="{{ a.id }}"> {{ a.filename }} <span class="muted small">{{ a.size|kb }}</span></label>{% endfor %}
   </fieldset>{% endif %}
@@ -168,6 +170,18 @@
     <p class="hint">{% if inj.effective_channel == 'email' %}Subject starts with [TEST] and a banner lists the real recipients.{% else %}Lands in the <a href="/inboxes/?team={{ test_team_id }}">Test team inbox</a> with [TEST] in the subject.{% endif %} Does not change the inject's status.</p>
   </form>
 </div>
+
+{% if ai_on %}
+<form method="post" action="/injects/drafts/" class="card form">{% csrf_token %}
+  <h3>Draft with AI</h3>
+  <input type="hidden" name="inject" value="{{ inj.id }}">
+  <select name="mode"><option value="new">A new inject that follows on from this one</option>{% if followup_targets %}<option value="followup">A follow-up in this conversation</option>{% endif %}</select>
+  <select name="team"><option value="">reacting to all teams</option>{% for t in teams %}{% if t.active %}<option value="{{ t.id }}">reacting to {{ t.name }}</option>{% endif %}{% endfor %}</select>
+  <textarea name="prompt" rows="3" placeholder="What should it do? e.g. the figures have changed: 3,000 more displaced in Balanjar"></textarea>
+  <button class="btn small">Draft</button> <a class="small" href="/injects/drafts/?inject={{ inj.id }}">more options</a>
+  <p class="hint">Nothing is sent: you get a draft to read and edit.</p>
+</form>
+{% endif %}
 
 <div class="card live-card">
   <h3>Send live now</h3>

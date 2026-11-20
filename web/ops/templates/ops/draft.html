@@ -1,0 +1,63 @@
+{% extends "ops/base.html" %}
+{% block title %}AI draft · SIMEX ops{% endblock %}
+{% block head %}{% if d.status == 'running' %}<meta http-equiv="refresh" content="10">{% endif %}{% endblock %}
+{% block body %}
+<div class="bar">
+  <h1><a href="/injects/" class="muted">Injects</a> / <a href="/injects/drafts/" class="muted">Draft with AI</a> / {{ d.created_at|date:"D H:i" }}</h1>
+  <span class="small muted">{% if d.mode == "answer" %}answer{% elif d.mode == "followup" %}follow-up{% else %}new inject{% endif %}{% if d.inject %} · <a href="/injects/{{ d.inject_id }}/">{{ d.inject.mel_id }}</a>{% endif %}{% if d.team %} · {{ d.team.name }}{% endif %}{% if d.response %} · <a href="/replies/{{ d.response_id }}/">reply</a>{% endif %}{% if d.user %} · {{ d.user }}{% endif %}</span>
+</div>
+{% if d.prompt %}<p class="small"><b>Request:</b> {{ d.prompt }}</p>{% endif %}
+
+{% if d.status == 'running' %}
+<div class="card"><p class="muted">Drafting… this takes a few seconds; the page refreshes on its own.</p></div>
+{% elif d.status == 'failed' %}
+<div class="flash error">The draft failed: {{ d.error }}</div>
+{% else %}
+<div class="cols">
+<section class="col-main">
+<div class="card">
+  <h3>Draft <span class="muted">by {{ d.model }}, not sent</span></h3>
+  <dl class="hdrs">
+    <dt>From</dt><dd>{% if sender %}{{ sender.display_name }} &lt;{{ sender.inapp_address }}&gt;{% else %}{{ b.from_name }} &lt;{{ b.sender }}&gt; <span class="flag check">new persona</span>{% endif %}</dd>
+    {% if d.mode != 'answer' %}<dt>Subject</dt><dd>{{ b.subject }}</dd>{% endif %}
+    {% if b.scenario_time %}<dt>Scenario</dt><dd>{{ b.scenario_time }}</dd>{% endif %}
+    {% if b.send_at and d.mode == 'new' %}<dt>Send at</dt><dd>{{ b.send_at }}</dd>{% endif %}
+    {% if d.mode == 'new' %}<dt>To</dt><dd>{% if b.recipients == 'team' and d.team %}{{ d.team.name }} only{% elif d.inject %}as {{ d.inject.mel_id }}{% else %}all teams{% endif %}</dd>{% endif %}
+    {% if b.expects_reply %}<dt>Reply</dt><dd>expected{% if b.reply_due_minutes %} within {{ b.reply_due_minutes }} min{% endif %}</dd>{% endif %}
+    {% if b.documents %}<dt>Files</dt><dd>{{ b.documents|join:"; " }} <span class="hint">you supply them</span></dd>{% endif %}
+  </dl>
+  <pre class="mailtext">{{ b.body }}</pre>
+  <form method="post" action="/injects/drafts/{{ d.id }}/use/" class="inline">{% csrf_token %}
+    {% if d.mode == 'followup' %}<button class="btn primary">Use in the follow-up form</button>
+    {% elif d.mode == 'answer' %}<button class="btn primary">Use in the answer form</button>
+    {% elif d.created %}<a class="btn" href="/injects/{{ d.created_id }}/">Open {{ d.created.mel_id }}</a>
+    {% else %}<button class="btn primary">Make it a draft inject</button>{% endif %}
+  </form>
+  <p class="hint">{% if d.mode == 'new' %}Creates an unscheduled draft inject (id AI-n) for you to edit, check and schedule.{% else %}Fills the form; you review it and send it from there.{% endif %}</p>
+</div>
+
+<form method="post" action="/injects/drafts/" class="card form">{% csrf_token %}
+  <h3>Revise</h3>
+  <input type="hidden" name="previous" value="{{ d.id }}"><input type="hidden" name="mode" value="{{ d.mode }}">
+  {% if d.inject_id %}<input type="hidden" name="inject" value="{{ d.inject_id }}">{% endif %}
+  {% if d.team_id %}<input type="hidden" name="team" value="{{ d.team_id }}">{% endif %}
+  {% if d.response_id %}<input type="hidden" name="response" value="{{ d.response_id }}">{% endif %}
+  <label>What to change <textarea name="prompt" rows="3" required placeholder="Shorter, and from the WFP country director instead."></textarea></label>
+  <button class="btn" {% if not ai_on %}disabled{% endif %}>Draft again</button>
+  {% for r in revisions %}<p class="small"><a href="/injects/drafts/{{ r.id }}/">Revision {{ r.created_at|date:"H:i" }}</a>: {{ r.prompt|truncatechars:60 }}</p>{% endfor %}
+</form>
+</section>
+
+<section class="col-side">
+<div class="card">
+  <h3>Why <span class="muted">ExCon only</span></h3>
+  <p class="small">{{ b.rationale }}</p>
+  {% if b.new_facts %}<p class="small"><b>New facts: check them against the scenario</b></p>
+  <ul class="small">{% for x in b.new_facts %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+  {% if b.questions %}<p class="small"><b>To confirm</b></p><ul class="small">{% for x in b.questions %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+  {% if b.relies_on %}<p class="small"><b>Built on</b></p><ul class="small muted">{% for x in b.relies_on %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+</div>
+</section>
+</div>
+{% endif %}
+{% endblock %}

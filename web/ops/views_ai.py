@@ -1,20 +1,21 @@
 """ExCon views for the Claude analysis (ops/ai.py): the Dashboard tab, the analyse / re-run
-buttons, and Settings → AI analysis. Every view is excon_required."""
+buttons, Draft with AI, and Settings → AI analysis. Every view is excon_required."""
 
 from collections import Counter
 from datetime import timedelta
 
 from django.conf import settings
 from django.contrib import messages
+from django.db.models import Max
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from . import ai, checks, conf
+from . import ai, checks, conf, delivery
 from .access import excon_required
-from .models import (AiCall, AiGrade, AiReport, Grade, Inject, InjectReview, Message, ReplyAnalysis, Response, Team,
-                     audit)
-from .views_excon import _u, reply_grid, safe_next
+from .models import (AiCall, AiGrade, AiReport, Grade, Inject, InjectDraft, InjectReview, Message, ReplyAnalysis,
+                     Response, Sender, Team, audit)
+from .views_excon import _int, _u, from_local_input, reply_grid, safe_next
 
 # Sequential blue (light -> dark) for the rubric heatmap; ink flips to white on the dark steps.
 HEAT = [("#cde2fb", "#0b0b0b"), ("#9ec5f4", "#0b0b0b"), ("#6da7ec", "#0b0b0b"), ("#3987e5", "#0b0b0b"),
@@ -229,3 +230,97 @@ def ai_settings_context():
     return {**ai_status(), "ai_calls_today": calls.count(), "ai_failed_today": calls.filter(ok=False).count(),
             "ai_model_fast": ai.model_id("fast"), "ai_model_deep": ai.model_id("deep"),
             "ai_region": settings.AI_REGION, "ai_last_error": calls.filter(ok=False).order_by("-id").first()}
+
+
+# --- Draft with AI -----------------------------------------------------------------------------
+
+@excon_required
+def drafts_page(request):
+    """The request form (prefilled from ?inject=&team=&mode=&response=) and recent drafts. POST
+    starts a draft in a thread and goes to its page."""
+    src = request.POST if request.method == "POST" else request.GET
+    inj = Inject.objects.filter(pk=_int(src.get("inject"))).first()
+    team = Team.objects.filter(pk=_int(src.get("team")), is_test=False).first()
+    resp = Response.objects.filter(pk=_int(src.get("response"))).select_related("team", "inject").first()
+    prev = InjectDraft.objects.filter(pk=_int(src.get("previous"))).first()
+    mode = src.get("mode") if src.get("mode") in ai.DRAFT_MODES else "new"
+    if mode == "answer" and resp:
+        inj, team = resp.inject, resp.team
+    elif mode == "answer" or (mode == "followup" and not inj):
+        mode = "new"
+    if request.method == "POST":
+        prompt = (src.get("prompt") or "").strip()[:4000]
+        if not ai.enabled():
+            messages.error(request, "AI analysis is off (Settings → AI analysis).")
+        elif not ai.under_cap():
+            messages.error(request, "Today's AI spending cap is reached (Settings → AI analysis).")
+        elif not prompt and mode == "new" and not inj and not team:
+            messages.error(request, "Say what the inject should be about, or start from an inject or a team.")
+        else:
+            d = ai.start_draft(mode=mode, prompt=prompt, inject=inj, team=team, response=resp if mode == "answer" else None,
+                               previous=prev, user=_u(request))
+            audit("ai_draft", f"#{d.id} {mode} {inj.mel_id if inj else ''}".strip(), _u(request))
+            return redirect(f"/injects/drafts/{d.id}/")
+        return redirect(request.get_full_path())
+    return render(request, "ops/drafts.html", {
+        "tab": "injects", "inj": inj, "team": team, "resp": resp if mode == "answer" else None, "mode": mode,
+        "MODES": ai.DRAFT_MODES, "injects_all": Inject.objects.exclude(status="cancelled").order_by("send_at", "seq"),
+        "teams": Team.objects.filter(active=True, is_test=False),
+        "can_followup": bool(inj and delivery.followup_targets(inj)),
+        "recent": InjectDraft.objects.select_related("inject", "team", "created").order_by("-id")[:30], **ai_status()})
+
+
+@excon_required
+def draft_page(request, did):
+    d = get_object_or_404(InjectDraft.objects.select_related("inject", "team", "response", "created"), pk=did)
+    known = {s.local_part: s for s in Sender.objects.all()}
+    b = d.body or {}
+    return render(request, "ops/draft.html", {
+        "tab": "injects", "d": d, "b": b, "sender": known.get(b.get("sender")),
+        "revisions": InjectDraft.objects.filter(previous=d).order_by("id"), "ai_on": ai.enabled()})
+
+
+def _send_at(value):
+    try:
+        return from_local_input((value or "").strip().replace(" ", "T")[:16]) if value else None
+    except ValueError:
+        return None
+
+
+@excon_required
+@require_POST
+def draft_use(request, did):
+    """Make the draft a draft inject, or take it to the follow-up or answer form. Never sends."""
+    d = get_object_or_404(InjectDraft, pk=did)
+    b = d.body or {}
+    if d.status != "done":
+        messages.error(request, "This draft isn't ready.")
+        return redirect(f"/injects/drafts/{did}/")
+    if d.mode == "followup" and d.inject_id:
+        return redirect(f"/injects/{d.inject_id}/?draft={d.id}#followup")
+    if d.mode == "answer" and d.response_id:
+        return redirect(f"/replies/{d.response_id}/?draft={d.id}#answer")
+    if d.created_id:
+        messages.info(request, f"Already made into {d.created.mel_id}.")
+        return redirect(f"/injects/{d.created_id}/")
+    n = Inject.objects.filter(mel_id__startswith="AI-").count() + 1
+    while Inject.objects.filter(mel_id=f"AI-{n}").exists():
+        n += 1
+    base, known = d.inject, set(Sender.objects.values_list("local_part", flat=True))
+    sender = b.get("sender") or (base.sender_local if base else None)
+    inj = Inject.objects.create(
+        mel_id=f"AI-{n}", seq=(Inject.objects.aggregate(m=Max("seq"))["m"] or 0) + 1, status="draft",
+        sender_local=sender or None, from_name=None if sender in known else (b.get("from_name") or None),
+        subject=b.get("subject") or None, body=(b.get("body") or "").strip() or None,
+        scenario_dt=(b.get("scenario_time") or "").strip()[:20] or None, send_at=_send_at(b.get("send_at")),
+        channel=base.channel if base else "inapp", delivery=base.delivery if base else "each_team",
+        team_ids=[d.team_id] if d.team_id and b.get("recipients") == "team" else (base.team_ids if base else None),
+        supporting_documents="\n".join(x for x in b.get("documents") or [] if x.strip()) or None,
+        expects_reply=bool(b.get("expects_reply")), reply_due_minutes=b.get("reply_due_minutes") or None)
+    d.created = inj
+    d.save(update_fields=["created"])
+    if ai.enabled():
+        ai.queue_review(inj)
+    audit("ai_draft_inject", f"#{d.id} -> {inj.mel_id}", _u(request))
+    messages.success(request, f"Draft inject {inj.mel_id} created: check it, attach any documents, then schedule or send it.")
+    return redirect(f"/injects/{inj.id}/")

@@ -1,0 +1,57 @@
+{% extends "ops/base.html" %}
+{% block title %}Draft with AI · SIMEX ops{% endblock %}
+{% block body %}
+<div class="bar">
+  <h1><a href="/injects/" class="muted">Injects</a> / Draft with AI</h1>
+  <span class="small muted">
+    {% if not ai_available %}AI analysis: no provider configured{% elif not ai_enabled %}AI analysis is off (<a href="/settings/#ai">Settings</a>){% else %}about ${{ ai_spent|floatformat:2 }} of ${{ ai_cap|floatformat:2 }} today{% endif %}
+  </span>
+</div>
+<p class="small muted">Claude drafts a message from the injects, the personas and what the teams have written. Nothing is sent: you get a draft to edit, then make it a draft inject (or copy it into the follow-up or answer form) and send it as usual. It only knows what this app holds, so check any new fact it lists against the scenario.</p>
+
+<div class="cols">
+<section class="col-main">
+<form method="post" action="/injects/drafts/" class="card form">{% csrf_token %}
+  {% if resp %}
+  <input type="hidden" name="mode" value="answer"><input type="hidden" name="response" value="{{ resp.id }}">
+  <h3>Answer to <a href="/replies/{{ resp.id }}/">{{ resp.team.name|default:resp.from_addr }}: {{ resp.subject|truncatechars:60 }}</a></h3>
+  <p class="small muted">In character, as {{ resp.persona }}, in the same conversation.</p>
+  {% else %}
+  <div class="row">
+    <label>What to draft
+      <select name="mode">
+        <option value="new" {% if mode == 'new' %}selected{% endif %}>A new inject</option>
+        {% if can_followup %}<option value="followup" {% if mode == 'followup' %}selected{% endif %}>A follow-up in {{ inj.mel_id }}'s conversation</option>{% endif %}
+      </select>
+    </label>
+    <label>Starting from inject
+      <select name="inject"><option value="">— none —</option>{% for i in injects_all %}<option value="{{ i.id }}" {% if inj and i.id == inj.id %}selected{% endif %}>{{ i.mel_id }} {{ i.subject|default:''|truncatechars:50 }}</option>{% endfor %}</select>
+      <span class="hint">its text, and what teams wrote about it</span>
+    </label>
+    <label>Reacting to team
+      <select name="team"><option value="">— all teams —</option>{% for t in teams %}<option value="{{ t.id }}" {% if team and t.id == team.id %}selected{% endif %}>{{ t.name }}</option>{% endfor %}</select>
+      <span class="hint">its messages, for a reaction to what it did</span>
+    </label>
+  </div>
+  {% endif %}
+  <label>What should it do? <span class="hint">persona, purpose, tone, timing; leave empty to let Claude propose one from the context</span>
+    <textarea name="prompt" rows="5" placeholder="{% if resp %}e.g. The ministry can't release the trucks before Thursday; ask the team to prioritise.{% else %}e.g. The governor of Plaida complains on the radio that the team ignored the island; pressure for a visit tomorrow morning.{% endif %}"></textarea></label>
+  <button class="btn primary" {% if not ai_enabled %}disabled{% endif %}>Draft</button>
+  <span class="hint">A few seconds; about a cent (ten for the first after the injects change).</span>
+</form>
+</section>
+
+<section class="col-side">
+<div class="card">
+  <h3>Recent drafts</h3>
+  {% if recent %}<table class="list small">
+    {% for x in recent %}<tr>
+      <td class="nowrap"><a href="/injects/drafts/{{ x.id }}/">{{ x.created_at|date:"D H:i" }}</a></td>
+      <td>{% if x.status == 'done' %}{{ x.body.subject|default:"(answer)"|truncatechars:40 }}{% else %}<span class="status {% if x.status == 'failed' %}failed{% else %}sending{% endif %}">{{ x.status }}</span>{% endif %}
+        <div class="muted">{{ x.mode }}{% if x.inject %} · {{ x.inject.mel_id }}{% endif %}{% if x.team %} · {{ x.team.name }}{% endif %}{% if x.created %} → <a href="/injects/{{ x.created_id }}/">{{ x.created.mel_id }}</a>{% endif %}</div></td>
+    </tr>{% endfor %}
+  </table>{% else %}<p class="small muted">None yet.</p>{% endif %}
+</div>
+</section>
+</div>
+{% endblock %}

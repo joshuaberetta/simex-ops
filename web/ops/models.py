@@ -503,10 +503,30 @@ class AiReport(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
 
 
+class InjectDraft(models.Model):
+    """A message Claude drafted on ExCon's request (Injects → Draft with AI): a new inject, a
+    follow-up in a delivered inject's conversation, or a persona's answer to a reply. Nothing
+    is sent from here: ExCon turns it into a draft inject or copies it into the follow-up or
+    answer form."""
+    mode = models.CharField(max_length=10, default="new")  # new | followup | answer
+    prompt = models.TextField(blank=True, default="")
+    inject = models.ForeignKey(Inject, null=True, blank=True, on_delete=models.SET_NULL, related_name="ai_drafts")
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.SET_NULL)
+    response = models.ForeignKey(Response, null=True, blank=True, on_delete=models.SET_NULL)
+    previous = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL)  # the draft this revises
+    status = models.CharField(max_length=10, default="running")  # running | done | failed
+    model = models.CharField(max_length=120, default="")
+    body = models.JSONField(default=dict)
+    error = models.TextField(blank=True, null=True)
+    created = models.ForeignKey(Inject, null=True, blank=True, on_delete=models.SET_NULL, related_name="drafted_from")
+    user = models.CharField(max_length=150, blank=True, default="")
+    created_at = models.DateTimeField(default=timezone.now)
+
+
 class AiCall(models.Model):
     """Every model call, for the spend cap and the Settings usage line."""
     at = models.DateTimeField(default=timezone.now)
-    purpose = models.CharField(max_length=10)  # reply | grade | summary | inject
+    purpose = models.CharField(max_length=10)  # reply | grade | summary | inject | draft
     ref = models.CharField(max_length=40, blank=True, default="")
     model = models.CharField(max_length=120, default="")
     input_tokens = models.IntegerField(default=0)

@@ -22,7 +22,7 @@ from django.views.decorators.http import require_POST
 from . import ai, legacy_import, backup, checks, conf, delivery, documents, importer, inbound, mailer, render as rnd
 from .access import excon_required
 from .models import (CHANNELS, DELIVERY_MODES, STATUSES, AiGrade, Attachment, AttachmentImport, Audit, Grade,
-                     ImportBatch, Inject, InjectReview, Mail, MailLabel, Message, Person, ReplyAnalysis, Response,
+                     ImportBatch, Inject, InjectDraft, InjectReview, Mail, MailLabel, Message, Person, ReplyAnalysis, Response,
                      ResponseAttachment, RubricCriterion, Sender, Team, TestRun, TestRunItem, audit)
 
 MAX_ATTACHMENT = documents.MAX_ATTACHMENT
@@ -50,6 +50,13 @@ def safe_next(value, default):
 
 def _u(request):
     return request.user.get_username()
+
+
+def _int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
 
 
 # --- injects -----------------------------------------------------------------------------------
@@ -165,6 +172,9 @@ def inject_page(request, iid):
     atts = list(inj.attachments.all())
     names, senders = [a.filename for a in atts], {x.local_part: x for x in Sender.objects.all()}
     review = InjectReview.objects.filter(inject=inj).first()
+    targets = delivery.followup_targets(inj)
+    ai_draft = InjectDraft.objects.filter(pk=_int(request.GET.get("draft")), inject=inj, mode="followup", status="done").first()
+    checked = {m.id for m in targets if ai_draft and ai_draft.team_id and ai_draft.team_id in (m.team_id, m.inbox_team_id)}
     ctx = {
         "tab": "injects", "inj": inj, "drafts": drafts, "warnings": warnings,
         "msgs": Message.objects.filter(inject=inj)[:100], "teams": Team.objects.filter(is_test=False),
@@ -178,7 +188,8 @@ def inject_page(request, iid):
         "with_rubric": Inject.objects.filter(rubric__isnull=False).exclude(pk=iid).distinct().order_by("mel_id"),
         "send_at_input": local_input(inj.send_at), "DELIVERY_MODES": DELIVERY_MODES, "CHANNELS": CHANNELS,
         "selected_teams": inj.team_ids or [t.id for t in Team.objects.filter(is_test=False)],
-        "test_team_id": delivery.test_team().id, "followup_targets": delivery.followup_targets(inj),
+        "test_team_id": delivery.test_team().id, "followup_targets": targets,
+        "ai_draft": ai_draft, "followup_checked": checked, "drafted_from": InjectDraft.objects.filter(created=inj).first(),
     }
     return render(request, "ops/inject.html", ctx)
 
@@ -1122,6 +1133,8 @@ def reply_page(request, rid):
         "sender": rnd.sender_by_local(r.persona)[0] if r.persona else None,
         "persona_addr": rnd.persona_addr(r.persona, r.channel) if r.persona else "",
         "analysis": ReplyAnalysis.objects.filter(response=r).first(), "ai_on": ai.enabled(), "FLAGS": ai.FLAGS,
+        "ai_draft": InjectDraft.objects.filter(pk=_int(request.GET.get("draft")), mode="answer", status="done",
+                                               response__in=[o for k, _, o in conv if k == "team"]).first(),
         "files": ResponseAttachment.objects.filter(response=r) if r.channel == "email" else
         (r.mail.files.all() if r.mail else [])})
 

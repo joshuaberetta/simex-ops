@@ -209,3 +209,74 @@ def test_inject_review_flags_the_list_and_reruns_only_on_change(excon, fake):
     assert "AI: attachment" in excon.get("/injects/").content.decode()
     excon.post("/injects/ai-check/")
     assert InjectReview.objects.get(inject=inj).status == "queued"
+
+
+DRAFT_OUT = {"sender": "Donotreply@epeigonia.org", "from_name": "", "subject": "Road to Balanjar cut",
+             "body": "Dear {team_name},\nThe coastal road is cut at km 12.", "scenario_time": "2035-05-20T10:00",
+             "send_at": "2026-11-23 11:30", "recipients": "team", "expects_reply": True, "reply_due_minutes": 45,
+             "documents": ["Road map.pdf"], "rationale": "Tests access planning.", "relies_on": ["1-15"],
+             "new_facts": ["The road is cut at km 12."], "questions": []}
+
+
+def test_draft_new_inject_from_a_reply_never_sends(excon, fake):
+    from ops.models import InjectDraft, InjectReview, Message
+    r = a_reply(excon)
+    fake.answer = lambda kw: (DRAFT_OUT, "end_turn")
+    page = excon.get(f"/replies/{r.id}/").content.decode()
+    assert "Draft an answer" in page and "Draft a new inject reacting to this" in page
+    sent = Message.objects.count()
+    resp = excon.post("/injects/drafts/", {"mode": "new", "inject": r.inject_id, "team": r.team_id, "response": r.id,
+                                           "prompt": "The road is cut"})
+    d = InjectDraft.objects.get()
+    assert resp["Location"] == f"/injects/drafts/{d.id}/" and d.status == "done" and d.response is None
+    call = fake.calls[-1]
+    assert call["model"] == "claude-sonnet-5-5" and call["system"] == ai.DRAFT_SYSTEM
+    text = json.dumps(call["messages"])
+    assert "Hello {team_name}" in text and "Plan by 15:00" in text and "The road is cut" in text and "undac-{team}-tl" in text
+    assert "SECRET" not in text  # control-side fields never reached the app
+    assert call["messages"][0]["content"][0]["cache_control"]  # injects and personas: cached
+    page = excon.get(f"/injects/drafts/{d.id}/").content.decode()
+    assert "Road to Balanjar cut" in page and "The road is cut at km 12." in page and "Make it a draft inject" in page
+    excon.post(f"/injects/drafts/{d.id}/use/")
+    inj = Inject.objects.get(mel_id="AI-1")
+    assert inj.status == "draft" and inj.sender_local == "donotreply" and inj.team_ids == [r.team_id]
+    assert inj.expects_reply and inj.reply_due_minutes == 45 and inj.supporting_documents == "Road map.pdf"
+    assert timezone.localtime(inj.send_at).strftime("%Y-%m-%d %H:%M") == "2026-11-23 11:30"
+    assert InjectReview.objects.get(inject=inj).status == "queued"
+    excon.post(f"/injects/drafts/{d.id}/use/")
+    assert Inject.objects.filter(mel_id__startswith="AI-").count() == 1  # not made twice
+    assert "Drafted by Claude" in excon.get(f"/injects/{inj.id}/").content.decode()
+    assert Message.objects.count() == sent
+    # a revision carries the previous draft
+    excon.post("/injects/drafts/", {"previous": d.id, "mode": "new", "inject": r.inject_id, "prompt": "Shorter"})
+    assert "Your previous draft" in json.dumps(fake.calls[-1]["messages"]) and InjectDraft.objects.count() == 2
+
+
+def test_draft_answer_and_followup_fill_the_forms(excon, fake):
+    from ops.models import InjectDraft, Message
+    r = a_reply(excon)
+    fake.answer = lambda kw: ({**DRAFT_OUT, "body": "Noted, two trucks on their way."}, "end_turn")
+    sent = Message.objects.count()
+    excon.post("/injects/drafts/", {"mode": "answer", "response": r.id, "prompt": "agree"})
+    d = InjectDraft.objects.get(mode="answer")
+    assert d.inject_id == r.inject_id and d.team_id == r.team_id
+    text = json.dumps(fake.calls[-1]["messages"])
+    assert "answer to Team A's latest message" in text and "TEAM MESSAGE" in text and "Plan by 15:00" in text
+    loc = excon.post(f"/injects/drafts/{d.id}/use/")["Location"]
+    assert loc == f"/replies/{r.id}/?draft={d.id}#answer"
+    assert "Noted, two trucks on their way.</textarea>" in excon.get(loc.split("#")[0]).content.decode()
+    excon.post("/injects/drafts/", {"mode": "followup", "inject": r.inject_id, "team": r.team_id, "prompt": "map missing"})
+    f = InjectDraft.objects.get(mode="followup")
+    loc = excon.post(f"/injects/drafts/{f.id}/use/")["Location"]
+    page = excon.get(loc.split("#")[0]).content.decode()
+    assert "Noted, two trucks on their way.</textarea>" in page and 'value="Road to Balanjar cut"' in page
+    assert Message.objects.count() == sent
+
+
+def test_draft_needs_ai_on(excon):
+    from ops.models import InjectDraft
+    do_import(excon, SAMPLE)
+    excon.post("/injects/drafts/", {"prompt": "Something"})
+    assert not InjectDraft.objects.exists()
+    assert "Draft with AI" not in excon.get("/injects/").content.decode()
+    assert excon.get("/injects/drafts/").status_code == 200
