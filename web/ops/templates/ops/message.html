@@ -16,7 +16,7 @@
   {% endif %}
   {% if m.original_to %}<dt>Instead of</dt><dd>{% for k, v in m.original_to.items %}{% if v %}{{ k }}: {{ v|joinlist }}<br>{% endif %}{% endfor %}</dd>{% endif %}
   <dt>Subject</dt><dd>{{ m.subject }}</dd>
-  {% if atts %}<dt>Files</dt><dd>{% for id, fn in atts %}<a href="/attachments/{{ id }}/">{{ fn }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</dd>{% endif %}
+  {% if atts %}<dt>Files</dt><dd>{% for a in atts %}<a href="{{ a.url }}">{{ a.name }}</a> <span class="muted">{{ a.size|kb }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}</dd>{% endif %}
   {% if m.resend_id %}<dt>Resend id</dt><dd><code>{{ m.resend_id }}</code>{% if m.delivery %} · {{ m.delivery }}{% endif %}</dd>{% endif %}
   {% if m.error %}<dt>Error</dt><dd class="err">{{ m.error }}</dd>{% endif %}
 </dl>

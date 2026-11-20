@@ -228,6 +228,16 @@ class Message(models.Model):
         ordering = ["-id"]
 
 
+class MessageAttachment(models.Model):
+    """A file ExCon attached to an answer (kind reply) by uploading it: its own copy, sent by
+    email or put on the in-app Mail. Inject documents go in Message.attachment_ids instead."""
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name="files")
+    filename = models.CharField(max_length=300)
+    content_type = models.CharField(max_length=120, default="application/octet-stream")
+    size = models.IntegerField(default=0)
+    data = models.BinaryField()
+
+
 class Event(models.Model):
     """Every delivery/engagement event about one of our messages: Resend's (delivered,
     bounced, opened, clicked...) and in-app ones (read, download)."""

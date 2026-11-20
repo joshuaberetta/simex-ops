@@ -12,7 +12,6 @@
     <dt>Via</dt><dd>{% if r.channel == 'inapp' %}in-app{% if r.team %} · <a href="/inbox/as/{{ r.team_id }}/t/{{ r.mail.thread }}/?folder=sent">view in the team's mailbox</a>{% endif %}{% else %}email{% endif %}</dd>
     <dt>Received</dt><dd>{{ r.received_at|date:"D d M H:i:s" }}{% if minutes is not None %} · <b>{{ minutes }} min</b> after the message it answers{% endif %}</dd>
     <dt>Inject</dt><dd>{% if r.inject %}<a href="/injects/{{ r.inject.id }}/">{{ r.inject.mel_id }}</a> {{ r.inject.subject|default:'' }} <span class="muted">({{ r.match }})</span>{% else %}<span class="warn">not matched</span>{% endif %}</dd>
-    {% if files %}<dt>Files</dt><dd>{% for a in files %}{% if r.channel == 'email' %}{% if a.data is not None %}<a href="/response-files/{{ a.id }}/">{{ a.filename }}</a>{% else %}{{ a.filename }} <span class="muted">(too large, not stored)</span>{% endif %}{% else %}<a href="/inbox/file/{{ a.id }}/">{{ a.filename }}</a>{% endif %} <span class="muted">{{ a.size|kb }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}</dd>{% endif %}
     {% if r.error %}<dt>Error</dt><dd class="err">{{ r.error }}</dd>{% endif %}
   </dl>
   {% if conv|length > 1 %}<h3 class="conv-head">Conversation · {{ conv|length }} messages</h3>{% endif %}
@@ -22,11 +21,13 @@
     <div class="small"><b>{{ o.from_addr|name_only }}</b> → {{ o.target }} · {{ at|date:"D d M H:i" }} ·
       {% if o.inject %}<a href="/injects/{{ o.inject.id }}/">inject {{ o.inject.mel_id }}</a>{% else %}<a href="/log/{{ o.id }}/">message</a>{% endif %}{% if o.kind == 'followup' %} · <a href="/log/{{ o.id }}/">follow-up</a>{% endif %}</div>
     <details><summary class="small">{{ o.subject }}</summary><pre class="mailtext">{{ o.body|default:o.text }}</pre></details>
+    {% include "ops/_conv_files.html" with files=o.file_list %}
   </div>
   {% elif kind_ == 'answer' %}
   <div class="conv-item from-persona">
     <div class="small"><b>{{ o.from_addr|name_only }}</b> (ExCon answer) · {{ at|date:"D d M H:i" }} · <a href="/log/{{ o.id }}/">{{ o.status }}</a></div>
     <pre class="mailtext">{{ o.shown }}</pre>
+    {% include "ops/_conv_files.html" with files=o.file_list %}
   </div>
   {% else %}
   <div class="conv-item from-team {% if o.id == r.id %}this{% endif %} {% if o.status == 'ignored' %}muted{% endif %}">
@@ -38,16 +39,22 @@
       {% if o.quoted %}<details><summary class="muted small">quoted text</summary><pre class="mailtext muted">{{ o.quoted }}</pre></details>{% endif %}
       {% if o.html and not o.text %}<iframe class="mail tall" sandbox srcdoc="{{ o.html }}"></iframe>{% endif %}
     {% else %}<p class="muted">Content not fetched yet.</p>{% endif %}
+    {% include "ops/_conv_files.html" with files=o.file_list %}
   </div>
   {% endif %}
   {% endfor %}
 </div>
 
 {% if r.persona %}
-<form method="post" action="/replies/{{ latest.id }}/answer/" class="card form" id="answer">{% csrf_token %}
+<form method="post" action="/replies/{{ latest.id }}/answer/" class="card form" id="answer" enctype="multipart/form-data">{% csrf_token %}
   <h3>Answer as {% if sender %}{{ sender.display_name }}{% else %}{{ r.persona }}{% endif %} &lt;{{ persona_addr }}&gt;</h3>
   {% if ai_draft %}<p class="small"><span class="flag ai">AI draft</span> Filled in from <a href="/injects/drafts/{{ ai_draft.id }}/">your AI draft</a>: read it before sending.</p>{% endif %}
   <textarea name="body" rows="6" placeholder="In character.{% if r.channel == 'email' %} The original is quoted below your text.{% else %} It appears in the team's inbox in the same conversation.{% endif %}">{% if ai_draft %}{{ ai_draft.body.body }}{% endif %}</textarea>
+  <label>Attach files <input type="file" name="files" multiple></label>
+  {% if inject_files %}<fieldset><legend>Attach documents of {{ r.inject.mel_id }}</legend>
+    {% for a in inject_files %}<label class="chk"><input type="checkbox" name="att" value="{{ a.id }}"> {{ a.filename }} <span class="muted small">{{ a.size|kb }}</span></label>{% endfor %}
+  </fieldset>{% endif %}
+  <p class="hint">Up to {{ max_mb }} MB of files in all.</p>
   <button class="btn">Send reply</button>
   {% for m in answers %}<p class="small">Answered {{ m.created_at|date:"D H:i" }}: <a href="/log/{{ m.id }}/">{{ m.status }}</a></p>{% endfor %}
 </form>

@@ -78,6 +78,8 @@ urlpatterns = [
     path("replies/<int:rid>/answer/", x.reply_answer),
     path("replies/<int:rid>/analyse/", a.reply_analyse),
     path("response-files/<int:aid>/", x.response_attachment),
+    path("files/<str:src>/<int:fid>/", x.file_get),
+    path("files/<str:src>/<int:fid>/view/", x.file_view),
     path("grades/<int:iid>/<int:tid>/", x.grade_page),
     path("grades/<int:iid>/<int:tid>/analyse/", a.grade_analyse),
     path("dashboard/", a.dashboard),

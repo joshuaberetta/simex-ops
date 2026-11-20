@@ -13,7 +13,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Count, Max, Prefetch, Sum
+from django.db.models import BooleanField, Count, ExpressionWrapper, Max, Prefetch, Q, Sum
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -23,7 +23,8 @@ from django.views.decorators.http import require_POST
 from . import ai, legacy_import, backup, checks, conf, delivery, documents, importer, inbound, mailer, render as rnd
 from .access import excon_required
 from .models import (CHANNELS, DELIVERY_MODES, STATUSES, AiGrade, Attachment, AttachmentImport, Audit, Grade,
-                     ImportBatch, Inject, InjectDraft, InjectReview, Mail, MailAttachment, MailLabel, Message, Person, ReplyAnalysis, Response,
+                     ImportBatch, Inject, InjectDraft, InjectReview, Mail, MailAttachment, MailLabel, Message,
+                     MessageAttachment, Person, ReplyAnalysis, Response,
                      ResponseAttachment, RubricCriterion, Sender, Team, TestRun, TestRunItem, audit)
 
 MAX_ATTACHMENT = documents.MAX_ATTACHMENT
@@ -1145,6 +1146,7 @@ def reply_page(request, rid):
             obj.new_part, obj.quoted = inbound.split_quoted(obj.text or "")
         elif kind_ == "answer":
             obj.shown = inbound.split_quoted(obj.body or obj.text or "")[0]
+        obj.file_list = conv_files(kind_, obj)
     latest = max((o for k, _, o in conv if k == "team" and o.status != "ignored"), key=lambda o: o.received_at, default=r)
     new_part, quoted = inbound.split_quoted(r.text or "")
     return render(request, "ops/reply.html", {
@@ -1156,8 +1158,8 @@ def reply_page(request, rid):
         "analysis": ReplyAnalysis.objects.filter(response=r).first(), "ai_on": ai.enabled(), "FLAGS": ai.FLAGS,
         "ai_draft": InjectDraft.objects.filter(pk=_int(request.GET.get("draft")), mode="answer", status="done",
                                                response__in=[o for k, _, o in conv if k == "team"]).first(),
-        "files": ResponseAttachment.objects.filter(response=r) if r.channel == "email" else
-        (r.mail.files.all() if r.mail else [])})
+        "inject_files": r.inject.attachments.defer("data") if r.inject else [],
+        "max_mb": delivery.EMAIL_FILES_MAX // (1024 * 1024)})
 
 
 @excon_required
@@ -1165,20 +1167,101 @@ def reply_page(request, rid):
 def reply_answer(request, rid):
     r = get_object_or_404(Response, pk=rid)
     body = (request.POST.get("body") or "").replace("\r\n", "\n").strip()
-    if not body:
+    uploads = request.FILES.getlist("files")
+    docs = list(Attachment.objects.filter(inject_id=r.inject_id, id__in=[_int(x) for x in request.POST.getlist("att")])
+                if r.inject_id else [])
+    if not body and not uploads and not docs:
         messages.error(request, "Write a reply first.")
+        return redirect(f"/replies/{rid}/")
+    if sum(f.size for f in uploads) + sum(a.size for a in docs) > delivery.EMAIL_FILES_MAX:
+        messages.error(request, f"Attachments are over {delivery.EMAIL_FILES_MAX // (1024 * 1024)} MB.")
         return redirect(f"/replies/{rid}/")
     if conf.flag("paused"):
         messages.error(request, "Sending is paused.")
         return redirect(f"/replies/{rid}/")
     if not r.persona or (r.channel == "inapp" and not r.team_id):
         raise Http404
-    m = delivery.answer(r, body, user=_u(request))
+    files = [(re.sub(r"[\r\n]+", " ", PurePosixPath(f.name.replace("\\", "/")).name) or "file",
+              f.content_type or "application/octet-stream", f.read()) for f in uploads]
+    m = delivery.answer(r, body, user=_u(request), files=files, attachments=docs)
     if m.status == "sent":
         messages.success(request, "Reply delivered." if r.channel == "inapp" else "Reply sent.")
     else:
         messages.error(request, f"Reply failed: {m.error}")
     return redirect(f"/replies/{rid}/")
+
+
+# --- files on the Replies pages: any stored file, by source ----------------------------------------
+
+FILE_SOURCES = {"a": Attachment, "m": MailAttachment, "r": ResponseAttachment, "x": MessageAttachment}
+IMAGE_EXT = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+STORED = {"m": Q(data__isnull=False) | Q(attachment__isnull=False), "r": Q(data__isnull=False)}
+
+
+def _with_stored(src, qs):
+    return qs.defer("data").annotate(stored=ExpressionWrapper(STORED.get(src, Q(pk__isnull=False)),
+                                                              output_field=BooleanField()))
+
+
+def file_links(src, qs):
+    """What a conversation item shows of its files: name, size, download link (none if the
+    file was too large to keep) and whether it can be previewed as an image."""
+    return [{"name": a.filename, "size": a.size, "url": f"/files/{src}/{a.id}/" if a.stored else None,
+             "image": a.stored and a.filename.lower().endswith(IMAGE_EXT)} for a in _with_stored(src, qs)]
+
+
+def conv_files(kind_, o):
+    if kind_ == "team":
+        if o.channel == "email":
+            return file_links("r", o.attachments.all())
+        return file_links("m", o.mail.files.all()) if o.mail_id else []
+    out = file_links("a", Attachment.objects.filter(id__in=o.attachment_ids or []))
+    return out + (file_links("x", o.files.all()) if kind_ == "answer" else [])
+
+
+def _file(src, fid):
+    model = FILE_SOURCES.get(src)
+    if not model:
+        raise Http404
+    a = get_object_or_404(model, pk=fid)
+    data = a.content() if src == "m" else a.data
+    if data is None:
+        raise Http404
+    return a, bytes(data)
+
+
+def _image_type(data):
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"GIF8"):
+        return "image/gif"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+@excon_required
+def file_get(request, src, fid):
+    a, data = _file(src, fid)
+    return _download(data, a.filename)
+
+
+@excon_required
+def file_view(request, src, fid):
+    """An image shown in the page (participants' uploads included): only real PNG, JPEG, GIF
+    or WebP by their bytes, never what the uploader called it; anything else is a 404."""
+    a, data = _file(src, fid)
+    ctype = _image_type(data)
+    if not ctype:
+        raise Http404
+    resp = HttpResponse(data, content_type=ctype)
+    resp["Content-Disposition"] = content_disposition_header(False, re.sub(r"[\r\n]+", " ", a.filename))
+    resp["X-Content-Type-Options"] = "nosniff"
+    resp["Content-Security-Policy"] = "default-src 'none'; sandbox"
+    resp["Cache-Control"] = "private, max-age=3600"
+    return resp
 
 
 @excon_required
@@ -1297,7 +1380,7 @@ def log_page(request):
 @excon_required
 def message_page(request, mid):
     m = get_object_or_404(Message.objects.select_related("inject"), pk=mid)
-    atts = Attachment.objects.filter(id__in=m.attachment_ids or []).values_list("id", "filename")
+    atts = file_links("a", Attachment.objects.filter(id__in=m.attachment_ids or [])) + file_links("x", m.files.all())
     return render(request, "ops/message.html", {"tab": "log", "m": m, "atts": atts})
 
 

@@ -20,12 +20,13 @@ from django.db.models import F
 from django.utils import timezone
 
 from . import conf, mailer, push, render
-from .models import (Attachment, Inject, Mail, MailAttachment, Message, Person, Team, TestRun, TestRunItem,
-                     audit)
+from .models import (Attachment, Inject, Mail, MailAttachment, Message, MessageAttachment, Person, Team, TestRun,
+                     TestRunItem, audit)
 
 log = logging.getLogger("simex.delivery")
 BCC_CHUNK = 45  # stay under Resend's 50-recipients-per-email limit
 STALE_SENDING = timedelta(minutes=2)
+EMAIL_FILES_MAX = 28 * 1024 * 1024  # Resend's 40 MB per email, once base64-encoded
 
 
 def test_team():
@@ -72,6 +73,9 @@ def _put_mail(m):
     for a in Attachment.objects.filter(id__in=m.attachment_ids or []):
         MailAttachment.objects.create(mail=mail, attachment=a, filename=a.filename, content_type=a.content_type,
                                       size=a.size)
+    for f in m.files.all():  # files ExCon uploaded to an answer: the Mail gets its own copy
+        MailAttachment.objects.create(mail=mail, filename=f.filename, content_type=f.content_type, size=f.size,
+                                      data=f.data)
     push.notify_mail(mail)
     return mail
 
@@ -118,7 +122,7 @@ def deliver(msgs, dry_run=False, respect_pause=True):
         if m.parent_id and not m.extra_headers:
             m.extra_headers = _thread_headers(m.parent, m_)
             Message.objects.filter(pk=m.pk).update(extra_headers=m.extra_headers)
-        atts = list(Attachment.objects.filter(id__in=m.attachment_ids or []))
+        atts = list(Attachment.objects.filter(id__in=m.attachment_ids or [])) + list(m.files.all())
         try:
             rid = m_.send(mailer.payload(m, atts, m.extra_headers), m.idem_key)
             Message.objects.filter(pk=m.pk).update(status="sent", sent_at=timezone.now(), error=None, resend_id=rid)
@@ -304,9 +308,10 @@ def create_test_run(name, injects, start, redirect, dry_run, factor=None, interv
 
 # --- ExCon answering a participant in character ----------------------------------------------
 
-def answer(response, body, user=""):
+def answer(response, body, user="", files=(), attachments=()):
     """Reply as the persona the participant wrote to: into their team's inbox (in-app
-    thread) or by email (email thread). Returns the Message."""
+    thread) or by email (email thread), with files ExCon uploaded ((filename, content_type,
+    data) tuples) and inject documents (Attachment rows). Returns the Message."""
     persona = response.persona or ""
     sender, ctx = render.sender_by_local(persona)
     team = response.team
@@ -318,7 +323,8 @@ def answer(response, body, user=""):
     if response.channel == "inapp":
         team = response.team
         d = render.Draft(target=team.name if team else "", from_addr=from_addr, reply_to=None, to=[], cc=[], bcc=[],
-                         subject=subject, body=body, footer=cfg.get("footer", ""), attachment_ids=[],
+                         subject=subject, body=body, footer=cfg.get("footer", ""),
+                         attachment_ids=[a.id for a in attachments],
                          team_id=response.team_id, person_id=response.person_id, reply_local=persona,
                          channel="inapp", inbox_team_id=response.team_id,
                          to_label=(response.person.name if response.person else (team.name if team else "")))
@@ -332,13 +338,18 @@ def answer(response, body, user=""):
                             if quoted else "")
         d = render.Draft(target=response.team.name if response.team else response.from_addr, from_addr=from_addr,
                          reply_to=None, to=[response.from_addr], cc=[], bcc=render.split_addresses(cfg.get("excon_bcc")),
-                         subject=subject, body=text_body, footer=cfg.get("footer", ""), attachment_ids=[],
+                         subject=subject, body=text_body, footer=cfg.get("footer", ""),
+                         attachment_ids=[a.id for a in attachments],
                          team_id=response.team_id, person_id=response.person_id, reply_local=persona, channel="email")
         m = new_message(response.inject, d, "reply", f"reply-{response.id}-{uuid.uuid4().hex}")
         m.response = response
         if response.message_id_header:
             m.extra_headers = {"In-Reply-To": response.message_id_header, "References": response.message_id_header}
-    m.save()
+    with transaction.atomic():  # the files are in place before anything can deliver the Message
+        m.save()
+        for name, ctype, data in files:
+            MessageAttachment.objects.create(message=m, filename=name[:300], content_type=ctype[:120], size=len(data),
+                                             data=data)
     audit("reply_answer", f"#{response.id} ({response.channel})", user)
     deliver([m])
     return m
@@ -392,7 +403,7 @@ def send_followup(inj, parents, subject, body, attachment_ids, user=""):
     if not parents:
         return [], "Choose who gets the follow-up."
     atts = list(Attachment.objects.filter(id__in=attachment_ids, inject=inj))
-    if any(p.channel == "email" for p in parents) and sum(a.size for a in atts) > 28 * 1024 * 1024:
+    if any(p.channel == "email" for p in parents) and sum(a.size for a in atts) > EMAIL_FILES_MAX:
         return [], "Attachments are over Resend's 40 MB per email once encoded."
     footer = render.footer_for(inj, conf.get_all())
     batch = uuid.uuid4().hex[:12]

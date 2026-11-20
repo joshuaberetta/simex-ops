@@ -1184,3 +1184,66 @@ def test_a_team_with_exercise_mail_cannot_be_deleted(excon):
     t = Team.objects.get(code="a")
     excon.post(f"/teams/{t.id}/delete/")
     assert Team.objects.filter(pk=t.pk).exists()
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+
+
+def test_reply_files_in_the_conversation_and_answer_with_files(excon):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from ops.models import Attachment, MailAttachment
+    do_import(excon, SAMPLE)
+    inj = Inject.objects.get(mel_id="1-15")
+    doc = Attachment.objects.create(inject=inj, filename="1-15 Plan.pdf", content_type="application/pdf", size=4,
+                                    data=b"%PDF")
+    arm()
+    deliver_now("1-15")
+    mail = Mail.objects.get(team__code="a")
+    pa = participant("a", "Jane")
+    pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: Update", "body": "See attached.",
+                             "in_reply_to": mail.id,
+                             "files": [SimpleUploadedFile("map.png", PNG, content_type="image/png"),
+                                       SimpleUploadedFile("evil.png", b"<script>x</script>", content_type="image/png")]})
+    resp = Response.objects.get()
+    png, evil = MailAttachment.objects.filter(mail=resp.mail).order_by("id")
+    page = excon.get(f"/replies/{resp.id}/").content.decode()
+    assert f'src="/files/m/{png.id}/view/"' in page and f'href="/files/m/{evil.id}/"' in page
+    # Images are shown by their bytes only; anything else is download-only.
+    r = excon.get(f"/files/m/{png.id}/view/")
+    assert r.status_code == 200 and r["Content-Type"] == "image/png" and "sandbox" in r["Content-Security-Policy"]
+    assert excon.get(f"/files/m/{evil.id}/view/").status_code == 404
+    assert excon.get(f"/files/m/{evil.id}/")["Content-Disposition"].startswith("attachment")
+    assert excon.get("/files/zz/1/").status_code == 404
+    assert Client().get(f"/files/m/{png.id}/view/").status_code == 302
+    assert pa.get(f"/files/m/{png.id}/view/").status_code in (302, 403, 404)
+    # ExCon answers with an uploaded file and an inject document, in the same thread.
+    r = excon.post(f"/replies/{resp.id}/answer/", {"body": "Here you go.", "att": [str(doc.id)],
+                                                    "files": [SimpleUploadedFile("C:\\tmp\\reply.png", PNG, "image/png")]})
+    assert r.status_code == 302
+    ans = Mail.objects.get(team__code="a", folder="inbox", body="Here you go.")
+    assert ans.thread == mail.thread
+    assert sorted((f.filename, f.content()) for f in ans.files.all()) == [("1-15 Plan.pdf", b"%PDF"), ("reply.png", PNG)]
+    m = Message.objects.get(kind="reply")
+    page = excon.get(f"/replies/{resp.id}/").content.decode()
+    up = m.files.get()
+    assert f'src="/files/x/{up.id}/view/"' in page and f'href="/files/a/{doc.id}/"' in page
+    assert "reply.png" in excon.get(f"/log/{m.id}/").content.decode()
+    # Files alone are a reply; another inject's document is not attachable.
+    other = Attachment.objects.create(inject=Inject.objects.get(mel_id="3-13"), filename="x.pdf", size=1, data=b"x")
+    excon.post(f"/replies/{resp.id}/answer/", {"body": "", "att": [str(other.id)]})
+    assert Message.objects.filter(kind="reply").count() == 1
+    excon.post(f"/replies/{resp.id}/answer/", {"body": "", "files": [SimpleUploadedFile("a.txt", b"hi", "text/plain")]})
+    assert Message.objects.filter(kind="reply").count() == 2
+
+
+def test_email_answer_sends_its_files():
+    from ops.models import Sender
+    Sender.objects.create(local_part="cnn", display_name="CNN")
+    lm = mailer.LogMailer()
+    mailer.set_mailer(lm)
+    r = Response.objects.create(channel="email", from_addr="jane@kobotoolbox.org", to=["cnn@simex.kobolabs.dev"],
+                                subject="Question", text="Hello", persona="cnn", fetched=True)
+    m = delivery.answer(r, "Answer", files=[("photo.png", "image/png", PNG)])
+    assert m.status == "sent"
+    att = lm.sent[-1][0]["attachments"]
+    assert [a["filename"] for a in att] == ["photo.png"]

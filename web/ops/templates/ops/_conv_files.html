@@ -1,0 +1,6 @@
+{% load ops %}{% if files %}<div class="conv-files">
+  {% for f in files %}<div class="conv-file">
+    {% if f.image %}<a href="{{ f.url }}view/" target="_blank" rel="noopener"><img src="{{ f.url }}view/" alt="{{ f.name }}" loading="lazy"></a>{% endif %}
+    <span class="small">📎 {% if f.url %}<a href="{{ f.url }}">{{ f.name }}</a>{% else %}{{ f.name }} <span class="muted">(too large, not stored)</span>{% endif %} <span class="muted">{{ f.size|kb }}</span></span>
+  </div>{% endfor %}
+</div>{% endif %}
