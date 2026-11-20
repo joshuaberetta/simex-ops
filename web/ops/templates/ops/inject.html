@@ -107,6 +107,29 @@
     <input type="file" name="files" multiple> <button class="btn small">Upload</button>
   </form>
 </div>
+
+{% if followup_targets %}
+<form method="post" action="/injects/{{ inj.id }}/followup/" enctype="multipart/form-data" class="card form live-card" id="followup">{% csrf_token %}
+  <h3>Send a follow-up <span class="muted">in the same conversation</span></h3>
+  <p class="small">A correction or a missing document after this inject went out: {{ inj.sender_local|default:"the persona" }} writes again to the recipients you tick, in their existing
+  conversation (in-app) or email thread. Replies to it count as replies to this inject. This is a live send.</p>
+  <fieldset><legend>To</legend>
+    {% for m in followup_targets %}<label class="chk"><input type="checkbox" name="to" value="{{ m.id }}" checked> {{ m.target }}
+      <span class="muted small">{% if m.channel == 'inapp' %}inbox{% else %}email{% endif %}, {{ m.sent_at|date:"D H:i" }}</span></label>{% endfor %}
+  </fieldset>
+  <label>Subject <span class="hint">{subject} is the original subject; keep it so mail clients group the follow-up with it</span>
+    <input name="subject" value="Re: {subject}" required></label>
+  <label>Message <span class="hint">Placeholders: {team} {team_name} {name} {first_name}</span>
+    <textarea name="body" rows="5" required placeholder="Apologies, the annex was missing from my earlier message. Please find it attached."></textarea></label>
+  {% if atts %}<fieldset><legend>Attach</legend>
+    {% for a in atts %}<label class="chk"><input type="checkbox" name="att" value="{{ a.id }}"> {{ a.filename }} <span class="muted small">{{ a.size|kb }}</span></label>{% endfor %}
+  </fieldset>{% endif %}
+  <label>New files <span class="hint">also added to this inject's attachments; max 30 MB each</span> <input type="file" name="files" multiple></label>
+  {% if cfg.live_armed != '1' %}<p class="muted small">Live sending is disarmed (Settings).</p>{% endif %}
+  <label>Type <b>{{ inj.mel_id }}</b> to confirm <input name="confirm" autocomplete="off"></label>
+  <button class="btn danger" {% if cfg.live_armed != '1' %}disabled{% endif %}>Send follow-up</button>
+</form>
+{% endif %}
 </section>
 
 <section class="col-side">

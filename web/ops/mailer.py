@@ -70,6 +70,9 @@ class ResendMailer:
     def get_received(self, email_id):
         return self._get(f"/emails/receiving/{email_id}")
 
+    def get_sent(self, email_id):
+        return self._get(f"/emails/{email_id}")
+
     def list_received(self, limit=50):
         return self._get("/emails/receiving", limit=limit).get("data", [])
 
@@ -112,6 +115,9 @@ class LogMailer:
 
     def list_received(self, limit=50):
         return [{"id": k, **v} for k, v in self.received.items()]
+
+    def get_sent(self, email_id):
+        return {"id": email_id, "message_id": f"<{email_id}@log.invalid>"}
 
     def received_attachments(self, email_id):
         return [{**a, "download_url": "log://" + a["filename"]} for a in self.received.get(email_id, {}).get("attachments", [])]

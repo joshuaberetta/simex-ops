@@ -5,7 +5,7 @@
 <form method="get" class="filters">
   <select name="kind" onchange="this.form.submit()"><option value="">all kinds</option>
     <option {% if kind == 'live' %}selected{% endif %}>live</option><option {% if kind == 'test' %}selected{% endif %}>test</option>
-    <option {% if kind == 'oneoff' %}selected{% endif %}>oneoff</option><option {% if kind == 'reply' %}selected{% endif %}>reply</option></select>
+    <option {% if kind == 'oneoff' %}selected{% endif %}>oneoff</option><option {% if kind == 'reply' %}selected{% endif %}>reply</option><option {% if kind == 'followup' %}selected{% endif %}>followup</option></select>
   <select name="status" onchange="this.form.submit()"><option value="">all statuses</option>
     <option {% if status == 'pending' %}selected{% endif %}>pending</option><option {% if status == 'sent' %}selected{% endif %}>sent</option>
     <option {% if status == 'failed' %}selected{% endif %}>failed</option><option {% if status == 'dry' %}selected{% endif %}>dry</option></select>

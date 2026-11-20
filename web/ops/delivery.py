@@ -1,5 +1,5 @@
-"""Delivery: the scheduler tick and the live / test / one-off / answer send paths, for both
-channels.
+"""Delivery: the scheduler tick and the live / test / one-off / answer / follow-up send paths,
+for both channels.
 
 Every delivery is written as a Message (status pending) before anything happens. Each
 Message is then claimed (pending -> sending, a conditional UPDATE, safe across processes)
@@ -108,6 +108,9 @@ def deliver(msgs, dry_run=False, respect_pause=True):
             Message.objects.filter(pk=m.pk).update(status="dry", sent_at=timezone.now())
             continue
         m_ = m_ or mailer.get()
+        if m.parent_id and not m.extra_headers:
+            m.extra_headers = _thread_headers(m.parent, m_)
+            Message.objects.filter(pk=m.pk).update(extra_headers=m.extra_headers)
         atts = list(Attachment.objects.filter(id__in=m.attachment_ids or []))
         try:
             rid = m_.send(mailer.payload(m, atts, m.extra_headers), m.idem_key)
@@ -331,6 +334,90 @@ def answer(response, body, user=""):
     return m
 
 
+# --- follow-ups: more from the persona in the thread of a delivered inject ------------------
+
+def followup_targets(inj):
+    """The latest live delivery of an inject to each recipient (team inbox, person, set of
+    email addresses): what a follow-up can continue."""
+    out = {}
+    for m in Message.objects.filter(inject=inj, kind="live", status="sent").order_by("id"):
+        out[(m.channel, m.target, m.inbox_team_id, m.person_id, tuple(m.to), tuple(m.cc), tuple(m.bcc))] = m
+    return sorted(out.values(), key=lambda m: m.id)
+
+
+def _ctx(m):
+    team = m.team or m.inbox_team
+    p = m.person
+    t = {"team": team.code, "team_name": team.name} if team else {"team": "", "team_name": ""}
+    return {**t, "name": p.name if p else t["team_name"], "first_name": p.first_name if p else t["team_name"]}
+
+
+def _thread_headers(parent, m_):
+    """Email: In-Reply-To / References pointing at the original email, so mail clients show
+    the follow-up in its thread. Resend reports the Message-ID it gave the original."""
+    if not parent.message_id_header and parent.resend_id:
+        try:
+            mid = (m_.get_sent(parent.resend_id) or {}).get("message_id") or ""
+        except Exception as e:
+            log.warning("no Message-ID for message %s: %s", parent.id, e)
+            mid = ""
+        if mid:
+            mid = mid if mid.startswith("<") else f"<{mid}>"
+            parent.message_id_header = mid[:300]
+            Message.objects.filter(pk=parent.pk).update(message_id_header=parent.message_id_header)
+    if not parent.message_id_header:
+        return {}
+    return {"In-Reply-To": parent.message_id_header, "References": parent.message_id_header}
+
+
+def send_followup(inj, parents, subject, body, attachment_ids, user=""):
+    """The inject's persona writes again to the recipients of some of its deliveries (a
+    correction, a missing document), in each one's existing conversation. {subject} in the
+    subject is the original subject; the body takes the inject placeholders. In-app is
+    delivered now; email is queued for the scheduler. Returns (messages, error)."""
+    if conf.flag("paused"):
+        return [], "Sending is paused (Settings)."
+    if not conf.flag("live_armed"):
+        return [], "Live sending is not armed (Settings)."
+    if not parents:
+        return [], "Choose who gets the follow-up."
+    atts = list(Attachment.objects.filter(id__in=attachment_ids, inject=inj))
+    if any(p.channel == "email" for p in parents) and sum(a.size for a in atts) > 28 * 1024 * 1024:
+        return [], "Attachments are over Resend's 40 MB per email once encoded."
+    footer = render.footer_for(inj, conf.get_all())
+    batch = uuid.uuid4().hex[:12]
+    msgs = []
+    with transaction.atomic():
+        for i, p in enumerate(parents):
+            ctx = _ctx(p)
+            subj = render.fill(subject, ctx).replace("{subject}", p.subject)
+            text = render.fill(body, ctx)
+            local = email.utils.parseaddr(p.from_addr)[1].split("@")[0]
+            common = dict(target=p.target, from_addr=p.from_addr, subject=subj, footer=footer,
+                          attachment_ids=[a.id for a in atts], team_id=p.team_id, person_id=p.person_id,
+                          reply_local=local)
+            if p.channel == "inapp":
+                d = render.Draft(**common, reply_to=None, to=[], cc=[], bcc=[], body=text, channel="inapp",
+                                 inbox_team_id=p.inbox_team_id, to_label=(p.to or [""])[0])
+            else:
+                quoted = "\n".join("> " + line for line in (p.body or "").splitlines()[:60])
+                when = timezone.localtime(p.sent_at or p.created_at).strftime("%a %d %b %H:%M")
+                name = email.utils.parseaddr(p.from_addr)[0] or local
+                d = render.Draft(**common, reply_to=None if p.reply_token else p.reply_to, to=list(p.to),
+                                 cc=list(p.cc), bcc=list(p.bcc), channel="email",
+                                 body=text + (f"\n\nOn {when}, {name} wrote:\n{quoted}" if quoted else ""))
+            m = new_message(inj, d, "followup", f"followup-{inj.id}-{batch}-{i}")
+            m.parent = p
+            if p.channel == "inapp":
+                mail = p.mails.filter(folder="inbox").first()
+                m.thread = mail.thread if mail else ""
+            m.save()
+            msgs.append(m)
+    audit("followup", f"{inj.mel_id}: {len(msgs)} ({', '.join(sorted({m.target for m in msgs}))})", user)
+    deliver([m for m in msgs if m.channel == "inapp"])
+    return msgs, None
+
+
 # --- scheduler tick ---------------------------------------------------------------------------
 
 def _locked(qs):
@@ -361,6 +448,9 @@ def tick():
                     audit("live_due", str(iid))
         for iid in Inject.objects.filter(status="sending").values_list("id", flat=True):
             process_live(iid)
+        followups = list(Message.objects.filter(kind="followup", channel="email", status="pending").order_by("id"))
+        if followups:
+            deliver(followups)
     with transaction.atomic():
         due_items = list(_locked(TestRunItem.objects.filter(run__status="active", status="pending", due_at__lte=now)
                                  .order_by("due_at")).values_list("id", flat=True))

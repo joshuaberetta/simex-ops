@@ -144,7 +144,7 @@ def inject_page(request, iid):
         "with_rubric": Inject.objects.filter(rubric__isnull=False).exclude(pk=iid).distinct().order_by("mel_id"),
         "send_at_input": local_input(inj.send_at), "DELIVERY_MODES": DELIVERY_MODES, "CHANNELS": CHANNELS,
         "selected_teams": inj.team_ids or [t.id for t in Team.objects.filter(is_test=False)],
-        "test_team_id": delivery.test_team().id,
+        "test_team_id": delivery.test_team().id, "followup_targets": delivery.followup_targets(inj),
     }
     return render(request, "ops/inject.html", ctx)
 
@@ -228,6 +228,40 @@ def inject_send(request, iid):
     else:
         messages.success(request, "Queued: the scheduler sends it within a few seconds. Refresh to see progress.")
     return redirect(f"/injects/{iid}/")
+
+
+@excon_required
+@require_POST
+def inject_followup(request, iid):
+    """Send a follow-up in the thread of a delivered inject (a correction, a missing document)."""
+    inj = get_object_or_404(Inject, pk=iid)
+    P = request.POST
+    back = f"/injects/{iid}/#followup"
+    if P.get("confirm") != inj.mel_id:
+        messages.error(request, f"Type the inject id ({inj.mel_id}) to confirm the follow-up.")
+        return redirect(back)
+    subject, body = (P.get("subject") or "").strip(), (P.get("body") or "").strip()
+    if not subject or not body:
+        messages.error(request, "A follow-up needs a subject and a message.")
+        return redirect(back)
+    chosen = {int(x) for x in P.getlist("to")}
+    parents = [m for m in delivery.followup_targets(inj) if m.id in chosen]
+    att_ids = [int(x) for x in P.getlist("att")]
+    for up in request.FILES.getlist("files"):
+        if up.size > MAX_ATTACHMENT:
+            messages.error(request, f"{up.name} is over 30 MB; nothing was sent.")
+            return redirect(back)
+    for up in request.FILES.getlist("files"):  # new files also become attachments of the inject
+        att_ids.append(documents.put_attachment(inj, PurePosixPath(up.name).name, up.read()).id)
+    msgs, err = delivery.send_followup(inj, parents, subject, body, att_ids, user=_u(request))
+    if err:
+        messages.error(request, err)
+    elif any(m.channel == "email" for m in msgs):
+        messages.success(request, f"Follow-up queued for {len(msgs)} recipient(s): the scheduler sends it within a few "
+                                  "seconds. Refresh to see progress.")
+    else:
+        messages.success(request, f"Follow-up delivered to {len(msgs)} inbox(es).")
+    return redirect(back)
 
 
 @excon_required
@@ -845,7 +879,7 @@ def conversations(reps):
 def reply_grid(kind):
     """Teams, every Response of this kind, the inject x team matrix and per-team totals
     (Replies tab and Dashboard)."""
-    kinds = ["live", "reply"] if kind == "live" else ["test", "oneoff"]
+    kinds = ["live", "reply", "followup"] if kind == "live" else ["test", "oneoff"]
     teams = list(Team.objects.filter(active=True, is_test=(kind != "live")) if kind != "live"
                  else Team.objects.filter(active=True, is_test=False))
     all_in = list(Response.objects.filter(kind=kind).select_related("inject", "team", "person", "mail")
@@ -912,7 +946,7 @@ def replies_page(request):
     kind = request.GET.get("kind", "live")
     team_f, inject_f = int(request.GET.get("team") or 0), int(request.GET.get("inject") or 0)
     status_f, matched_f = request.GET.get("status", ""), request.GET.get("matched", "")
-    kinds = ["live", "reply"] if kind == "live" else ["test", "oneoff"]
+    kinds = ["live", "reply", "followup"] if kind == "live" else ["test", "oneoff"]
     teams, all_in, matrix, team_sum = reply_grid(kind)
     # Read / opens & clicks: per inject x team, from the delivering Messages.
     eng_msgs = list(Message.objects.filter(kind__in=["live"] if kind == "live" else ["test", "oneoff"],
@@ -1090,7 +1124,7 @@ def grade_page(request, iid, tid):
         return redirect(f"/grades/{iid}/{nxt}/" if nxt else "/replies/")
     reps = list(Response.objects.filter(inject=inj, team=team).exclude(status="ignored")
                 .select_related("person", "mail").order_by("received_at"))
-    sent = inbound.first_sent(["live", "reply", "test", "oneoff"] if team.is_test else ["live", "reply"])
+    sent = inbound.first_sent(["live", "reply", "followup", "test", "oneoff"] if team.is_test else ["live", "reply", "followup"])
     sent_at = sent.get((iid, tid)) or sent.get((iid, None))
     tags = {a.response_id: a for a in ReplyAnalysis.objects.filter(response__in=reps, status="done")}
     for r in reps:

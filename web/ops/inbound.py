@@ -85,7 +85,7 @@ def guess(r: Response):
     if not r.persona:
         return
     qs = Message.objects.filter(from_addr__icontains=f"<{r.persona}@", status="sent", sent_at__lte=r.received_at,
-                                kind__in=["live", "reply"])
+                                kind__in=["live", "reply", "followup"])
     if r.team_id:
         qs = qs.filter(Q(team_id=r.team_id) | Q(team__isnull=True) | Q(inbox_team_id=r.team_id))
     cands = list(qs.order_by("-sent_at")[:20])
@@ -106,7 +106,7 @@ def match_email(r: Response):
         if m:
             r.message, r.inject_id, r.match = m, m.inject_id, "token"
             r.team_id = r.team_id or m.team_id
-            r.kind = "live" if m.kind in ("live", "reply") else "test"
+            r.kind = "live" if m.kind in ("live", "reply", "followup") else "test"
             return
     guess(r)
 
@@ -195,7 +195,7 @@ def record_read(mails, person, user_agent="", what="read", link=None):
     now = timezone.now()
     for mail in mails:
         m = mail.message
-        if not m or m.kind not in ("live", "reply", "test", "oneoff"):
+        if not m or m.kind not in ("live", "reply", "followup", "test", "oneoff"):
             continue
         Event.objects.create(message=m, type=what, at=now, person=person, link=link, user_agent=(user_agent or "")[:400] or None)
         if what == "read":
@@ -334,6 +334,9 @@ def conversation(r):
     items += [("answer", m.sent_at or m.created_at, m) for m in answers]
     answer_ids = {m.id for m in answers}
     starts = {x.message for x in reps if x.message and x.message.kind != "reply" and x.message.id not in answer_ids}
+    # The original delivery and its follow-ups, whichever of them the team answered.
+    roots = {m.parent or m for m in starts}
+    starts |= roots | set(Message.objects.filter(kind="followup", parent__in=roots).exclude(status__in=["pending", "failed"]))
     items += [("inject", m.sent_at or m.created_at, m) for m in starts]
     items.sort(key=lambda it: (it[1], {"inject": 0, "team": 1, "answer": 2}[it[0]]))
     return items

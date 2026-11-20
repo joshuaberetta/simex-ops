@@ -787,3 +787,63 @@ def test_start_over_deletes_attachments_or_injects(excon):
     Inject.objects.filter(mel_id="3-13").update(status="sent")
     excon.post("/import/clear/", {"what": "injects", "confirm": "DELETE"})
     assert not Inject.objects.exists()
+
+
+def test_followup_inapp_lands_in_the_same_conversation(excon):
+    from ops.models import Attachment
+    do_import(excon, SAMPLE)
+    arm()
+    deliver_now("1-15")
+    inj = Inject.objects.get(mel_id="1-15")
+    page = excon.get(f"/injects/{inj.id}/").content.decode()
+    assert "Send a follow-up" in page
+    targets = delivery.followup_targets(inj)
+    assert len(targets) == 4
+    a = next(m for m in targets if m.target == "Team A")
+    post = {"to": [a.id], "subject": "Re: {subject}", "body": "Annex for {team_name} attached.", "confirm": "nope"}
+    excon.post(f"/injects/{inj.id}/followup/", post)
+    assert not Message.objects.filter(kind="followup").exists()
+    post["confirm"] = "1-15"
+    post["files"] = _upload(b"%PDF", "Annex.pdf")
+    excon.post(f"/injects/{inj.id}/followup/", post)
+    orig = Mail.objects.get(team__code="a", inject=inj, message=a)
+    fu = Mail.objects.filter(team__code="a").exclude(pk=orig.pk).get()
+    assert fu.thread == orig.thread and fu.subject == "Re: Update for Team A" and fu.body == "Annex for Team A attached."
+    assert [f.filename for f in fu.files.all()] == ["Annex.pdf"] and fu.inject_id == inj.id
+    assert Attachment.objects.filter(inject=inj, filename="Annex.pdf").exists()
+    assert not Mail.objects.filter(team__code="b").exclude(message__kind="live").exists()
+    # A reply to the follow-up counts for the inject, and the conversation shows both.
+    pa = participant("a", "Jane")
+    pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: x", "body": "Got it", "in_reply_to": fu.id})
+    resp = Response.objects.get()
+    assert resp.inject_id == inj.id
+    kinds = sorted(o.kind for k, _, o in inbound.conversation(resp) if k == "inject")
+    assert kinds == ["followup", "live"]
+
+
+def test_followup_email_is_threaded_and_needs_arming(excon):
+    do_import(excon, SAMPLE)
+    Inject.objects.update(channel="email")
+    for t in Team.objects.filter(is_test=False):
+        Person.objects.create(name=f"Real {t.code}", email=f"real-{t.code}@kobotoolbox.org", team=t)
+    arm()
+    deliver_now("1-15")
+    inj = Inject.objects.get(mel_id="1-15")
+    b = Message.objects.get(target="Team B", kind="live")
+    post = {"to": [b.id], "subject": "Correction: {subject}", "body": "The link is https://x.example/y",
+            "confirm": "1-15"}
+    conf.put("live_armed", "0")
+    excon.post(f"/injects/{inj.id}/followup/", post)
+    assert not Message.objects.filter(kind="followup").exists()
+    arm()
+    excon.post(f"/injects/{inj.id}/followup/", post)
+    m = Message.objects.get(kind="followup")
+    assert m.status == "pending" and m.to == b.to and m.parent_id == b.id and m.reply_token != b.reply_token
+    n = len(mailer.get().sent)
+    delivery.tick()
+    payload, _ = mailer.get().sent[n]
+    assert payload["subject"] == "Correction: Update for Team B" and payload["to"] == b.to
+    assert payload["headers"]["In-Reply-To"] == f"<{b.resend_id}@log.invalid>"
+    assert "wrote:\n> Hello Team B" in payload["text"]
+    m.refresh_from_db()
+    assert m.status == "sent"

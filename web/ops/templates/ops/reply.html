@@ -20,7 +20,7 @@
   {% if kind_ == 'inject' %}
   <div class="conv-item from-persona">
     <div class="small"><b>{{ o.from_addr|name_only }}</b> → {{ o.target }} · {{ at|date:"D d M H:i" }} ·
-      {% if o.inject %}<a href="/injects/{{ o.inject.id }}/">inject {{ o.inject.mel_id }}</a>{% else %}<a href="/log/{{ o.id }}/">message</a>{% endif %}</div>
+      {% if o.inject %}<a href="/injects/{{ o.inject.id }}/">inject {{ o.inject.mel_id }}</a>{% else %}<a href="/log/{{ o.id }}/">message</a>{% endif %}{% if o.kind == 'followup' %} · <a href="/log/{{ o.id }}/">follow-up</a>{% endif %}</div>
     <details><summary class="small">{{ o.subject }}</summary><pre class="mailtext">{{ o.body|default:o.text }}</pre></details>
   </div>
   {% elif kind_ == 'answer' %}

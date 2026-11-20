@@ -164,7 +164,7 @@ class Message(models.Model):
     """One delivery: an email handed to Resend, or a Mail put in an in-app inbox."""
     inject = models.ForeignKey(Inject, null=True, blank=True, on_delete=models.SET_NULL)
     run = models.ForeignKey(TestRun, null=True, blank=True, on_delete=models.SET_NULL)
-    kind = models.CharField(max_length=10)  # live | test | oneoff | reply
+    kind = models.CharField(max_length=10)  # live | test | oneoff | reply | followup
     channel = models.CharField(max_length=10, default="inapp")
     target = models.CharField(max_length=200, blank=True, default="")
     idem_key = models.CharField(max_length=200, unique=True)
@@ -204,6 +204,9 @@ class Message(models.Model):
     banner = models.TextField(blank=True, default="")
     body = models.TextField(blank=True, default="")  # in-app: text without footer/banner
     footer = models.TextField(blank=True, default="")
+    # Follow-up (kind followup): the delivery of the inject it continues, in that thread.
+    parent = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="followups")
+    message_id_header = models.CharField(max_length=300, blank=True, default="")  # email: its Message-ID, from Resend
 
     class Meta:
         ordering = ["-id"]

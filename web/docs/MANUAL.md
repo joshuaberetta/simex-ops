@@ -144,7 +144,9 @@ To rehearse the whole loop, sign in as your Test team login (another browser or 
 ### 5.3 Sending by hand, holding, changing
 - **Send now:** on the inject, type its id under **Send live now**. In-app messages land at once.
 - **Hold:** **Back to draft** or **Cancel inject**. **Edit:** change and **Save** — what is saved at the send time is what goes out.
-- **Ad-hoc inject:** **Injects → New inject**.
+- **Ad-hoc inject:** **Injects → New inject**: any persona to any teams, participants or (email) addresses. It starts a new conversation; use it for new information, not to correct one already sent.
+- **Follow-up / correction** (a document or link was missing, a figure was wrong): on the delivered inject, **Send a follow-up**. Tick who gets it (every recipient of the inject is ticked; untick the teams that don't need it), keep the subject `Re: {subject}` ({subject} is the original subject, so mail clients group it with the original), write the message (placeholders {team} {team_name} {name} {first_name} work), tick attachments of the inject or add new files (they are also added to the inject), type the inject id and **Send follow-up**. It comes from the inject's persona in the team's existing conversation (in-app, delivered at once) or as a reply in the email thread (email, sent by the scheduler within seconds, quoting the original). It is a live send: live sending must be armed and sending not paused. Teams' replies to it count as replies to the inject, and it shows in the conversation on the reply page and in the Log (kind *followup*).
+- **Not sent yet?** Just fix the inject (add the attachment, edit the body) and **Save**; no follow-up needed.
 - **Stop everything:** **Pause all sending**; **Resume sending** continues without duplicates.
 
 ### 5.4 Replies and grading
@@ -208,6 +210,7 @@ Export grades and a final backup, disarm, and disable the participant logins (Pe
 | A participant can't sign in | People & logins → **reset password**, give them the new one. Check the login isn't disabled and the person has a team. |
 | A team says nothing arrived | Team inboxes → View as team. If it's there, they may be looking at another folder or another team's login. |
 | Inject **overdue** | Send now, or move its time and Schedule. |
+| An inject went out with a missing attachment, link or a mistake | Open it → **Send a follow-up** (5.3): add the file, explain, send it in the same conversation. |
 | Inject **failed / partial** | Open it, read the error, fix it, "only retry the failed deliveries". |
 | A reply is "unmatched" or a "guess" | Open it and set the inject and team under **Match**. |
 | Email channel: "Mailer: log" | `RESEND_API_KEY` is missing; email injects are only logged. In-app is unaffected. |
