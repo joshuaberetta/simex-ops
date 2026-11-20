@@ -16,11 +16,11 @@ from ops.models import (Grade, Inject, Mail, Message, Person, Response, RubricCr
 SECRET = "whsec_dGVzdC1zZWNyZXQtMTIzNDU2"
 SAMPLE = [
     {"inject_id": "1-15", "method": "Email", "sender": "UNDAC-{team}-TL@epeigonia.org", "recipients": "Each team",
-     "subject": "Update for {team_name}", "content": "Hello {team_name}", "send_date": "2026-11-23T00:00:00",
+     "subject": "Update for {team_name}", "content": "Hello {team_name}", "send_date": "2030-11-23T00:00:00",
      "send_time": "09:00", "mailbox": "teamleader", "supporting_documents": "1-15 Plan.pdf",
      "expected_outcomes": "SECRET OUTCOME", "story": "SECRET STORY", "description": "Task: SECRET"},
     {"inject_id": "3-13", "method": "Email", "sender": "donotreply@epeigonia.org", "recipients": "All teams (Bcc)",
-     "subject": "News", "content": "Article", "send_date": "2026-11-24T00:00:00", "send_time": "14:30"},
+     "subject": "News", "content": "Article", "send_date": "2030-11-24T00:00:00", "send_time": "14:30"},
     {"inject_id": "1-27", "method": "F2F", "content": "Customs visit", "sender": None},
 ]
 
@@ -72,7 +72,7 @@ def test_import_drops_control_fields_and_non_email(excon):
     blob = json.dumps({f.name: str(getattr(i, f.name)) for f in Inject._meta.fields})
     assert "SECRET" not in blob
     assert i.channel == "inapp" and i.sender_local == "undac-{team}-tl" and i.status == "scheduled"
-    assert i.send_at.isoformat() == "2026-11-23T06:00:00+00:00"  # 09:00 Nairobi
+    assert i.send_at.isoformat() == "2030-11-23T06:00:00+00:00"  # 09:00 Nairobi
 
 
 def test_render_inapp_each_team(excon):
@@ -911,9 +911,9 @@ def test_inapp_personas_can_have_any_domain(excon):
 def test_same_username_on_two_domains_is_two_personas(excon):
     from ops.models import Sender
     items = [{"inject_id": "2-01", "method": "Email", "sender": "news@cnn.com", "recipients": "Each team",
-              "subject": "CNN story", "content": "c", "send_date": "2026-11-23T00:00:00", "send_time": "09:00"},
+              "subject": "CNN story", "content": "c", "send_date": "2030-11-23T00:00:00", "send_time": "09:00"},
              {"inject_id": "2-02", "method": "Email", "sender": "news@reuters.com", "recipients": "Each team",
-              "subject": "Reuters story", "content": "r", "send_date": "2026-11-23T00:00:00", "send_time": "09:05"}]
+              "subject": "Reuters story", "content": "r", "send_date": "2030-11-23T00:00:00", "send_time": "09:05"}]
     r = excon.post("/import/", {"file": _upload(json.dumps(items).encode())})
     assert b"news@cnn.com, news@reuters.com" in r.content
     bid = re.search(rb"/import/(\d+)/apply/", r.content).group(1).decode()
@@ -1047,3 +1047,39 @@ def test_inbound_catch_up_only_recent_and_only_with_resend():
     m.name = "resend"
     added, _ = inbound.catch_up()
     assert added == 1 and list(Response.objects.values_list("resend_id", flat=True)) == ["r-new"]
+
+
+def test_import_date_without_time_is_not_scheduled_for_midnight(excon):
+    items = [dict(SAMPLE[0], send_time="TBC")]
+    do_import(excon, items)
+    i = Inject.objects.get(mel_id="1-15")
+    assert i.send_at is None and i.status == "draft"
+
+
+def test_import_new_inject_in_the_past_waits_as_draft(excon):
+    do_import(excon, [dict(SAMPLE[0], send_date="2020-01-01T00:00:00")])
+    assert Inject.objects.get(mel_id="1-15").status == "draft"
+
+
+def test_overwrite_only_touches_injects_changed_in_the_mel(excon):
+    do_import(excon, SAMPLE)
+    Inject.objects.filter(mel_id="1-15").update(subject="Fixed by hand")
+    Inject.objects.filter(mel_id="3-13").update(subject="Also by hand")
+    changed = [dict(x) for x in SAMPLE]
+    changed[1]["subject"] = "News v2"  # only 3-13 changed in the MEL
+    do_import(excon, changed, overwrite=True)
+    assert Inject.objects.get(mel_id="1-15").subject == "Fixed by hand"
+    assert Inject.objects.get(mel_id="3-13").subject == "News v2"
+
+
+def test_replies_page_with_an_untimed_inject_and_bad_filters(excon):
+    do_import(excon, SAMPLE)
+    arm()
+    inj = Inject.objects.get(mel_id="1-15")
+    inj.send_at = None
+    inj.save()
+    assert delivery.start_live(inj) is None
+    delivery.process_live(inj.id)
+    assert Inject.objects.get(pk=inj.pk).status == "sent"
+    assert excon.get("/replies/").status_code == 200
+    assert excon.get("/replies/?team=abc&inject=x").status_code == 200

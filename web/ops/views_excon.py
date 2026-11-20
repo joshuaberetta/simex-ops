@@ -13,7 +13,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Count, Max, Sum
+from django.db.models import Count, Max, Prefetch, Sum
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -22,7 +22,7 @@ from django.views.decorators.http import require_POST
 from . import ai, legacy_import, backup, checks, conf, delivery, documents, importer, inbound, mailer, render as rnd
 from .access import excon_required
 from .models import (CHANNELS, DELIVERY_MODES, STATUSES, AiGrade, Attachment, AttachmentImport, Audit, Grade,
-                     ImportBatch, Inject, InjectDraft, InjectReview, Mail, MailLabel, Message, Person, ReplyAnalysis, Response,
+                     ImportBatch, Inject, InjectDraft, InjectReview, Mail, MailAttachment, MailLabel, Message, Person, ReplyAnalysis, Response,
                      ResponseAttachment, RubricCriterion, Sender, Team, TestRun, TestRunItem, audit)
 
 MAX_ATTACHMENT = documents.MAX_ATTACHMENT
@@ -948,7 +948,13 @@ def reply_grid(kind):
     teams = list(Team.objects.filter(active=True, is_test=(kind != "live")) if kind != "live"
                  else Team.objects.filter(active=True, is_test=False))
     all_in = list(Response.objects.filter(kind=kind).select_related("inject", "team", "person", "mail")
-                  .prefetch_related("attachments").order_by("received_at"))
+                  .prefetch_related(Prefetch("attachments", ResponseAttachment.objects.defer("data")),
+                                    Prefetch("mail__files", MailAttachment.objects.defer("data")))
+                  .order_by("received_at"))
+    by_cell = {}
+    for r in all_in:
+        if r.status != "ignored":
+            by_cell.setdefault((r.inject_id, r.team_id), []).append(r)
     sent = inbound.first_sent(kinds)
     maxes = dict(RubricCriterion.objects.values_list("inject_id").annotate(s=Sum("max_points"))
                  .values_list("inject_id", "s"))
@@ -964,7 +970,7 @@ def reply_grid(kind):
     for inj in injects_rows:
         cells = []
         for t in teams:
-            reps = [r for r in all_in if r.inject_id == inj.id and r.team_id == t.id and r.status != "ignored"]
+            reps = by_cell.get((inj.id, t.id), [])
             sent_at = sent.get((inj.id, t.id)) or sent.get((inj.id, None))
             first = reps[0] if reps else None
             minutes = int((first.received_at - sent_at).total_seconds() // 60) if first and sent_at else None
@@ -1009,7 +1015,7 @@ def reply_grid(kind):
 @excon_required
 def replies_page(request):
     kind = request.GET.get("kind", "live")
-    team_f, inject_f = int(request.GET.get("team") or 0), int(request.GET.get("inject") or 0)
+    team_f, inject_f = _int(request.GET.get("team")) or 0, _int(request.GET.get("inject")) or 0
     status_f, matched_f = request.GET.get("status", ""), request.GET.get("matched", "")
     kinds = ["live", "reply", "followup"] if kind == "live" else ["test", "oneoff"]
     teams, all_in, matrix, team_sum = reply_grid(kind)
@@ -1034,7 +1040,7 @@ def replies_page(request):
             e["first"] = m.opened_at
         e["sent"] = min(e["sent"], m.sent_at) if e["sent"] and m.sent_at else (e["sent"] or m.sent_at)
     eng_rows = []
-    eng_injects = sorted({m.inject for m in eng_msgs}, key=lambda i: (i.send_at is None, i.send_at or now, i.seq))
+    eng_injects = sorted({m.inject for m in eng_msgs}, key=lambda i: (i.send_at is None, i.send_at or timezone.now(), i.seq))
     for inj in eng_injects:
         cells = []
         for t in eng_teams:

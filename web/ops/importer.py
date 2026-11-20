@@ -14,6 +14,7 @@ from datetime import timezone
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
+from django.db import transaction
 
 from .models import IMPORT_FIELDS, Inject, Sender, audit
 
@@ -132,7 +133,9 @@ def _send_at(send_date, send_time):
         d = datetime.date.fromisoformat(send_date[:10])
     except ValueError:
         return None
-    t = _hm(send_time or "") or "00:00"
+    t = _hm(send_time or "")
+    if not t:  # a date without a readable time ("TBC", "after 1-15"): leave it to ExCon, never midnight
+        return None
     local = datetime.datetime.combine(d, datetime.time.fromisoformat(t), tzinfo=ZoneInfo(settings.TIME_ZONE))
     return local.astimezone(timezone.utc).replace(tzinfo=None).isoformat(timespec="minutes")
 
@@ -180,16 +183,16 @@ def normalise(raw_items):
             mel_id = f"{mel_id}-{chr(ord('a') + n)}"
         docs = [d.strip() for d in (raw.get("supporting_documents") or "").splitlines()]
         docs = [d for d in docs if d and d.lower() not in ("none", "n/a", "-")]
-        out.append({
-            "mel_id": mel_id,
+        out.append({  # cut to the field sizes (Postgres rejects longer values)
+            "mel_id": mel_id[:40],
             "seq": seq,
-            "method": raw.get("method"),
-            "mailbox": raw.get("mailbox"),
-            "scenario_dt": raw.get("scenario_dt"),
+            "method": _cut(raw.get("method"), 200),
+            "mailbox": _cut(raw.get("mailbox"), 60),
+            "scenario_dt": _cut(raw.get("scenario_dt"), 20),
             "send_at": _send_at(raw.get("send_date"), raw.get("send_time")),
-            "sender_local": sender_local(raw.get("sender")),
-            "sender_domain": sender_domain(raw.get("sender")),
-            "recipients_label": raw.get("recipients"),
+            "sender_local": _cut(sender_local(raw.get("sender")), 120),
+            "sender_domain": _cut(sender_domain(raw.get("sender")), 200),
+            "recipients_label": _cut(raw.get("recipients"), 200),
             "delivery": delivery_for(raw.get("recipients")),
             "subject": raw.get("subject"),
             "body": raw.get("content"),
@@ -197,6 +200,10 @@ def normalise(raw_items):
         })
     _split_shared_usernames(out)
     return out
+
+
+def _cut(v, n):
+    return v[:n] if isinstance(v, str) else v
 
 
 def _split_shared_usernames(records):
@@ -299,6 +306,7 @@ def plan(records):
     return rows, missing
 
 
+@transaction.atomic  # all or nothing: an error part-way must not leave half an import
 def apply(records, overwrite_local=False, cancel_missing=False, sender_domains=False, user=""):
     now = datetime.datetime.now(timezone.utc)
     existing = {i.mel_id: i for i in Inject.objects.all()}
@@ -309,7 +317,8 @@ def apply(records, overwrite_local=False, cancel_missing=False, sender_domains=F
             inj = Inject(mel_id=r["mel_id"])
             for f in IMPORT_FIELDS:
                 set_value(inj, f, r.get(f))
-            inj.status = "scheduled" if r.get("send_at") else "draft"
+            # A new inject whose time has passed (added mid-exercise) waits for ExCon.
+            inj.status = "scheduled" if inj.send_at and inj.send_at > now else "draft"
             inj.imported = {f: r.get(f) for f in IMPORT_FIELDS}
             inj.save()
             counts["new"] += 1
@@ -321,6 +330,8 @@ def apply(records, overwrite_local=False, cancel_missing=False, sender_domains=F
         changed = False
         for f in IMPORT_FIELDS:
             new, cur = r.get(f), current_value(inj, f)
+            if f in snap and new == snap.get(f):
+                continue  # unchanged in the MEL since the last import: keep what is here (as plan() shows)
             local_edit = f in snap and cur != snap.get(f)
             if new != cur and (not local_edit or overwrite_local):
                 set_value(inj, f, new)
@@ -333,6 +344,7 @@ def apply(records, overwrite_local=False, cancel_missing=False, sender_domains=F
                         counts["rescheduled"] += 1
             elif new != cur:
                 counts["kept_local"] += 1
+                continue  # the old snapshot stays, so the conflict shows again next time
             snap[f] = new
         inj.imported = snap
         inj.save()
