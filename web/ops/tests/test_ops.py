@@ -1083,3 +1083,66 @@ def test_replies_page_with_an_untimed_inject_and_bad_filters(excon):
     assert Inject.objects.get(pk=inj.pk).status == "sent"
     assert excon.get("/replies/").status_code == 200
     assert excon.get("/replies/?team=abc&inject=x").status_code == 200
+
+
+# --- SIMEX Mail robustness -----------------------------------------------------------------------
+
+def test_login_lockout_is_per_username_not_the_whole_venue():
+    from django.core.cache import cache
+    cache.clear()
+    c = Client()
+    for _ in range(12):
+        c.post("/login/", {"username": "a.typo", "password": "wrong"})
+    r = c.post("/login/", {"username": "a.typo", "password": "wrong"}, follow=True)
+    assert b"Too many attempts" in r.content
+    # ExCon, from the same address, still gets in
+    r = c.post("/login/", {"username": "undac", "password": "nairobi2026"})
+    assert r.status_code == 302 and r.url != "/login/"
+    cache.clear()
+
+
+def test_failed_send_leaves_nothing_behind(monkeypatch):
+    from ops.models import Sender
+    Sender.objects.create(local_part="cnn", display_name="CNN")
+    pa = participant("a")
+    monkeypatch.setattr(inbound, "from_mail", lambda *a: (_ for _ in ()).throw(RuntimeError("x")))
+    with pytest.raises(RuntimeError):
+        pa.post("/inbox/send/", {"to": "p:cnn", "subject": "Q", "body": "Hello"})
+    assert not Mail.objects.filter(folder="sent").exists()
+
+
+def test_draft_autosave_after_send_does_not_make_a_new_draft():
+    from ops.models import Sender
+    Sender.objects.create(local_part="cnn", display_name="CNN")
+    pa = participant("a")
+    d = pa.post("/inbox/draft/", {"to": "p:cnn", "subject": "Q", "body": "Hel"}).json()["id"]
+    pa.post("/inbox/send/", {"to": "p:cnn", "subject": "Q", "body": "Hello", "draft_id": d})
+    r = pa.post("/inbox/draft/", {"to": "p:cnn", "subject": "Q", "body": "Hello", "draft_id": d})
+    assert r.status_code == 410 and not Mail.objects.filter(folder="drafts").exists()
+    # junk ids are ignored, not a 500
+    assert pa.post("/inbox/draft/", {"subject": "x", "in_reply_to": "abc", "forward_of": "1.5"}).status_code == 200
+
+
+def test_download_keeps_a_non_latin_file_name(excon):
+    from ops.models import MailAttachment
+    pa = participant("a")
+    m = Mail.objects.create(team=pa.person.team, folder="inbox", subject="s", thread="t1")
+    a = MailAttachment.objects.create(mail=m, filename="Sitrep – Day 2\n.pdf", size=3, data=b"pdf")
+    r = pa.get(f"/inbox/file/{a.id}/")
+    assert r.status_code == 200 and "filename*=utf-8''Sitrep%20%E2%80%93%20Day%202%20.pdf" in r["Content-Disposition"]
+
+
+def test_team_to_team_reply_stays_between_the_two_teams():
+    conf.put("team_to_team", "1")
+    pa, pb = participant("a"), participant("b")
+    ta, tb = Team.objects.get(code="a"), Team.objects.get(code="b")
+    # every team has a persona thread with the same subject
+    persona_b = Mail.objects.create(team=tb, folder="inbox", subject="Situation update", thread="persona-b")
+    pa.post("/inbox/send/", {"to": f"t:{tb.id}", "subject": "Situation update", "body": "from A"})
+    b_copy = Mail.objects.filter(team=tb, body="from A").get()
+    assert b_copy.thread != persona_b.thread
+    pb.post("/inbox/send/", {"to": f"t:{ta.id}", "subject": "Re: Situation update", "body": "from B",
+                             "in_reply_to": b_copy.id})
+    a_sent = Mail.objects.get(team=ta, folder="sent", body="from A")
+    a_copy = Mail.objects.get(team=ta, folder="inbox", body="from B")
+    assert a_copy.thread == a_sent.thread

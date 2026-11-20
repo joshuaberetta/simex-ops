@@ -17,6 +17,7 @@ from django.db.models import Count, Max, Prefetch, Sum
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_POST
 
 from . import ai, legacy_import, backup, checks, conf, delivery, documents, importer, inbound, mailer, render as rnd
@@ -362,7 +363,7 @@ def attachments_upload(request, iid):
 
 def _download(data, filename, content_type="application/octet-stream"):
     resp = HttpResponse(bytes(data), content_type=content_type)
-    resp["Content-Disposition"] = f'attachment; filename="{filename.replace(chr(34), chr(39))}"'
+    resp["Content-Disposition"] = content_disposition_header(True, re.sub(r"[\r\n]+", " ", filename or "file"))
     resp["X-Content-Type-Options"] = "nosniff"
     return resp
 

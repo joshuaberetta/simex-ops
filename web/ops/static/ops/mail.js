@@ -151,15 +151,19 @@
       return fd;
     }
     empty() { return !this.keys.to.length && !this.keys.cc.length && !this.form.elements.subject.value.trim() && !this.form.elements.body.value.trim(); }
-    async save() {
-      if (CFG.readonly || this.empty()) return;
+    save() {
+      if (CFG.readonly || this.sending || this.empty()) return this.saving || Promise.resolve();
       this.dirty = false;
-      try {
-        const r = await post(`${BASE}/draft/`, this.data(false));
-        const j = await r.json();
-        this.form.elements.draft_id.value = j.id;
-        $("[data-draft-state]", this.form).textContent = "Draft saved";
-      } catch (e) { this.dirty = true; }
+      this.saving = (async () => {
+        try {
+          const r = await post(`${BASE}/draft/`, this.data(false));
+          if (r.status === 410) return;  // sent or discarded meanwhile: no new draft
+          const j = await r.json();
+          this.form.elements.draft_id.value = j.id;
+          $("[data-draft-state]", this.form).textContent = "Draft saved";
+        } catch (e) { this.dirty = true; } finally { this.saving = null; }
+      })();
+      return this.saving;
     }
     async send() {
       const btn = $(".gm-send", this.form);
@@ -167,10 +171,19 @@
       if (mb > CFG.maxMb) { snack(`Attachments are over ${CFG.maxMb} MB.`); return; }
       if (!this.keys.to.length && !this.keys.cc.length && !this.keys.bcc.length) { snack("Please specify at least one recipient."); return; }
       btn.disabled = true;
-      const r = await post(`${BASE}/send/`, this.data(true));
-      btn.disabled = false;
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) { snack(j.error || "Sending failed."); return; }
+      // No autosave while sending: a save landing after the send would leave a copy in Drafts.
+      this.sending = true;
+      let r;
+      try {
+        await this.saving;
+        r = await post(`${BASE}/send/`, this.data(true));
+      } catch (e) {
+        r = null;
+      } finally {
+        btn.disabled = false;
+      }
+      const j = r ? await r.json().catch(() => ({})) : {};
+      if (!r || !r.ok) { this.sending = false; snack(j.error || "Sending failed. Check your connection and try again."); return; }
       clearInterval(this.timer);
       sessionStorage.setItem("simex-snack", "Message sent");
       if (this.opts.onSent) this.opts.onSent(j);
@@ -547,6 +560,15 @@
   if (pushable) {
     pushOn();  // keeps the server's copy current (new login on this device, restored backup, new key)
     navigator.serviceWorker.addEventListener("message", (e) => { if (e.data && e.data.type === "simex-push") poll(); });
+    // Signing out stops this device's notifications (a shared phone or laptop must not show the
+    // last team's mail); signing in again turns them back on.
+    const out = document.querySelector('form[action="/logout/"]');
+    if (out) out.addEventListener("submit", (e) => {
+      if (out.dataset.done) return;
+      e.preventDefault();
+      out.dataset.done = "1";
+      Promise.race([pushOff().catch(() => {}), new Promise((r) => setTimeout(r, 2000))]).then(() => out.submit());
+    });
   }
 
   // iPhone/iPad in Safari: notifications only work from the home-screen app, so say how to add it.

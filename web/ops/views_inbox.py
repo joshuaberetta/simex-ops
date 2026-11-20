@@ -8,6 +8,7 @@ anything read.
 """
 
 import json
+import re
 from datetime import timedelta
 
 from django.conf import settings
@@ -16,10 +17,12 @@ from django.contrib.auth import logout
 from django.contrib.auth.views import LoginView
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import Prefetch, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.http import content_disposition_header
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
@@ -38,26 +41,31 @@ LABEL_COLOURS = {"#fb4c2f": "#fff", "#ffad47": "#462a00", "#fad165": "#4a3b00", 
 # --- auth & misc -----------------------------------------------------------------------------------
 
 class ThrottledLogin(LoginView):
-    """Login with a simple per-IP limit (10 failures per 10 minutes). On the mail host it looks
+    """Login with simple limits per 10 minutes: 10 failures for one username from one address,
+    200 from one address in all (a whole venue is often one address behind its NAT, so a few
+    mistyped passwords must not lock every team, or ExCon, out). On the mail host it looks
     like the webmail sign-in page."""
     redirect_authenticated_user = True
+    PER_USER, PER_IP = 10, 200
 
     def get_template_names(self):
         return ["ops/mail/login.html" if getattr(self.request, "mail_host", False) else "ops/login.html"]
 
-    def _key(self):
+    def _keys(self):
         ip = (self.request.META.get("HTTP_X_FORWARDED_FOR") or self.request.META.get("REMOTE_ADDR") or "").split(",")[0]
-        return f"login-fail:{ip.strip()}"
+        user = (self.request.POST.get("username") or "").strip().lower()[:150]
+        return f"login-fail:{ip.strip()}:{user}", f"login-fail:{ip.strip()}"
 
     def post(self, request, *args, **kwargs):
-        if cache.get(self._key(), 0) >= 10:
+        per_user, per_ip = self._keys()
+        if cache.get(per_user, 0) >= self.PER_USER or cache.get(per_ip, 0) >= self.PER_IP:
             messages.error(request, "Too many attempts. Try again in a few minutes.")
             return redirect("/login/")
         return super().post(request, *args, **kwargs)
 
     def form_invalid(self, form):
-        key = self._key()
-        cache.set(key, cache.get(key, 0) + 1, 600)
+        for key in self._keys():
+            cache.set(key, cache.get(key, 0) + 1, 600)
         return super().form_invalid(form)
 
 
@@ -187,9 +195,13 @@ def _folder_qs(team, folder, q=""):
     return qs
 
 
+# A mail's files without their contents (an inject's documents can be many MB, in every team's inbox).
+FILES = Prefetch("files", MailAttachment.objects.defer("data"))
+
+
 def conversations(team, folder, q=""):
     """Gmail-style conversation rows: one per thread, newest first."""
-    mails = list(_folder_qs(team, folder, q).prefetch_related("files").order_by("-created_at", "-id")[:2000])
+    mails = list(_folder_qs(team, folder, q).prefetch_related(FILES).order_by("-created_at", "-id")[:2000])
     if folder == "drafts":
         return [{"thread": m.thread, "latest": m, "count": 1, "unread": False, "starred": m.starred,
                  "has_files": bool(m.files.all()), "people": "Draft", "draft": True, "subject": m.subject}
@@ -298,7 +310,7 @@ def thread_view(request, v, thread):
     qs = Mail.objects.filter(team=v.team, thread=thread).exclude(folder="drafts")
     if folder != "trash":
         qs = qs.filter(trashed_at__isnull=True)
-    mails = list(qs.select_related("author").prefetch_related("files__attachment").order_by("created_at", "id"))
+    mails = list(qs.select_related("author", "to_person").prefetch_related(FILES).order_by("created_at", "id"))
     if not mails:
         raise Http404
     if not v.readonly:
@@ -474,16 +486,18 @@ def _keys(value):
 def draft_save(request, v):
     """Autosave of the compose window (no files: those are attached on send)."""
     P = request.POST
-    d = Mail.objects.filter(pk=P.get("draft_id") or 0, team=v.team, folder="drafts").first()
+    d = Mail.objects.filter(pk=_id(P.get("draft_id")), team=v.team, folder="drafts").first()
+    if d is None and _id(P.get("draft_id")):
+        return JsonResponse({"error": "This draft was sent or discarded."}, status=410)
     if d is None:
         d = Mail(team=v.team, folder="drafts", author=v.person, from_name=_from_name(v), from_addr=team_address(v.team))
-    parent = Mail.objects.filter(pk=P.get("in_reply_to") or 0, team=v.team).first()
+    parent = Mail.objects.filter(pk=_id(P.get("in_reply_to")), team=v.team).first()
     d.recipients = {"to": _keys(P.get("to")), "cc": _keys(P.get("cc")), "bcc": _keys(P.get("bcc"))}
     book = address_book(v.team)
     d.to_label = _label(_resolve(d.recipients["to"], book, v.team))
     d.subject, d.body = P.get("subject") or "", (P.get("body") or "").replace("\r\n", "\n")
     d.in_reply_to = parent
-    d.forward_of = Mail.objects.filter(pk=P.get("forward_of") or 0, team=v.team).first()
+    d.forward_of = Mail.objects.filter(pk=_id(P.get("forward_of")), team=v.team).first()
     d.thread = parent.thread if parent else (d.thread or "")
     d.created_at = timezone.now()
     d.save()
@@ -496,6 +510,14 @@ def draft_get(request, v, mid):
     return JsonResponse({"id": d.id, "to": d.recipients.get("to", []), "cc": d.recipients.get("cc", []),
                          "bcc": d.recipients.get("bcc", []), "subject": d.subject, "body": d.body,
                          "in_reply_to": d.in_reply_to_id, "forward_of": d.forward_of_id})
+
+
+def _id(v):
+    """A posted id, or 0 for none / not a number."""
+    try:
+        return int(v or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _from_name(v):
@@ -527,8 +549,17 @@ def send(request, v):
         return fail("Write a message first.")
     if sum(f.size for f in files) > limit:
         return fail(f"Attachments are over {limit // (1024 * 1024)} MB.")
-    parent = Mail.objects.filter(pk=P.get("in_reply_to") or 0, team=v.team).first()
-    fwd = Mail.objects.filter(pk=P.get("forward_of") or 0, team=v.team).first()
+    parent = Mail.objects.filter(pk=_id(P.get("in_reply_to")), team=v.team).first()
+    fwd = Mail.objects.filter(pk=_id(P.get("forward_of")), team=v.team).first()
+    with transaction.atomic():  # all or nothing: a failure must not leave a Sent copy to send again
+        sent = _send(request, v, P, to, cc, bcc, subject, body, files, parent, fwd)
+    if ajax:
+        return JsonResponse({"ok": True, "thread": sent.thread, "url": f"{v.base}/t/{sent.thread}/?folder=sent"})
+    messages.success(request, "Message sent.")
+    return redirect(f"{v.base}/t/{sent.thread}/?folder=sent")
+
+
+def _send(request, v, P, to, cc, bcc, subject, body, files, parent, fwd):
     from_name, from_addr = _from_name(v), team_address(v.team)
     sent = Mail.objects.create(
         team=v.team, folder="sent", thread=parent.thread if parent else "", from_name=from_name, from_addr=from_addr,
@@ -556,23 +587,25 @@ def send(request, v):
             copy = Mail.objects.create(team=t, folder="inbox", from_name=from_name, from_addr=from_addr,
                                        to_label=visible_to, cc_label=_label(cc), to_team=t, subject=subject,
                                        body=body, author=v.person, is_test=v.team.is_test,
-                                       thread=_peer_thread(t, parent))
+                                       thread=_peer_thread(t, v.team, parent))
             for a in sent.files.all():
                 MailAttachment.objects.create(mail=copy, attachment=a.attachment, filename=a.filename, size=a.size,
                                               content_type=a.content_type, data=a.data)
             push.notify_mail(copy)
             audit("team_to_team", f"{v.team.name} -> {t.name}: {subject[:80]}", request.user.get_username())
-    Mail.objects.filter(pk=P.get("draft_id") or 0, team=v.team, folder="drafts").delete()
-    if ajax:
-        return JsonResponse({"ok": True, "thread": sent.thread, "url": f"{v.base}/t/{sent.thread}/?folder=sent"})
-    messages.success(request, "Message sent.")
-    return redirect(f"{v.base}/t/{sent.thread}/?folder=sent")
+    Mail.objects.filter(pk=_id(P.get("draft_id")), team=v.team, folder="drafts").delete()
+    return sent
 
 
-def _peer_thread(team, parent):
-    """Team-to-team replies continue the other team's copy of the conversation."""
-    if parent:
-        peer = Mail.objects.filter(team=team, subject__iexact=inbound.SUBJECT_PREFIX.sub("", parent.subject)).first()
+def _peer_thread(team, sender_team, parent):
+    """Team-to-team replies continue the other team's copy of the conversation: a mail of the
+    same subject between those two teams (never a persona's thread every team has)."""
+    if parent and parent.from_addr == team_address(team):
+        subject = inbound.SUBJECT_PREFIX.sub("", parent.subject)
+        between = Q(from_addr=team_address(sender_team)) | Q(folder="sent", to_label__contains=f"<{team_address(sender_team)}>")
+        peer = (Mail.objects.filter(between, team=team, trashed_at__isnull=True)
+                .filter(Q(subject__iexact=subject) | Q(subject__iregex=r"^((re|fwd?)\s*:\s*)+" + re.escape(subject) + "$"))
+                .order_by("-id").first())
         if peer:
             return peer.thread
     return ""
@@ -656,7 +689,7 @@ def mail_file(request, fid, as_team=None):
     if person and a.mail.team_id == person.team_id and a.mail.folder == "inbox" and a.mail.message_id:
         inbound.record_read([a.mail], person, request.META.get("HTTP_USER_AGENT", ""), what="download", link=a.filename)
     resp = HttpResponse(data, content_type="application/octet-stream")  # download only, never rendered inline
-    resp["Content-Disposition"] = f'attachment; filename="{a.filename.replace(chr(34), chr(39))}"'
+    resp["Content-Disposition"] = content_disposition_header(True, re.sub(r"[\r\n]+", " ", a.filename))
     resp["X-Content-Type-Options"] = "nosniff"
     return resp
 
