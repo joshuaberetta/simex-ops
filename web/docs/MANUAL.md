@@ -246,6 +246,7 @@ Export grades and a final backup, disarm, and disable the participant logins (Pe
 | Emails aren't arriving / bouncing | Log → the email → delivery status. If it can't be fixed quickly, switch to SIMEX Mail (5.6). |
 | AI analysis says "No provider configured" or calls fail | The web and scheduler components need `ANTHROPIC_API_KEY`, or `AI_PROVIDER=bedrock` with `AWS_BEARER_TOKEN_BEDROCK` (and `AWS_REGION`). The last error is on Settings → AI analysis. Grading by hand is unaffected. |
 | AI analysis stopped for the day | The daily cap was reached: raise it on Settings → AI analysis. |
+| "… has exercise mail or grades: make it inactive" when deleting a team | Deleting would take its inbox, replies and grades with it. Untick **active** on People & teams instead (it stops getting injects). |
 | Need to undo a big mistake | Settings → Restore a backup (type RESTORE). A backup of this app replaces everything, including logins. A backup from the first (email-only) version of the app is merged in instead: settings, senders, roster, injects with attachments, rubrics and grades. |
 
 ## 9. Quick reference: a day of the exercise

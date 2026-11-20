@@ -60,6 +60,14 @@ def _int(v):
         return None
 
 
+def _num(v):
+    """A posted number (1.5 is fine), or None."""
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
 # --- injects -----------------------------------------------------------------------------------
 
 @excon_required
@@ -138,7 +146,7 @@ def injects_bulk(request):
         elif action == "cancel" and inj.status in ("draft", "scheduled", "overdue"):
             inj.status = "cancelled"
         elif action == "shift" and inj.send_at and inj.status not in importer.LOCKED:
-            inj.send_at += timedelta(minutes=int(request.POST.get("minutes") or 0))
+            inj.send_at += timedelta(minutes=_num(request.POST.get("minutes")) or 0)
         elif action in ("inapp", "email") and inj.status not in importer.LOCKED:
             inj.channel = action
         else:
@@ -507,7 +515,7 @@ def senders_page(request):
         if Sender.objects.filter(local_part=local).exclude(pk=int(sid or 0)).exists():
             messages.error(request, f"The username {local} is already used by another sender.")
             return redirect("/senders/")
-        x = Sender.objects.get(pk=int(sid)) if sid else Sender()
+        x = get_object_or_404(Sender, pk=_int(sid)) if sid else Sender()
         old = x.local_part
         x.local_part, x.display_name, x.reply_to = local, (P.get("display_name") or "").strip(), reply_to
         x.inapp_local, x.domain = inapp_local, domain
@@ -604,8 +612,8 @@ def team_save(request):
     if Team.objects.filter(code=code).exclude(pk=int(tid or 0)).exists():
         messages.error(request, f"Team code '{code}' is taken.")
         return redirect("/people/")
-    t = Team.objects.get(pk=int(tid)) if tid else Team()
-    t.code, t.name, t.email, t.sort = code, name, email, int(P.get("sort") or 0)
+    t = get_object_or_404(Team, pk=_int(tid)) if tid else Team()
+    t.code, t.name, t.email, t.sort = code, name, email, _int(P.get("sort")) or 0
     t.active = P.get("active") == "1" or not tid
     t.save()
     audit("team_save", f"{code} {name}", _u(request))
@@ -616,6 +624,11 @@ def team_save(request):
 @require_POST
 def team_delete(request, tid):
     t = Team.objects.filter(pk=tid).first()
+    if t and (Mail.objects.filter(team=t, is_test=False).exists() or Grade.objects.filter(team=t).exists()
+              or Response.objects.filter(team=t, kind="live").exists()):
+        # Deleting would take its inbox, replies' team and grades with it.
+        messages.error(request, f"{t.name} has exercise mail or grades: make it inactive instead of deleting it.")
+        return redirect("/people/")
     if t:
         audit("team_delete", t.name, _u(request))
         t.delete()
@@ -635,9 +648,9 @@ def person_save(request):
     if not name or (email and not rnd.EMAIL.match(email)):
         messages.error(request, "A person needs a name (and, if given, a valid email).")
         return redirect("/people/")
-    p = Person.objects.get(pk=int(pid)) if pid else Person()
+    p = get_object_or_404(Person, pk=_int(pid)) if pid else Person()
     p.name, p.email = name, email
-    p.team_id = int(P.get("team_id")) if P.get("team_id") else None
+    p.team_id = _int(P.get("team_id"))
     p.role = "tl" if P.get("role") == "tl" else "member"
     p.active = P.get("active") == "1" or not pid
     p.save()
@@ -686,6 +699,7 @@ def person_account(request, pid):
 
 @excon_required
 @require_POST
+@transaction.atomic  # replace_placeholders deletes first: an error later must undo that too
 def people_bulk(request):
     """Paste CSV: name,email,team code,role. Creates logins for new people; the passwords are
     shown once (and on a printable sheet)."""
@@ -702,13 +716,13 @@ def people_bulk(request):
         if not row or not any(row) or row[0].lower() == "name":
             continue
         name, email = row[0], row[1] if len(row) > 1 else ""
-        code = row[2].lower() if len(row) > 2 else ""
+        code = re.sub(r"[^a-z0-9-]", "", row[2].lower()) if len(row) > 2 else ""
         role = "tl" if len(row) > 3 and row[3].lower() in ("tl", "team leader", "leader") else "member"
         if email and not rnd.EMAIL.match(email):
             errors.append(f"line {n}: bad email '{email}'")
             continue
         if code and code not in teams:
-            teams[code] = Team.objects.create(code=re.sub(r"[^a-z0-9-]", "", code), name=f"Team {code.upper()}",
+            teams[code] = Team.objects.create(code=code, name=f"Team {code.upper()}",
                                               sort=len(teams), is_test=code == "test")
         existing = Person.objects.filter(email__iexact=email).first() if email else \
             Person.objects.filter(name=name, team=teams.get(code)).first()
@@ -867,9 +881,9 @@ def _tests_create(request):
         start = timezone.now()
     factor = interval = None
     if P.get("timing") == "factor":
-        factor = max(float(P.get("factor") or 60), 1.0)
+        factor = max(_num(P.get("factor")) or 60, 1.0)
     else:
-        interval = max(float(P.get("interval") or 30), 5.0)
+        interval = max(_num(P.get("interval")) or 30, 5.0)
     name = (P.get("name") or "").strip() or f"Test {timezone.localtime():%d %b %H:%M}"
     if redirect_to:
         conf.put("test_redirect", redirect_to)
@@ -1235,19 +1249,24 @@ def rubric_save(request, iid):
     inj.save()
     for c in inj.rubric.all():
         if P.get(f"del{c.id}") == "1":
+            # its points leave the totals too (else a team could score 6/3)
+            for g in list(Grade.objects.filter(inject=inj)) + list(AiGrade.objects.filter(inject=inj)):
+                if str(c.id) in (g.scores or {}):
+                    g.scores.pop(str(c.id))
+                    g.save(update_fields=["scores"])
             c.delete()
             continue
         c.label = (P.get(f"label{c.id}") or c.label).strip()
         c.description = (P.get(f"desc{c.id}") or "").strip() or None
-        c.max_points = max(1, int(P.get(f"max{c.id}") or c.max_points))
-        c.sort = int(P.get(f"sort{c.id}") or c.sort)
+        c.max_points = max(1, _int(P.get(f"max{c.id}")) or c.max_points)
+        c.sort = _int(P.get(f"sort{c.id}")) if _int(P.get(f"sort{c.id}")) is not None else c.sort
         c.save()
     label = (P.get("new_label") or "").strip()
     if label:
         RubricCriterion.objects.create(inject=inj, label=label, description=(P.get("new_desc") or "").strip() or None,
-                                       max_points=max(1, int(P.get("new_max") or 3)), sort=inj.rubric.count())
-    if P.get("copy_from"):
-        for c in RubricCriterion.objects.filter(inject_id=int(P["copy_from"])):
+                                       max_points=max(1, _int(P.get("new_max")) or 3), sort=inj.rubric.count())
+    if _int(P.get("copy_from")):
+        for c in RubricCriterion.objects.filter(inject_id=_int(P["copy_from"])):
             RubricCriterion.objects.create(inject=inj, label=c.label, description=c.description,
                                            max_points=c.max_points, sort=c.sort)
     audit("rubric_save", inj.mel_id, _u(request))

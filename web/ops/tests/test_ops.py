@@ -1146,3 +1146,41 @@ def test_team_to_team_reply_stays_between_the_two_teams():
     a_sent = Mail.objects.get(team=ta, folder="sent", body="from A")
     a_copy = Mail.objects.get(team=ta, folder="inbox", body="from B")
     assert a_copy.thread == a_sent.thread
+
+
+# --- ExCon robustness -------------------------------------------------------------------------------
+
+def test_deleting_a_criterion_takes_its_points_out_of_the_total(excon):
+    do_import(excon, SAMPLE)
+    inj = Inject.objects.get(mel_id="1-15")
+    _rubric(inj)
+    team = Team.objects.get(code="a")
+    c1, c2 = RubricCriterion.objects.order_by("id")
+    excon.post(f"/grades/{inj.id}/{team.id}/", {f"c{c1.id}": "2", f"c{c2.id}": "2"})
+    excon.post(f"/injects/{inj.id}/rubric/", {f"del{c2.id}": "1", f"max{c1.id}": "x", f"sort{c1.id}": ""})
+    assert Grade.objects.get().total() == 2.0
+    assert RubricCriterion.objects.get().max_points == 3
+
+
+def test_roster_with_a_messy_team_code_twice(excon):
+    for _ in range(2):
+        r = excon.post("/people/bulk/", {"csv": "Jane,jane@kobotoolbox.org,Team X\nJoe,joe@kobotoolbox.org,team x"})
+        assert r.status_code == 302
+    assert Team.objects.filter(code="teamx").count() == 1
+    assert Person.objects.filter(team__code="teamx").count() == 2
+
+
+def test_bad_numbers_and_deleted_rows_are_not_500s(excon):
+    do_import(excon, SAMPLE)
+    inj = Inject.objects.get(mel_id="1-15")
+    assert excon.post("/injects/bulk/", {"ids": [inj.id], "action": "shift", "minutes": "1.5"}).status_code == 302
+    assert excon.post("/teams/save/", {"id": "99999", "code": "zz", "name": "Z"}).status_code == 404
+
+
+def test_a_team_with_exercise_mail_cannot_be_deleted(excon):
+    do_import(excon, SAMPLE)
+    arm()
+    deliver_now("1-15")
+    t = Team.objects.get(code="a")
+    excon.post(f"/teams/{t.id}/delete/")
+    assert Team.objects.filter(pk=t.pk).exists()
