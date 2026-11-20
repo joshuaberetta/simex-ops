@@ -1,5 +1,6 @@
 {% extends "ops/base.html" %}
 {% block title %}Import · SIMEX ops{% endblock %}
+{% block head %}{% if zip_running %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
 {% block body %}
 <h1><a href="/injects/" class="muted">Injects</a> / Import</h1>
 <div class="cols">
@@ -15,8 +16,27 @@
 <form method="post" action="/import/attachments/" enctype="multipart/form-data" class="card form">{% csrf_token %}
   <h3>2. Inject documents</h3>
   <p>Upload a <b>.zip</b> of the inject documents (e.g. the SIMEX <i>4. Injects</i> folder). Files are matched to injects by the names in the MEL's
-  <i>Supporting documents</i> column; a file with the same name replaces the earlier one. Max 30 MB per file.</p>
-  <input type="file" name="file" accept=".zip" required> <button class="btn primary">Upload and match</button>
+  <i>Supporting documents</i> column; a file with the same name replaces the earlier one. Max 30 MB per file.
+  Matching runs in the background after the upload: you can leave this page, and its progress is shown here.</p>
+  <input type="file" name="file" accept=".zip" required> <button class="btn primary"{% if zip_running %} disabled{% endif %}>Upload and match</button>
+  {% for z in zips %}
+  <p class="small">{{ z.created_at|date:"d M H:i" }} · <b>{{ z.filename }}</b> ·
+    {% if z.active %}<span class="pill warn">matching</span> {{ z.done }} of {{ z.total|default:"?" }} injects, {{ z.attached }} attached so far
+    {% elif z.interrupted %}<span class="pill failed">interrupted</span> after {{ z.done }} of {{ z.total }} injects ({{ z.attached }} attached); upload it again
+    {% elif z.status == "failed" %}<span class="pill failed">failed</span> {{ z.error }}
+    {% else %}<span class="pill safe">done</span> {{ z.attached }} attachment(s) matched to injects{% if z.unused %};
+      <span class="warn">{{ z.unused|length }} file(s) matched no inject:</span> {{ z.unused|slice:":15"|join:", " }}{% if z.unused|length > 15 %} ...{% endif %}{% endif %}
+    {% endif %}</p>
+  {% endfor %}
+</form>
+<form method="post" action="/import/clear/" class="card form danger-zone">{% csrf_token %}
+  <h3>Start over</h3>
+  <p class="small">Delete every inject's <b>attachments</b> (then upload a new zip), or <b>all {{ n_injects }} injects</b> with their {{ n_attachments }} attachments,
+  rubrics, grades and test-run items (then import the MEL again). Deliveries, inbox mail and replies stay, no longer linked to an inject.
+  This can't be undone: download a backup first (Settings).</p>
+  <label>Delete <select name="what"><option value="attachments">all attachments ({{ n_attachments }})</option><option value="injects">all injects and attachments ({{ n_injects }} / {{ n_attachments }})</option></select></label>
+  <label>Type <b>DELETE</b> <input name="confirm" autocomplete="off"></label>
+  <button class="btn danger">Delete</button>
 </form>
 </section>
 <section class="col-side">

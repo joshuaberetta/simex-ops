@@ -728,3 +728,62 @@ def test_polls_for_alerts(excon):
     assert [(x["team"], x["persona"], x["preview"]) for x in j["items"]] == [("Team A", "undac-a-tl", "On it")]
     assert j["new"] == 1 and j["max"] > start["max"]
     assert pa.get("/excon/poll/").status_code == 403
+
+
+def _zip(files):
+    import io
+    import zipfile
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        for name, data in files.items():
+            zf.writestr(name, data)
+    return SimpleUploadedFile("docs.zip", buf.getvalue(), content_type="application/zip")
+
+
+def test_attachments_zip_is_matched_in_the_background(excon):
+    from ops.models import AttachmentImport
+    do_import(excon, SAMPLE)
+    r = excon.post("/import/attachments/", {"file": _zip({"Injects/1-15 Plan.pdf": b"%PDF", "other.docx": b"x",
+                                                          "__MACOSX/._1-15 Plan.pdf": b""})})
+    assert r.status_code == 302 and r["Location"] == "/import/"
+    job = AttachmentImport.objects.get()
+    assert (job.status, job.attached, job.unused) == ("done", 1, ["other.docx"])
+    assert [a.filename for a in Inject.objects.get(mel_id="1-15").attachments.all()] == ["1-15 Plan.pdf"]
+    page = excon.get("/import/").content.decode()
+    assert "1 attachment(s) matched" in page and "other.docx" in page and 'http-equiv="refresh"' not in page
+    # Uploading again replaces rather than duplicates.
+    excon.post("/import/attachments/", {"file": _zip({"1-15 Plan.pdf": b"%PDF-2"})})
+    atts = list(Inject.objects.get(mel_id="1-15").attachments.all())
+    assert len(atts) == 1 and bytes(atts[0].data) == b"%PDF-2"
+
+
+def test_attachments_zip_rejects_bad_files_and_a_second_upload(excon):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from ops.models import AttachmentImport
+    excon.post("/import/attachments/", {"file": SimpleUploadedFile("x.zip", b"not a zip")})
+    assert not AttachmentImport.objects.exists()
+    AttachmentImport.objects.create(filename="big.zip")  # still running
+    assert 'http-equiv="refresh"' in excon.get("/import/").content.decode()
+    excon.post("/import/attachments/", {"file": _zip({"a.pdf": b"x"})})
+    assert AttachmentImport.objects.count() == 1
+    AttachmentImport.objects.filter(filename="big.zip").update(updated_at=timezone.now() - timedelta(minutes=10))
+    assert "interrupted" in excon.get("/import/").content.decode()
+    excon.post("/import/attachments/", {"file": _zip({"a.pdf": b"x"})})
+    assert AttachmentImport.objects.filter(status="done").count() == 1
+
+
+def test_start_over_deletes_attachments_or_injects(excon):
+    from ops.models import Attachment
+    do_import(excon, SAMPLE)
+    excon.post("/import/attachments/", {"file": _zip({"1-15 Plan.pdf": b"%PDF"})})
+    excon.post("/import/clear/", {"what": "injects", "confirm": "nope"})
+    assert Inject.objects.count() == 2 and Attachment.objects.count() == 1
+    excon.post("/import/clear/", {"what": "attachments", "confirm": "DELETE"})
+    assert Inject.objects.count() == 2 and Attachment.objects.count() == 0
+    Inject.objects.filter(mel_id="3-13").update(status="sending")
+    excon.post("/import/clear/", {"what": "injects", "confirm": "DELETE"})
+    assert Inject.objects.count() == 2
+    Inject.objects.filter(mel_id="3-13").update(status="sent")
+    excon.post("/import/clear/", {"what": "injects", "confirm": "DELETE"})
+    assert not Inject.objects.exists()

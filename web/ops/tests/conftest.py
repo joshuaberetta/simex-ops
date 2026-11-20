@@ -18,6 +18,8 @@ def _setup(db, settings):
     from ops import ai
     ai.set_client(None)
     ai.RUN_INLINE = True
+    from ops import documents
+    documents.RUN_INLINE = True
     call_command("seed_simex", verbosity=0)
     # Most tests exercise each inject's own channel; the global switch has its own tests.
     from ops import conf

@@ -7,6 +7,7 @@ Resend. Participants' answers (in-app or by email) are Responses, which ExCon gr
 """
 
 import uuid
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import models
@@ -480,3 +481,30 @@ class AiCall(models.Model):
     cost_usd = models.FloatField(default=0)
     ok = models.BooleanField(default=True)
     error = models.TextField(blank=True, null=True)
+
+
+class AttachmentImport(models.Model):
+    """A zip of inject documents being matched to injects, in a thread of the web process
+    (ops/documents.py) so a large upload doesn't hold up a request."""
+    filename = models.CharField(max_length=300)
+    user = models.CharField(max_length=150, blank=True, default="")
+    status = models.CharField(max_length=10, default="running")  # running | done | failed
+    total = models.IntegerField(default=0)  # injects to look at
+    done = models.IntegerField(default=0)
+    attached = models.IntegerField(default=0)
+    unused = models.JSONField(default=list)  # files in the zip that matched no inject
+    error = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-id"]
+
+    @property
+    def interrupted(self):
+        """Still 'running' but no progress for a while: the process was restarted (a deploy)."""
+        return self.status == "running" and self.updated_at < timezone.now() - timedelta(minutes=5)
+
+    @property
+    def active(self):
+        return self.status == "running" and not self.interrupted

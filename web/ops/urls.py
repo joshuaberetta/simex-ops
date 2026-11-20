@@ -48,6 +48,7 @@ urlpatterns = [
     path("import/", x.import_page),
     path("import/<int:bid>/apply/", x.import_apply),
     path("import/attachments/", x.import_attachments),
+    path("import/clear/", x.injects_clear),
     path("senders/", x.senders_page),
     path("senders/<int:sid>/delete/", x.sender_delete),
     path("people/", x.people_page),

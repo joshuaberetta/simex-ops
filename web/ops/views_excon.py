@@ -4,10 +4,8 @@ log, settings. Every view here is excon_required (tests enforce it over the URLc
 import csv
 import io
 import json
-import mimetypes
 import re
 import secrets
-import zipfile
 from datetime import datetime, timedelta
 from pathlib import PurePosixPath
 
@@ -21,14 +19,13 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from . import ai, legacy_import, backup, conf, delivery, importer, inbound, mailer, render as rnd
+from . import ai, legacy_import, backup, conf, delivery, documents, importer, inbound, mailer, render as rnd
 from .access import excon_required
-from .models import (CHANNELS, DELIVERY_MODES, STATUSES, AiGrade, Attachment, Audit, Grade, ImportBatch, Inject, Mail,
-                     MailLabel, Message, Person, ReplyAnalysis, Response, ResponseAttachment, RubricCriterion, Sender,
-                     Team, TestRun, TestRunItem, audit)
+from .models import (CHANNELS, DELIVERY_MODES, STATUSES, AiGrade, Attachment, AttachmentImport, Audit, Grade,
+                     ImportBatch, Inject, Mail, MailLabel, Message, Person, ReplyAnalysis, Response, ResponseAttachment,
+                     RubricCriterion, Sender, Team, TestRun, TestRunItem, audit)
 
-MAX_ATTACHMENT = 30 * 1024 * 1024
-MAX_ZIP_TOTAL = 300 * 1024 * 1024
+MAX_ATTACHMENT = documents.MAX_ATTACHMENT
 User = get_user_model()
 
 
@@ -130,12 +127,6 @@ def inject_new(request):
     return redirect(f"/injects/{inj.id}/")
 
 
-def _doc_matches(doc_line, filename):
-    d, f = doc_line.strip().lower(), filename.lower()
-    stem = f.rsplit(".", 1)[0]
-    return f == d or stem == d or stem == d.rsplit(".", 1)[0] or (len(d) > 8 and f.startswith(d))
-
-
 @excon_required
 def inject_page(request, iid):
     inj = get_object_or_404(Inject, pk=iid)
@@ -148,7 +139,7 @@ def inject_page(request, iid):
         "tab": "injects", "inj": inj, "drafts": drafts, "warnings": warnings,
         "msgs": Message.objects.filter(inject=inj)[:100], "teams": Team.objects.filter(is_test=False),
         "senders": Sender.objects.filter(active=True), "sender": rnd.sender_for(inj), "atts": atts,
-        "missing_docs": [d for d in docs if not any(_doc_matches(d, a.filename) for a in atts)],
+        "missing_docs": [d for d in docs if not any(documents.doc_matches(d, a.filename) for a in atts)],
         "rubric": inj.rubric.all(), "reply_count": inj.responses.exclude(status="ignored").count(),
         "with_rubric": Inject.objects.filter(rubric__isnull=False).exclude(pk=iid).distinct().order_by("mel_id"),
         "send_at_input": local_input(inj.send_at), "DELIVERY_MODES": DELIVERY_MODES, "CHANNELS": CHANNELS,
@@ -274,16 +265,6 @@ def inject_delete(request, iid):
     return redirect("/injects/")
 
 
-def _put_attachment(inj, filename, data):
-    a = inj.attachments.filter(filename=filename).first()
-    if a:
-        a.data, a.size = data, len(data)
-        a.save()
-        return a
-    return Attachment.objects.create(inject=inj, filename=filename, data=data, size=len(data),
-                                     content_type=mimetypes.guess_type(filename)[0] or "application/octet-stream")
-
-
 @excon_required
 @require_POST
 def attachments_upload(request, iid):
@@ -293,7 +274,7 @@ def attachments_upload(request, iid):
         if up.size > MAX_ATTACHMENT:
             messages.error(request, f"{up.name} is over 30 MB; not added.")
             continue
-        _put_attachment(inj, PurePosixPath(up.name).name, up.read())
+        documents.put_attachment(inj, PurePosixPath(up.name).name, up.read())
         n += 1
     audit("attachments_upload", f"{inj.mel_id}: {n}", _u(request))
     messages.success(request, f"{n} file(s) attached.")
@@ -344,7 +325,10 @@ def import_page(request):
         return render(request, "ops/import_plan.html", {"tab": "injects", "batch": batch, "rows": rows,
                                                         "missing": missing, "summary": summary})
     batches = ImportBatch.objects.order_by("-id")[:10]
-    return render(request, "ops/import.html", {"tab": "injects", "batches": batches})
+    zips = list(AttachmentImport.objects.all()[:5])
+    return render(request, "ops/import.html", {
+        "tab": "injects", "batches": batches, "zips": zips, "zip_running": any(z.active for z in zips),
+        "n_injects": Inject.objects.count(), "n_attachments": Attachment.objects.count()})
 
 
 @excon_required
@@ -373,32 +357,44 @@ def import_attachments(request):
         messages.error(request, "Upload a .zip of the inject documents.")
         return redirect("/import/")
     try:
-        zf = zipfile.ZipFile(up)
-    except zipfile.BadZipFile:
-        messages.error(request, "Not a valid zip file.")
+        documents.start(up, _u(request))
+    except documents.ZipError as e:
+        messages.error(request, str(e))
         return redirect("/import/")
-    entries = [e for e in zf.infolist() if not e.is_dir() and not PurePosixPath(e.filename).name.startswith((".", "~$"))
-               and "__MACOSX" not in e.filename]
-    if sum(e.file_size for e in entries) > MAX_ZIP_TOTAL:
-        messages.error(request, "Zip contents are over 300 MB.")
+    messages.success(request, f"{up.name} received. Its documents are being matched to injects; progress is shown below.")
+    return redirect("/import/")
+
+
+@excon_required
+@require_POST
+def injects_clear(request):
+    """Start over: delete every inject's attachments, or every inject (with its attachments,
+    rubric, grades and test-run items). Deliveries and replies stay, unlinked, in the Log,
+    the inboxes and Replies."""
+    what = request.POST.get("what")
+    if (request.POST.get("confirm") or "").strip() != "DELETE":
+        messages.error(request, "Type DELETE to confirm.")
         return redirect("/import/")
-    attached, used = 0, set()
-    for inj in Inject.objects.exclude(supporting_documents=None).exclude(status__in=importer.LOCKED):
-        for line in inj.supporting_documents.splitlines():
-            for e in entries:
-                name = PurePosixPath(e.filename).name
-                if _doc_matches(line, name) and e.file_size <= MAX_ATTACHMENT:
-                    _put_attachment(inj, name, zf.read(e))
-                    used.add(e.filename)
-                    attached += 1
-                    break
-    audit("attachments_zip", f"{up.name}: {attached} attached", _u(request))
-    unused = [PurePosixPath(e.filename).name for e in entries if e.filename not in used]
-    messages.success(request, f"{attached} attachment(s) matched to injects.")
-    if unused:
-        messages.warning(request, f"{len(unused)} file(s) in the zip matched no inject: " + ", ".join(unused[:15])
-                         + (" ..." if len(unused) > 15 else ""))
-    return redirect("/injects/")
+    if Inject.objects.filter(status="sending").exists():
+        messages.error(request, "An inject is being sent; try again when it has finished.")
+        return redirect("/import/")
+    if any(j.active for j in AttachmentImport.objects.filter(status="running")):
+        messages.error(request, "A zip of documents is being matched; try again when it has finished.")
+        return redirect("/import/")
+    with transaction.atomic():
+        n_att = Attachment.objects.count()
+        if what == "injects":
+            n_inj = Inject.objects.count()
+            Inject.objects.all().delete()
+            detail = f"{n_inj} injects, {n_att} attachments"
+        elif what == "attachments":
+            Attachment.objects.all().delete()
+            detail = f"{n_att} attachments"
+        else:
+            raise Http404
+    audit(f"clear_{what}", detail, _u(request))
+    messages.success(request, f"Deleted {detail}.")
+    return redirect("/import/")
 
 
 # --- senders -----------------------------------------------------------------------------------

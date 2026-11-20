@@ -47,8 +47,10 @@ The status bar under the tabs shows the Nairobi clock, **Live disarmed** (green)
 1. In the knowledge base: `python3 -I scripts/export_inject_bundle.py`. It writes `work/simex-ops/injects.json` and `attachments.zip`.
 2. **Injects → Import / update**, upload `injects.json` (or `MEL-MIL.xlsx`) and click **Check file**.
 3. Read the summary (new / updated / with local edits / unchanged), then **Apply import**. New injects are **in-app**.
-4. On the same page, upload `attachments.zip`. Files are matched to injects by the names in the MEL's *Supporting documents* column.
+4. On the same page, upload `attachments.zip`. Files are matched to injects by the names in the MEL's *Supporting documents* column. Matching runs in the background once the upload has finished: the page shows its progress (*matching … of … injects*) and then how many files were attached and which matched no inject. You can leave the page meanwhile. If it shows *interrupted* (the app restarted, e.g. a deploy), upload the zip again: files already attached are replaced, not duplicated.
 5. Open a few injects: documents the MEL lists but that are still missing are shown in orange under **Attachments**. Upload those by hand (max 30 MB each; put a link in the body for the 1-20 briefing video).
+
+**Start over** (bottom of the same page): delete all attachments (to load a new zip), or all injects with their attachments, rubrics, grades and test-run items (to import the MEL from scratch). Type DELETE to confirm. Deliveries, inbox mail and replies stay, no longer linked to an inject. Download a backup first (Settings).
 
 Only participant-facing fields are imported. Expected outcomes, story, theme, key figures and the ExCon description never enter the app. Re-importing updates what changed in the MEL, keeps your edits (unless you tick "Overwrite my local edits") and never touches what was already delivered.
 
