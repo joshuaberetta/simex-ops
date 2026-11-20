@@ -238,7 +238,8 @@ Export grades and a final backup, disarm, and disable the participant logins (Pe
 | A team says nothing arrived | Team inboxes → View as team. If it's there, they may be looking at another folder or another team's login. |
 | Inject **overdue** | Send now, or move its time and Schedule. |
 | An inject went out with a missing attachment, link or a mistake | Open it → **Send a follow-up** (5.3): add the file, explain, send it in the same conversation. |
-| Inject **failed / partial** | Open it, read the error, fix it, "only retry the failed deliveries". |
+| Inject **failed / partial** | Open it, read the error, fix it, "only retry the failed deliveries". One inject failing never holds up the others. |
+| An email reply is missing or shows no text | The scheduler checks Resend every minute for received email the webhook missed (last 2 hours) and retries failed fetches. For older mail, Replies → **Sync email from Resend**. |
 | A reply is "unmatched" or a "guess" | Open it and set the inject and team under **Match**. |
 | Email channel: "Mailer: log" | `RESEND_API_KEY` is missing; email injects are only logged. In-app is unaffected. |
 | Emails aren't arriving / bouncing | Log → the email → delivery status. If it can't be fixed quickly, switch to SIMEX Mail (5.6). |

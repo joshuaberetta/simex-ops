@@ -584,13 +584,17 @@ def test_backup_roundtrip(excon):
     do_import(excon, SAMPLE)
     arm()
     deliver_now("1-15")
-    participant("a")
+    pa = participant("a")
+    pa.get(f"/inbox/t/{Mail.objects.get(team__code='a').thread}/")  # a read event
+    from ops.models import Event
+    assert Event.objects.filter(type="read").count() == 1
     data = excon.get("/settings/backup/").json()
     Mail.objects.all().delete()
     from django.core.files.uploadedfile import SimpleUploadedFile
     r = excon.post("/settings/restore/", {"confirm": "RESTORE",
                                           "file": SimpleUploadedFile("b.json", json.dumps(data).encode())}, follow=True)
     assert Mail.objects.count() == 4
+    assert Event.objects.filter(type="read").count() == 1  # read receipts survive a restore
     assert conf.get("live_armed") == "0"
     assert get_user_model().objects.filter(username="a.p").exists()
 
