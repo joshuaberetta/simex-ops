@@ -137,6 +137,12 @@ def _send_at(send_date, send_time):
     return local.astimezone(timezone.utc).replace(tzinfo=None).isoformat(timespec="minutes")
 
 
+def sender_domain(sender):
+    """The domain of the MEL's sender address (in-app personas show it), if it is one."""
+    domain = (sender or "").strip().lower().rpartition("@")[2] if "@" in (sender or "") else ""
+    return domain if re.fullmatch(r"([a-z0-9-]+\.)+[a-z]{2,}", domain) else None
+
+
 def sender_local(sender):
     if not sender:
         return None
@@ -182,13 +188,30 @@ def normalise(raw_items):
             "scenario_dt": raw.get("scenario_dt"),
             "send_at": _send_at(raw.get("send_date"), raw.get("send_time")),
             "sender_local": sender_local(raw.get("sender")),
+            "sender_domain": sender_domain(raw.get("sender")),
             "recipients_label": raw.get("recipients"),
             "delivery": delivery_for(raw.get("recipients")),
             "subject": raw.get("subject"),
             "body": raw.get("content"),
             "supporting_documents": "\n".join(docs) or None,
         })
+    _split_shared_usernames(out)
     return out
+
+
+def _split_shared_usernames(records):
+    """news@cnn.com and news@reuters.com in one MEL are two personas: their usernames become
+    cnn-news and reuters-news, with news as the username shown in SIMEX Mail."""
+    domains = {}
+    for r in records:
+        if r["sender_local"] and r["sender_domain"]:
+            domains.setdefault(r["sender_local"], set()).add(r["sender_domain"])
+    for r in records:
+        lp, domain = r["sender_local"], r["sender_domain"]
+        if lp and domain and len(domains[lp]) > 1:
+            labels = [d.split(".")[0] for d in domains[lp]]
+            label = domain.split(".")[0] if labels.count(domain.split(".")[0]) == 1 else domain.replace(".", "-")
+            r["sender_shown"], r["sender_local"] = lp, f"{label}-{lp}"
 
 
 def parse_upload(filename, data):
@@ -276,7 +299,7 @@ def plan(records):
     return rows, missing
 
 
-def apply(records, overwrite_local=False, cancel_missing=False, user=""):
+def apply(records, overwrite_local=False, cancel_missing=False, sender_domains=False, user=""):
     now = datetime.datetime.now(timezone.utc)
     existing = {i.mel_id: i for i in Inject.objects.all()}
     counts = {"new": 0, "updated": 0, "kept_local": 0, "skipped_sent": 0, "rescheduled": 0, "cancelled": 0}
@@ -323,17 +346,35 @@ def apply(records, overwrite_local=False, cancel_missing=False, user=""):
                 inj.save()
                 audit("import_cancel", f"{inj.mel_id}: not in the file", user)
                 counts["cancelled"] += 1
-    ensure_senders(records)
+    ensure_senders(records, use_domains=sender_domains)
     audit("import", json.dumps(counts), user)
     return counts
 
 
-def ensure_senders(records):
-    have = set(Sender.objects.values_list("local_part", flat=True))
+def sender_domains(records):
+    """{username: (username shown, domain)} from the MEL for the senders in the file that have
+    no SIMEX Mail domain yet (or don't exist yet): what "use the MEL's sender domains" sets."""
+    have = dict(Sender.objects.values_list("local_part", "domain"))
+    out = {}
+    for r in records:
+        lp, domain = r.get("sender_local"), r.get("sender_domain")
+        if lp and domain and not have.get(lp) and lp not in out:
+            out[lp] = (r.get("sender_shown") or "", domain)
+    return out
+
+
+def ensure_senders(records, use_domains=False):
+    """Create the senders the MEL uses. With use_domains, a sender without a domain takes the
+    MEL's (SIMEX Mail shows it); a domain set on the Senders tab is never changed."""
+    domains = sender_domains(records) if use_domains else {}
+    have = {x.local_part: x for x in Sender.objects.all()}
     for r in records:
         lp = r.get("sender_local")
         if lp and lp not in have:
             # "undac-{team}-tl" -> "UNDAC {team_name} TL"; edit names on the Senders tab.
             name = " ".join("{team_name}" if "{" in p else p.upper() for p in lp.split("-"))
-            Sender.objects.create(local_part=lp, display_name=name)
-            have.add(lp)
+            shown, domain = domains.get(lp, ("", ""))
+            have[lp] = Sender.objects.create(local_part=lp, display_name=name, inapp_local=shown, domain=domain)
+        elif lp in domains and not have[lp].domain:
+            have[lp].inapp_local, have[lp].domain = domains[lp]
+            have[lp].save(update_fields=["inapp_local", "domain"])

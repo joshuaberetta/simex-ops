@@ -45,7 +45,7 @@
 
 {% if r.persona %}
 <form method="post" action="/replies/{{ latest.id }}/answer/" class="card form">{% csrf_token %}
-  <h3>Answer as {% if sender %}{{ sender.display_name }}{% else %}{{ r.persona }}{% endif %} &lt;{{ r.persona }}@{{ MAIL_DOMAIN }}&gt;</h3>
+  <h3>Answer as {% if sender %}{{ sender.display_name }}{% else %}{{ r.persona }}{% endif %} &lt;{{ persona_addr }}&gt;</h3>
   <textarea name="body" rows="6" placeholder="In character.{% if r.channel == 'email' %} The original is quoted below your text.{% else %} It appears in the team's inbox in the same conversation.{% endif %}"></textarea>
   <button class="btn" data-confirm="Send this reply to {% if r.team %}{{ r.team.name }}{% else %}{{ r.from_addr }}{% endif %}?">Send reply</button>
   {% for m in answers %}<p class="small">Answered {{ m.created_at|date:"D H:i" }}: <a href="/log/{{ m.id }}/">{{ m.status }}</a></p>{% endfor %}

@@ -97,6 +97,38 @@ def sender_for(inj):
     return Sender.objects.filter(local_part=inj.sender_local).first() if inj.sender_local else None
 
 
+DOMAIN = re.compile(r"^(?=.{3,200}$)([a-z0-9{}](?:[a-z0-9{}_-]*[a-z0-9}])?\.)+[a-z]{2,}$")
+
+
+def persona_address(sender, local, ctx=None, channel="inapp"):
+    """The address a persona (username local, {team} filled) shows. In-app: the sender's own
+    SIMEX Mail address (any username and domain, Senders tab); by email always
+    <local>@MAIL_DOMAIN, the only domain Resend can send from."""
+    if channel == "inapp" and sender:
+        shown = fill(sender.inapp_local, ctx or {}).lower() if sender.inapp_local else local
+        return f"{shown}@{fill(sender.domain, ctx or {}).lower() if sender.domain else config.MAIL_DOMAIN}"
+    return f"{local}@{config.MAIL_DOMAIN}"
+
+
+def sender_by_local(local):
+    """(Sender, placeholder context) behind a persona username, also one filled in from a
+    {team} username (undac-a-tl from undac-{team}-tl)."""
+    s = Sender.objects.filter(local_part=local).first()
+    if s:
+        return s, {}
+    for s in Sender.objects.filter(local_part__contains="{team}"):
+        pattern = re.escape(s.local_part).replace(re.escape("{team}"), r"(?P<team>[a-z0-9]+)")
+        m = re.fullmatch(pattern, local or "")
+        if m:
+            return s, {"team": m.group("team")}
+    return None, {}
+
+
+def persona_addr(local, channel="inapp"):
+    s, ctx = sender_by_local(local)
+    return persona_address(s, local, ctx, channel)
+
+
 def scope_teams(inj):
     teams = list(Team.objects.filter(active=True, is_test=False))
     if inj.team_ids:
@@ -204,7 +236,7 @@ def build_inapp(inj, cfg):
     for target, ctx, team, person, to_label in targets:
         local, name = _identity(inj, sender, ctx)
         subject = subject_for(inj, cfg, ctx)
-        d = Draft(target=target, from_addr=f'"{name}" <{local}@{config.MAIL_DOMAIN}>', reply_to=None, to=[], cc=[],
+        d = Draft(target=target, from_addr=f'"{name}" <{persona_address(sender, local, ctx)}>', reply_to=None, to=[], cc=[],
                   bcc=[], subject=subject, body=fill(inj.body or "", ctx), footer=footer,
                   attachment_ids=[a.id for a in atts], team_id=team.id, person_id=person.id if person else None,
                   reply_local=local, channel="inapp", inbox_team_id=team.id, to_label=to_label, from_name=name)

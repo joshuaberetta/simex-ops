@@ -79,6 +79,10 @@ One row per persona, created from the MEL's sender aliases. Fix display names (e
 
 Active senders are the participants' **address book**: they can write to any of them. Untick **active** to hide one.
 
+**Address in SIMEX Mail.** Each persona has a **username** (what injects use, and its email address: `username@simex.kobolabs.dev`) and, for SIMEX Mail, any address you like: the username and domain after it on its row, e.g. `news` @ `cnn.com`. Empty parts default to the username and simex.kobolabs.dev. Participants see that address on messages and in their address book. Two personas can show the same name on different domains: `news@cnn.com` (username `cnn-news`) and `news@reuters.com` (username `reuters-news`); only the full SIMEX Mail address has to be unique.
+By email every persona sends from **its username @simex.kobolabs.dev**, the only domain Resend can send from, so switching to email (5.6) changes the addresses teams see.
+When you import the MEL, the check page offers to give senders without a domain the address in the MEL's sender column (ticked; it lists them). If the MEL uses one name on several domains (`news@cnn.com`, `news@reuters.com`), they become separate personas, `cnn-news` and `reuters-news`. An address you set here is never changed by an import.
+
 ### 3.4 Settings
 - **Default footer:** "EXERCISE EXERCISE EXERCISE …" at the bottom of every message.
 - **Subject prefix** (e.g. `[SIMEX] `) and **put the inject code in the subject**: every inject's subject then starts with its code, e.g. `[1-15] Request for assessment`, so teams and ExCon can refer to it. Off by default; it applies to injects delivered after you turn it on (both channels).

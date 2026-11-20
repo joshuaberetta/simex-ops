@@ -67,13 +67,24 @@ class Sender(models.Model):
     local_part = models.CharField(max_length=120, unique=True)  # may contain {team}
     display_name = models.CharField(max_length=200, blank=True, default="")
     reply_to = models.CharField(max_length=320, blank=True, default="")  # email channel only
+    # In-app (SIMEX Mail) only: the address participants see, e.g. news@cnn.com, when it isn't
+    # <local_part>@MAIL_DOMAIN. local_part stays the persona's unique key (and its email username:
+    # email always goes from MAIL_DOMAIN, the domain Resend can send from), so news@cnn.com and
+    # news@reuters.com can be two personas, e.g. cnn-news and reuters-news.
+    inapp_local = models.CharField(max_length=120, blank=True, default="")  # empty = local_part
+    domain = models.CharField(max_length=200, blank=True, default="")  # empty = MAIL_DOMAIN
     active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ["local_part"]
 
     def __str__(self):
-        return f"{self.display_name} <{self.local_part}@{settings.MAIL_DOMAIN}>"
+        return f"{self.display_name} <{self.inapp_address}>"
+
+    @property
+    def inapp_address(self):
+        """The SIMEX Mail address (with {team} unfilled)."""
+        return f"{self.inapp_local or self.local_part}@{self.domain or settings.MAIL_DOMAIN}".lower()
 
 
 class Inject(models.Model):
@@ -208,6 +219,7 @@ class Message(models.Model):
     banner = models.TextField(blank=True, default="")
     body = models.TextField(blank=True, default="")  # in-app: text without footer/banner
     footer = models.TextField(blank=True, default="")
+    persona = models.CharField(max_length=120, blank=True, default="")  # the sender's username (Sender.local_part, filled)
     # Follow-up (kind followup): the delivery of the inject it continues, in that thread.
     parent = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="followups")
     message_id_header = models.CharField(max_length=300, blank=True, default="")  # email: its Message-ID, from Resend

@@ -866,3 +866,81 @@ def test_test_run_channel_overrides_the_delivery_setting(excon):
     excon.post("/tests/", {"name": "R3", "scope": "ids", "ids": "1-15", "timing": "interval", "channel": "email",
                            "redirect": ""})
     assert TestRun.objects.count() == 1
+
+
+def test_inapp_personas_can_have_any_domain(excon):
+    from ops.models import Sender
+    r = excon.post("/import/", {"file": _upload(json.dumps(SAMPLE).encode())})
+    assert b"undac-{team}-tl@epeigonia.org" in r.content
+    bid = re.search(rb"/import/(\d+)/apply/", r.content).group(1).decode()
+    excon.post(f"/import/{bid}/apply/", {"sender_domains": "1"})
+    s = Sender.objects.get(local_part="undac-{team}-tl")
+    assert s.domain == "epeigonia.org"
+    excon.post("/senders/", {"id": s.id, "local_part": s.local_part, "display_name": s.display_name,
+                             "domain": "not a domain", "active": "1"})
+    assert Sender.objects.get(pk=s.id).domain == "epeigonia.org"
+    arm()
+    deliver_now("1-15")
+    mail = Mail.objects.get(team__code="a")
+    assert mail.from_addr == "undac-a-tl@epeigonia.org" and mail.persona == "undac-a-tl"
+    pa = participant("a", "Jane")
+    book = pa.get("/inbox/").content.decode()
+    assert "undac-a-tl@epeigonia.org" in book
+    pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: x", "body": "ok", "in_reply_to": mail.id})
+    resp = Response.objects.get()
+    assert resp.to == ["undac-a-tl@epeigonia.org"] and resp.inject.mel_id == "1-15"
+    assert "&lt;undac-a-tl@epeigonia.org&gt;" in excon.get(f"/replies/{resp.id}/").content.decode()
+    excon.post(f"/replies/{resp.id}/answer/", {"body": "Noted."})
+    assert Mail.objects.filter(team__code="a", body="Noted.").get().from_addr == "undac-a-tl@epeigonia.org"
+    # By email the persona still sends from our domain.
+    inj = Inject.objects.get(mel_id="1-15")
+    inj.channel = "email"
+    drafts, _ = render.build(inj, conf.get_all())
+    assert all("@simex.kobolabs.dev>" in d.from_addr for d in drafts)
+    # A re-import never changes a domain set on the Senders tab.
+    excon.post("/senders/", {"id": s.id, "local_part": s.local_part, "display_name": s.display_name,
+                             "domain": "un.org", "active": "1"})
+    r = excon.post("/import/", {"file": _upload(json.dumps(SAMPLE).encode())})
+    assert b"epeigonia.org" not in r.content.split(b"Apply import")[0]
+
+
+def test_same_username_on_two_domains_is_two_personas(excon):
+    from ops.models import Sender
+    items = [{"inject_id": "2-01", "method": "Email", "sender": "news@cnn.com", "recipients": "Each team",
+              "subject": "CNN story", "content": "c", "send_date": "2026-11-23T00:00:00", "send_time": "09:00"},
+             {"inject_id": "2-02", "method": "Email", "sender": "news@reuters.com", "recipients": "Each team",
+              "subject": "Reuters story", "content": "r", "send_date": "2026-11-23T00:00:00", "send_time": "09:05"}]
+    r = excon.post("/import/", {"file": _upload(json.dumps(items).encode())})
+    assert b"news@cnn.com, news@reuters.com" in r.content
+    bid = re.search(rb"/import/(\d+)/apply/", r.content).group(1).decode()
+    excon.post(f"/import/{bid}/apply/", {"sender_domains": "1"})
+    assert {(s.local_part, s.inapp_address) for s in Sender.objects.filter(domain__isnull=False).exclude(domain="")} == {
+        ("cnn-news", "news@cnn.com"), ("reuters-news", "news@reuters.com")}
+    assert Inject.objects.get(mel_id="2-02").sender_local == "reuters-news"
+    arm()
+    deliver_now("2-01")
+    deliver_now("2-02")
+    cnn = Mail.objects.get(team__code="a", subject="CNN story")
+    reu = Mail.objects.get(team__code="a", subject="Reuters story")
+    assert (cnn.from_addr, cnn.persona, reu.from_addr, reu.persona) == (
+        "news@cnn.com", "cnn-news", "news@reuters.com", "reuters-news")
+    pa = participant("a", "Jane")
+    book = pa.get("/inbox/").content.decode()
+    assert "news@cnn.com" in book and "news@reuters.com" in book
+    pa.post("/inbox/send/", {"to": "p:reuters-news", "subject": "Re: Reuters story", "body": "q", "in_reply_to": reu.id})
+    resp = Response.objects.get()
+    assert (resp.persona, resp.to, resp.inject.mel_id) == ("reuters-news", ["news@reuters.com"], "2-02")
+    excon.post(f"/replies/{resp.id}/answer/", {"body": "A."})
+    ans = Mail.objects.get(team__code="a", body="A.")
+    assert ans.from_addr == "news@reuters.com" and ans.thread == reu.thread and ans.persona == "reuters-news"
+    # Two personas can't show the same SIMEX Mail address.
+    cnn_s = Sender.objects.get(local_part="cnn-news")
+    excon.post("/senders/", {"id": cnn_s.id, "local_part": "cnn-news", "inapp_local": "news", "domain": "reuters.com",
+                             "active": "1"})
+    assert Sender.objects.get(pk=cnn_s.id).domain == "cnn.com"
+    # By email each persona sends from its username at our domain.
+    inj = Inject.objects.get(mel_id="2-02")
+    inj.channel = "email"
+    Person.objects.create(name="Real a", email="real-a@kobotoolbox.org", team=Team.objects.get(code="a"))
+    drafts, _ = render.build(inj, conf.get_all())
+    assert drafts and all(d.from_addr.endswith("<reuters-news@simex.kobolabs.dev>") for d in drafts)

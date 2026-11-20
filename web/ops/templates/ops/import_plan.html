@@ -8,6 +8,9 @@
   <form method="post" action="/import/{{ batch.id }}/apply/">{% csrf_token %}
     {% if summary.conflict %}<label class="chk"><input type="checkbox" name="overwrite" value="1"> Overwrite my local edits with the file's values</label>{% endif %}
     {% if summary.droppable %}<label class="chk"><input type="checkbox" name="cancel_missing" value="1"> Cancel the <b>{{ summary.droppable }}</b> unsent inject(s) that are no longer in this file <span class="warn">(otherwise they are still sent)</span></label>{% endif %}
+    {% if domains %}<label class="chk"><input type="checkbox" name="sender_domains" value="1" checked> In SIMEX Mail, show {{ domains|length }} sender{{ domains|length|pluralize }} with the MEL's domain:
+      <span class="small">{{ domains|join:", " }}</span>
+      <span class="hint">Only senders without a domain on the Senders tab. Email always uses {{ MAIL_DOMAIN }}.</span></label>{% endif %}
     <button class="btn primary">Apply import</button> <a href="/import/" class="btn">Cancel</a>
   </form>
 </div>

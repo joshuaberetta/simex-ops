@@ -33,7 +33,8 @@
       <span class="hint">In-app: lands in the team inboxes on this site. Email: sent through Resend.</span>
     </label>
     <label>Sender username
-      <span class="addr"><input name="sender_local" value="{{ inj.sender_local|default:'' }}" list="senderlist" placeholder="cnn"><span>@{{ MAIL_DOMAIN|default:'simex.kobolabs.dev' }}</span></span>
+      <span class="addr"><input name="sender_local" value="{{ inj.sender_local|default:'' }}" list="senderlist" placeholder="cnn"><span>@{{ MAIL_DOMAIN }}</span></span>
+      {% if sender_inapp %}<span class="hint">In SIMEX Mail: {{ sender_inapp }}</span>{% endif %}
       <datalist id="senderlist">{% for x in senders %}<option value="{{ x.local_part }}">{{ x.display_name }}</option>{% endfor %}</datalist>
     </label>
     <label>Sender name <input name="from_name" value="{{ inj.from_name|default:'' }}" placeholder="{% if sender %}{{ sender.display_name }}{% else %}from the Senders list{% endif %}"></label>

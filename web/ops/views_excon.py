@@ -139,6 +139,7 @@ def inject_page(request, iid):
         "tab": "injects", "inj": inj, "drafts": drafts, "warnings": warnings,
         "msgs": Message.objects.filter(inject=inj)[:100], "teams": Team.objects.filter(is_test=False),
         "senders": Sender.objects.filter(active=True), "sender": rnd.sender_for(inj), "atts": atts,
+        "sender_inapp": rnd.sender_for(inj).inapp_address if rnd.sender_for(inj) and inj.effective_channel == "inapp" else "",
         "missing_docs": [d for d in docs if not any(documents.doc_matches(d, a.filename) for a in atts)],
         "rubric": inj.rubric.all(), "reply_count": inj.responses.exclude(status="ignored").count(),
         "with_rubric": Inject.objects.filter(rubric__isnull=False).exclude(pk=iid).distinct().order_by("mel_id"),
@@ -356,8 +357,9 @@ def import_page(request):
         rows, missing = importer.plan(records)
         summary = {k: sum(1 for r in rows if r["action"] == k) for k in ("new", "update", "conflict", "unchanged")}
         summary["droppable"] = sum(1 for m in missing if m["droppable"])
+        domains = sorted(f"{shown or lp}@{d}" for lp, (shown, d) in importer.sender_domains(records).items())
         return render(request, "ops/import_plan.html", {"tab": "injects", "batch": batch, "rows": rows,
-                                                        "missing": missing, "summary": summary})
+                                                        "missing": missing, "summary": summary, "domains": domains})
     batches = ImportBatch.objects.order_by("-id")[:10]
     zips = list(AttachmentImport.objects.all()[:5])
     return render(request, "ops/import.html", {
@@ -373,7 +375,8 @@ def import_apply(request, bid):
         messages.error(request, "That import was already applied or has expired.")
         return redirect("/import/")
     counts = importer.apply(batch.payload, overwrite_local=request.POST.get("overwrite") == "1",
-                            cancel_missing=request.POST.get("cancel_missing") == "1", user=_u(request))
+                            cancel_missing=request.POST.get("cancel_missing") == "1",
+                            sender_domains=request.POST.get("sender_domains") == "1", user=_u(request))
     batch.applied = True
     batch.save()
     messages.success(request, f"Imported: {counts['new']} new, {counts['updated']} updated, {counts['kept_local']} "
@@ -446,19 +449,34 @@ def senders_page(request):
         if reply_to and not rnd.EMAIL.match(reply_to):
             messages.error(request, f"Reply-to '{reply_to}' is not an email address.")
             return redirect("/senders/")
+        domain = (P.get("domain") or "").strip().lower().lstrip("@")
+        if domain and (not rnd.DOMAIN.match(domain) or domain.endswith(f"teams.{settings.MAIL_DOMAIN}")):
+            messages.error(request, f"'{domain}' is not a valid domain (e.g. epeigonia.org).")
+            return redirect("/senders/")
+        inapp_local = re.sub(r"@.*$", "", (P.get("inapp_local") or "").strip().lower())
+        if inapp_local == local:
+            inapp_local = ""
+        if inapp_local and not rnd.LOCAL.match(inapp_local.replace("{team}", "x")):
+            messages.error(request, f"'{inapp_local}' is not a valid username (letters, digits, . _ + - and {{team}}).")
+            return redirect("/senders/")
         if Sender.objects.filter(local_part=local).exclude(pk=int(sid or 0)).exists():
-            messages.error(request, f"{local}@{settings.MAIL_DOMAIN} already exists.")
+            messages.error(request, f"The username {local} is already used by another sender.")
             return redirect("/senders/")
         x = Sender.objects.get(pk=int(sid)) if sid else Sender()
         old = x.local_part
         x.local_part, x.display_name, x.reply_to = local, (P.get("display_name") or "").strip(), reply_to
+        x.inapp_local, x.domain = inapp_local, domain
+        clash = next((o for o in Sender.objects.exclude(pk=x.pk) if o.inapp_address == x.inapp_address), None)
+        if clash:
+            messages.error(request, f"{x.inapp_address} is already the SIMEX Mail address of {clash.local_part}.")
+            return redirect("/senders/")
         x.active = P.get("active") == "1" or not sid
         x.save()
         renamed = 0
         if old and old != local and P.get("rename_injects") == "1":
             renamed = Inject.objects.filter(sender_local=old).update(sender_local=local)
         audit("sender_save", local, _u(request))
-        messages.success(request, f"Saved {local}@{settings.MAIL_DOMAIN}." + (f" {renamed} injects now use it." if renamed else ""))
+        messages.success(request, f"Saved {local} ({x.inapp_address} in SIMEX Mail)." + (f" {renamed} injects now use it." if renamed else ""))
         return redirect("/senders/")
     usage = dict(Inject.objects.values_list("sender_local").annotate(n=Count("id")).values_list("sender_local", "n"))
     senders = list(Sender.objects.all())
@@ -1068,7 +1086,8 @@ def reply_page(request, rid):
         "tab": "replies", "r": r, "minutes": inbound.response_minutes(r), "conv": conv, "latest": latest,
         "answers": r.answers.order_by("id"), "teams": Team.objects.all(), "people": Person.objects.order_by("name"),
         "injects_all": Inject.objects.order_by("seq"), "new_part": new_part, "quoted": quoted,
-        "sender": Sender.objects.filter(local_part=r.persona).first() if r.persona else None,
+        "sender": rnd.sender_by_local(r.persona)[0] if r.persona else None,
+        "persona_addr": rnd.persona_addr(r.persona, r.channel) if r.persona else "",
         "analysis": ReplyAnalysis.objects.filter(response=r).first(), "ai_on": ai.enabled(), "FLAGS": ai.FLAGS,
         "files": ResponseAttachment.objects.filter(response=r) if r.channel == "email" else
         (r.mail.files.all() if r.mail else [])})

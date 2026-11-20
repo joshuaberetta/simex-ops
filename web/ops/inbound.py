@@ -15,7 +15,7 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
-from . import mailer
+from . import mailer, render
 from .models import Event, Message, Person, Response, ResponseAttachment, audit
 
 log = logging.getLogger("simex.inbound")
@@ -120,7 +120,7 @@ def from_mail(mail, personas):
     parent = mail.in_reply_to
     persona = personas[0]
     r = Response(channel="inapp", mail=mail, received_at=mail.created_at, from_addr=mail.from_addr,
-                 from_name=mail.from_name, to=[f"{p}@{settings.MAIL_DOMAIN}" for p in personas], subject=mail.subject,
+                 from_name=mail.from_name, to=[render.persona_addr(p) for p in personas], subject=mail.subject,
                  text=mail.body, persona=persona, team=mail.team, person=mail.author, fetched=True,
                  kind="test" if mail.team.is_test else "live")
     src = parent.message if parent and parent.message_id else None

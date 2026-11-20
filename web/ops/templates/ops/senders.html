@@ -2,16 +2,19 @@
 {% block title %}Senders · SIMEX ops{% endblock %}
 {% block body %}
 <h1>Senders</h1>
-<p class="muted">The personas injects come from, and the address book participants write to. Shown as <i>name</i> &lt;<i>username</i>@{{ MAIL_DOMAIN }}&gt;.
+<p class="muted">The personas injects come from, and the address book participants write to.
+The <b>username</b> identifies the persona (injects use it) and is its email address, <i>username</i>@{{ MAIL_DOMAIN }}: email can only be sent from that domain.
+In SIMEX Mail a persona can show <b>any address</b>, e.g. <code>news@cnn.com</code> and <code>news@reuters.com</code> for the usernames <code>cnn-news</code> and <code>reuters-news</code>; empty parts default to the username and {{ MAIL_DOMAIN }}.
 <code>{team}</code> in a username, and <code>{team_name}</code> in a name, are filled in per team. Reply-to only matters for the email channel (leave it empty so replies are tracked).</p>
 <table class="list">
-  <thead><tr><th colspan="6">Name shown · address · reply-to (email) · injects using it · active</th></tr></thead>
+  <thead><tr><th colspan="6">Name shown · username · address in SIMEX Mail · reply-to (email) · injects using it · active</th></tr></thead>
   {% for x in senders %}
   <tr><td colspan="6">
       <form method="post" action="/senders/" class="rowform">{% csrf_token %}
         <input type="hidden" name="id" value="{{ x.id }}">
         <input name="display_name" value="{{ x.display_name }}" placeholder="CNN Breaking News">
-        <span class="addr"><input name="local_part" value="{{ x.local_part }}" required><span>@{{ MAIL_DOMAIN }}</span></span>
+        <input name="local_part" value="{{ x.local_part }}" required title="username">
+        <span class="addr" title="address in SIMEX Mail"><input name="inapp_local" value="{{ x.inapp_local }}" placeholder="{{ x.local_part }}"><span>@</span><input name="domain" value="{{ x.domain }}" placeholder="{{ MAIL_DOMAIN }}"></span>
         <input name="reply_to" value="{{ x.reply_to }}" placeholder="reply-to (email)">
         <span class="count">{{ x.usage }}</span>
         <label class="chk"><input type="checkbox" name="active" value="1" {% if x.active %}checked{% endif %}></label>
@@ -25,7 +28,8 @@
 <form method="post" action="/senders/" class="card rowform">{% csrf_token %}
   <b>Add</b>
   <input name="display_name" placeholder="CNN Breaking News">
-  <span class="addr"><input name="local_part" placeholder="cnn" required><span>@{{ MAIL_DOMAIN }}</span></span>
+  <input name="local_part" placeholder="username, e.g. cnn-news" required>
+  <span class="addr" title="address in SIMEX Mail (optional)"><input name="inapp_local" placeholder="news"><span>@</span><input name="domain" placeholder="cnn.com"></span>
   <input name="reply_to" placeholder="reply-to (optional)">
   <button class="btn small primary">Add sender</button>
 </form>

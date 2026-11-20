@@ -56,7 +56,8 @@ def new_message(inj, d, kind, idem_key, run=None):
                    to=d.to if d.channel == "email" else [d.to_label], cc=d.cc, bcc=d.bcc, original_to=d.original_to,
                    subject=d.subject, text=d.text, html=d.html, attachment_ids=d.attachment_ids,
                    team_id=d.team_id, person_id=d.person_id, reply_token=token if email_reply else None,
-                   inbox_team_id=d.inbox_team_id, banner=d.banner or "", body=d.body, footer=d.footer)
+                   inbox_team_id=d.inbox_team_id, banner=d.banner or "", body=d.body, footer=d.footer,
+                   persona=d.reply_local or "")
 
 
 def _put_mail(m):
@@ -66,7 +67,7 @@ def _put_mail(m):
     mail = Mail.objects.create(
         team_id=m.inbox_team_id, folder="inbox", thread=m.thread or (parent.thread if parent else ""),
         from_name=name, from_addr=addr, to_label=(m.to or [""])[0], to_person_id=m.person_id,
-        persona=addr.split("@")[0], subject=m.subject, body=m.body, footer=m.footer, banner=m.banner,
+        persona=m.persona or addr.split("@")[0], subject=m.subject, body=m.body, footer=m.footer, banner=m.banner,
         message=m, inject_id=m.inject_id, in_reply_to=parent, is_test=m.kind in ("test", "oneoff"))
     for a in Attachment.objects.filter(id__in=m.attachment_ids or []):
         MailAttachment.objects.create(mail=mail, attachment=a, filename=a.filename, content_type=a.content_type,
@@ -300,13 +301,14 @@ def create_test_run(name, injects, start, redirect, dry_run, factor=None, interv
 def answer(response, body, user=""):
     """Reply as the persona the participant wrote to: into their team's inbox (in-app
     thread) or by email (email thread). Returns the Message."""
-    from .models import Sender
     persona = response.persona or ""
-    sender = Sender.objects.filter(local_part=persona).first()
-    name = (sender.display_name if sender else persona).replace('"', "'")
+    sender, ctx = render.sender_by_local(persona)
+    team = response.team
+    ctx = {**ctx, "team_name": team.name} if team else ctx
+    name = ((render.fill(sender.display_name, ctx) if sender and sender.display_name else "") or persona).replace('"', "'")
     cfg = conf.get_all()
     subject = response.subject if response.subject.lower().startswith("re:") else f"Re: {response.subject}"
-    from_addr = f'"{name}" <{persona}@{settings.MAIL_DOMAIN}>'
+    from_addr = f'"{name}" <{render.persona_address(sender, persona, ctx, response.channel)}>'
     if response.channel == "inapp":
         team = response.team
         d = render.Draft(target=team.name if team else "", from_addr=from_addr, reply_to=None, to=[], cc=[], bcc=[],
@@ -394,7 +396,7 @@ def send_followup(inj, parents, subject, body, attachment_ids, user=""):
             ctx = _ctx(p)
             subj = render.fill(subject, ctx).replace("{subject}", p.subject)
             text = render.fill(body, ctx)
-            local = email.utils.parseaddr(p.from_addr)[1].split("@")[0]
+            local = p.persona or email.utils.parseaddr(p.from_addr)[1].split("@")[0]
             common = dict(target=p.target, from_addr=p.from_addr, subject=subj, footer=footer,
                           attachment_ids=[a.id for a in atts], team_id=p.team_id, person_id=p.person_id,
                           reply_local=local)

@@ -117,7 +117,7 @@ def address_book(team):
     for s in Sender.objects.filter(active=True):
         local = rnd.fill(s.local_part, ctx).lower()
         book.append({"key": f"p:{local}", "name": rnd.fill(s.display_name, ctx) or local,
-                     "addr": f"{local}@{settings.MAIL_DOMAIN}", "kind": "persona"})
+                     "addr": rnd.persona_address(s, local, ctx), "kind": "persona"})
     if conf.flag("team_to_team"):
         for t in Team.objects.filter(active=True, is_test=False).exclude(pk=team.pk):
             book.append({"key": f"t:{t.id}", "name": t.name, "addr": team_address(t), "kind": "team"})
@@ -130,7 +130,7 @@ def team_address(t):
 
 def _resolve(keys, book, team):
     """Address-book keys -> entries. Unknown persona keys (e.g. replying to a persona that was
-    since retired) are still accepted as long as the address is on our domain."""
+    since retired) are still accepted as long as the username is valid."""
     by = {b["key"]: b for b in book}
     out = []
     for k in keys:
@@ -140,7 +140,7 @@ def _resolve(keys, book, team):
         if k in by:
             out.append(by[k])
         elif k.startswith("p:") and rnd.LOCAL.match(k[2:]):
-            out.append({"key": k, "name": k[2:], "addr": f"{k[2:]}@{settings.MAIL_DOMAIN}", "kind": "persona"})
+            out.append({"key": k, "name": k[2:], "addr": rnd.persona_addr(k[2:]), "kind": "persona"})
     seen, uniq = set(), []
     for e in out:
         if e["key"] not in seen:
