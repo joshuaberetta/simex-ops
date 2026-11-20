@@ -46,7 +46,7 @@
     });
     if (menuBtn) menuBtn.nextElementSibling.hidden = !menuBtn.nextElementSibling.hidden;
     const det = e.target.closest("[data-details]");
-    $$(".gm-details").forEach((d) => { if (!det || d.previousElementSibling !== det) d.hidden = true; });
+    if (!e.target.closest(".gm-details")) $$(".gm-details").forEach((d) => { if (!det || d.previousElementSibling !== det) d.hidden = true; });
     if (det) { e.stopPropagation(); det.nextElementSibling.hidden = !det.nextElementSibling.hidden; }
     if (document.body.classList.contains("side-open") && !e.target.closest(".gm-side, [data-toggle-side]")) document.body.classList.remove("side-open");
   });
@@ -416,7 +416,7 @@
   let inline = null;
   if (tdata) {
     $$("[data-toggle-msg]").forEach((h) => h.addEventListener("click", (e) => {
-      if (e.target.closest("button, a")) return;
+      if (e.target.closest("button, a, .gm-details")) return;
       const art = h.closest(".gm-msg");
       if (art.classList.contains("closed")) { art.classList.remove("closed"); art.classList.add("open"); }
       else if (art.nextElementSibling && art.nextElementSibling.classList.contains("gm-msg")) { art.classList.add("closed"); art.classList.remove("open"); }
