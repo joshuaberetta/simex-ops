@@ -44,6 +44,8 @@ urlpatterns = [
     path("injects/<int:iid>/delete/", x.inject_delete),
     path("injects/<int:iid>/attachments/", x.attachments_upload),
     path("injects/<int:iid>/rubric/", x.rubric_save),
+    path("injects/<int:iid>/ai-check/", a.inject_ai_check),
+    path("injects/ai-check/", a.injects_ai_check),
     path("attachments/<int:aid>/", x.attachment_get),
     path("attachments/<int:aid>/delete/", x.attachment_delete),
     path("import/", x.import_page),

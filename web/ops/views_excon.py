@@ -19,11 +19,11 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from . import ai, legacy_import, backup, conf, delivery, documents, importer, inbound, mailer, render as rnd
+from . import ai, legacy_import, backup, checks, conf, delivery, documents, importer, inbound, mailer, render as rnd
 from .access import excon_required
 from .models import (CHANNELS, DELIVERY_MODES, STATUSES, AiGrade, Attachment, AttachmentImport, Audit, Grade,
-                     ImportBatch, Inject, Mail, MailLabel, Message, Person, ReplyAnalysis, Response, ResponseAttachment,
-                     RubricCriterion, Sender, Team, TestRun, TestRunItem, audit)
+                     ImportBatch, Inject, InjectReview, Mail, MailLabel, Message, Person, ReplyAnalysis, Response,
+                     ResponseAttachment, RubricCriterion, Sender, Team, TestRun, TestRunItem, audit)
 
 MAX_ATTACHMENT = documents.MAX_ATTACHMENT
 User = get_user_model()
@@ -57,6 +57,7 @@ def _u(request):
 @excon_required
 def injects(request):
     day, status, q = request.GET.get("day", ""), request.GET.get("status", ""), request.GET.get("q", "")
+    flagged = request.GET.get("flag", "")
     rows = list(Inject.objects.all().order_by("send_at", "seq"))
     rows.sort(key=lambda i: (i.send_at is None, i.send_at or timezone.now(), i.seq))
     days = sorted({local_day(i.send_at) for i in rows if i.send_at})
@@ -68,19 +69,47 @@ def injects(request):
         ql = q.lower()
         rows = [i for i in rows if ql in " ".join(filter(None, [i.mel_id, i.subject, i.body, i.sender_local])).lower()]
     senders = {x.local_part: x for x in Sender.objects.all()}
-    att_counts = dict(Attachment.objects.values_list("inject_id").annotate(n=Count("id")).values_list("inject_id", "n"))
+    files = checks.files_by_inject()
+    reviews = {rv.inject_id: rv for rv in InjectReview.objects.all()}
+    ai_stats = {"unsent": 0, "checked": 0, "queued": 0}
+    for i in rows:
+        fs = files.get(i.id, [])
+        i.flags = checks.inject_flags(i, fs, senders)
+        if not checks.unsent(i):
+            continue
+        ai_stats["unsent"] += 1
+        rv = ai.current_review(i, fs, senders, reviews)
+        if rv:
+            ai_stats["checked"] += 1
+            if not rv.dismissed:
+                i.flags += [("ai", f"AI: {ai.ISSUE_KINDS.get(x['kind'], 'check')}", x["detail"]) for x in rv.issues]
+        elif reviews.get(i.id) and reviews[i.id].status == "queued":
+            ai_stats["queued"] += 1
+    flag_total = sum(1 for i in rows if i.flags)
+    if flagged:
+        rows = [i for i in rows if i.flags]
     groups = []
     for i in rows:
         snd = senders.get(i.sender_local)
         i.from_display = i.from_name or (snd.display_name if snd else "")
-        i.att_count = att_counts.get(i.id, "")
+        i.att_count = len(files.get(i.id, [])) or ""
         i.delivery_label = DELIVERY_MODES.get(i.delivery, i.delivery).split("(")[0]
         key = timezone.localtime(i.send_at).strftime("%A %d %B %Y") if i.send_at else "No send time"
-        if not groups or groups[-1][0] != key:
-            groups.append((key, []))
-        groups[-1][1].append(i)
+        if not groups or groups[-1]["label"] != key:
+            groups.append({"label": key, "key": local_day(i.send_at) or "none", "items": []})
+        groups[-1]["items"].append(i)
+    for g in groups:
+        items = g["items"]
+        g["statuses"] = [(st, n) for st in STATUSES if (n := sum(1 for i in items if i.status == st))]
+        g["flagged"] = sum(1 for i in items if i.flags)
+        g["files"] = sum(len(files.get(i.id, [])) for i in items)
+        g["replies"] = sum(1 for i in items if i.expects_reply)
+        times = [i.send_at for i in items if i.send_at]
+        g["first"], g["last"] = (min(times), max(times)) if times else (None, None)
     return render(request, "ops/injects.html", {"tab": "injects", "groups": groups, "days": days, "day": day,
-                                                "status": status, "q": q, "total": len(rows), "STATUSES": STATUSES})
+                                                "status": status, "q": q, "flag": flagged, "flag_total": flag_total,
+                                                "ai_on": ai.enabled(), "ai_stats": ai_stats,
+                                                "total": len(rows), "STATUSES": STATUSES})
 
 
 @excon_required
@@ -134,13 +163,17 @@ def inject_page(request, iid):
         return _inject_save(request, inj)
     drafts, warnings = rnd.build(inj, conf.get_all())
     atts = list(inj.attachments.all())
-    docs = [d for d in (inj.supporting_documents or "").splitlines() if d.strip()]
+    names, senders = [a.filename for a in atts], {x.local_part: x for x in Sender.objects.all()}
+    review = InjectReview.objects.filter(inject=inj).first()
     ctx = {
         "tab": "injects", "inj": inj, "drafts": drafts, "warnings": warnings,
         "msgs": Message.objects.filter(inject=inj)[:100], "teams": Team.objects.filter(is_test=False),
         "senders": Sender.objects.filter(active=True), "sender": rnd.sender_for(inj), "atts": atts,
         "sender_inapp": rnd.sender_for(inj).inapp_address if rnd.sender_for(inj) and inj.effective_channel == "inapp" else "",
-        "missing_docs": [d for d in docs if not any(documents.doc_matches(d, a.filename) for a in atts)],
+        "missing_docs": documents.missing_docs(inj, names),
+        "flags": checks.inject_flags(inj, names, senders), "review": review, "ai_on": ai.enabled(),
+        "review_current": bool(review and ai.current_review(inj, names, senders, {inj.id: review})),
+        "ISSUE_KINDS": ai.ISSUE_KINDS,
         "rubric": inj.rubric.all(), "reply_count": inj.responses.exclude(status="ignored").count(),
         "with_rubric": Inject.objects.filter(rubric__isnull=False).exclude(pk=iid).distinct().order_by("mel_id"),
         "send_at_input": local_input(inj.send_at), "DELIVERY_MODES": DELIVERY_MODES, "CHANNELS": CHANNELS,

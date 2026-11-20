@@ -6,9 +6,31 @@ document.addEventListener("click", (e) => {
 
 document.querySelectorAll("[data-select-all]").forEach((box) => {
   box.addEventListener("change", () => {
-    box.closest("form").querySelectorAll('input[name="ids"]').forEach((c) => { c.checked = box.checked; });
+    // Only rows you can see: a collapsed day stays out of a bulk action.
+    box.closest("form").querySelectorAll('input[name="ids"]').forEach((c) => {
+      const day = c.closest("details");
+      c.checked = box.checked && (!day || day.open);
+    });
   });
 });
+
+// Injects: collapsible days, remembered in this browser.
+const dayGroups = document.querySelectorAll("details.day[data-day]");
+if (dayGroups.length) {
+  const KEY = "simex.injects.closed";
+  const closed = new Set(JSON.parse(localStorage.getItem(KEY) || "[]"));
+  const save = () => localStorage.setItem(KEY, JSON.stringify([...closed]));
+  dayGroups.forEach((d) => {
+    if (dayGroups.length > 1 && closed.has(d.dataset.day)) d.open = false;
+    d.addEventListener("toggle", () => {
+      if (d.open) closed.delete(d.dataset.day); else closed.add(d.dataset.day);
+      save();
+    });
+  });
+  document.querySelectorAll("[data-days]").forEach((b) => b.addEventListener("click", () => {
+    dayGroups.forEach((d) => { d.open = b.dataset.days === "open"; });
+  }));
+}
 
 const check = document.querySelector("[data-domain-check]");
 if (check) {

@@ -14,6 +14,23 @@ h2 { font-size: 16px; font-weight: 650; margin: 20px 0 8px; }
 h3 { font-size: 12px; font-weight: 650; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 .card h3 ~ h3 { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line); }
 h2.day { margin-top: 26px; font-size: 15px; display: flex; align-items: baseline; gap: 8px; }
+details.day > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 26px 0 8px; user-select: none; }
+details.day > summary::-webkit-details-marker { display: none; }
+details.day > summary h2.day { margin: 0; }
+details.day > summary h2.day::before { content: "▸"; display: inline-block; width: 14px; color: var(--muted); transition: transform .15s; }
+details.day[open] > summary h2.day::before { transform: rotate(90deg); }
+.day-stats { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
+.flags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.flag { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; cursor: help; white-space: nowrap; }
+.flag.err { background: #fbe1df; color: var(--err); }
+.flag.err::before { content: "⚠ "; }
+.flag.check { background: #fff4d6; color: #7a5600; }
+.flag.ai { background: #efe6fb; color: #5b2a9c; }
+.card.checks .flag { margin-right: 4px; }
+.ai-review { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+table.list tr.flagged td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+.filters label.check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
+.bulkbar .grow { flex: 1; }
 code { background: #f1f3f5; padding: 1px 4px; border-radius: 4px; font-size: 12px; }
 .muted { color: var(--muted); }
 .small { font-size: 12px; }

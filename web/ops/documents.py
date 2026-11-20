@@ -31,6 +31,12 @@ def doc_matches(doc_line, filename):
     return f == d or stem == d or stem == d.rsplit(".", 1)[0] or (len(d) > 8 and f.startswith(d))
 
 
+def missing_docs(inj, filenames):
+    """Lines of the inject's Supporting documents that no attached filename matches."""
+    docs = [d for d in (inj.supporting_documents or "").splitlines() if d.strip()]
+    return [d for d in docs if not any(doc_matches(d, f) for f in filenames)]
+
+
 def put_attachment(inj, filename, data):
     a = inj.attachments.filter(filename=filename).first()
     if a:

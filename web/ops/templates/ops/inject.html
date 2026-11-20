@@ -16,6 +16,29 @@
   </div>
 </div>
 {% if inj.last_error %}<div class="flash error">Last send: {{ inj.last_error }}</div>{% endif %}
+{% if flags or review or ai_on %}{% if st != 'sent' and st != 'partial' and st != 'sending' and st != 'cancelled' %}
+<div class="card checks">
+  <h3>Before sending</h3>
+  {% for level, label, detail in flags %}<p class="small"><span class="flag {{ level }}">{{ label }}</span> {{ detail }}</p>{% empty %}<p class="small muted">The automatic checks found nothing.</p>{% endfor %}
+  <div class="ai-review">
+    {% if review_current %}
+      {% if review.issues %}
+        {% if review.dismissed %}<p class="small muted">AI review ({{ review.updated_at|date:"D H:i" }}): {{ review.issues|length }} point{{ review.issues|length|pluralize }} dismissed.</p>
+        {% else %}{% for x in review.issues %}<p class="small"><span class="flag ai">AI: {{ ISSUE_KINDS|get:x.kind }}</span>{% if x.severity == 'fix' %} <b>fix</b>{% endif %} {{ x.detail }}</p>{% endfor %}{% endif %}
+      {% else %}<p class="small muted">AI review ({{ review.updated_at|date:"D H:i" }}): nothing to report.</p>{% endif %}
+    {% elif review.status == 'queued' %}<p class="small muted">AI review queued: it appears here within a minute or two.</p>
+    {% elif review.status == 'failed' %}<p class="small err">AI review failed: {{ review.error|truncatechars:200 }}</p>
+    {% elif review %}<p class="small muted">The inject changed since the AI review; it is checked again shortly{% if not ai_on %} once AI analysis is on{% endif %}.</p>
+    {% elif ai_on %}<p class="small muted">Not reviewed by AI yet.</p>{% endif %}
+    <form method="post" action="/injects/{{ inj.id }}/ai-check/" class="inline">{% csrf_token %}
+      <button class="btn small" name="action" value="check">{% if review_current %}Check again with AI{% else %}Check with AI{% endif %}</button>
+      {% if review_current and review.issues %}{% if review.dismissed %}<button class="link small" name="action" value="undismiss">Show the AI points again</button>
+      {% else %}<button class="link small" name="action" value="dismiss" title="Hide these points on the Injects list until the inject changes">Dismiss the AI points</button>{% endif %}{% endif %}
+    </form>
+    {% if not ai_on %}<span class="hint">AI analysis is off (Settings → AI analysis).</span>{% endif %}
+  </div>
+</div>
+{% endif %}{% endif %}
 {% if st == 'overdue' %}<div class="flash warn">This inject missed its send time by more than the grace period ({{ cfg.grace_minutes }} min) and was not sent. Send it now, or change the time and schedule it again.</div>{% endif %}
 
 <div class="cols">

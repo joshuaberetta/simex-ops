@@ -944,3 +944,25 @@ def test_same_username_on_two_domains_is_two_personas(excon):
     Person.objects.create(name="Real a", email="real-a@kobotoolbox.org", team=Team.objects.get(code="a"))
     drafts, _ = render.build(inj, conf.get_all())
     assert drafts and all(d.from_addr.endswith("<reuters-news@simex.kobolabs.dev>") for d in drafts)
+
+
+def test_injects_list_flags_what_needs_fixing(excon):
+    from ops.models import Attachment, Sender
+    Sender.objects.create(local_part="donotreply", display_name="DONOTREPLY")
+    t = timezone.now() + timedelta(days=1)
+    ok = Inject.objects.create(mel_id="0-01", sender_local="donotreply", subject="News", body="Article", send_at=t,
+                               supporting_documents="0-01 Article.pdf", status="scheduled")
+    Attachment.objects.create(inject=ok, filename="0-01 Article.pdf", data=b"x", size=1)
+    Inject.objects.create(mel_id="1-11", sender_local="donotreply", subject="Profile", body="See the profile",
+                          send_at=t, supporting_documents="B-01 Country Profile.pdf")
+    Inject.objects.create(mel_id="6-32", sender_local="donotreply", subject="Kits", body="Kits (see attached)", send_at=t)
+    Inject.objects.create(mel_id="2-05", subject="Meeting", body="Meet at XXXX *** ExCon: confirm time", send_at=t)
+    Inject.objects.create(mel_id="9-99", subject="Done", body="Sent already", send_at=t, status="sent")
+    r = excon.get("/injects/")
+    html = r.content.decode()
+    assert "1 doc missing" in html and "B-01 Country Profile.pdf" in html
+    assert "no attachment" in html and "no sender" in html and "placeholder" in html and "ExCon note" in html
+    assert "<b>5</b> injects" in html and "3 need attention" in html
+    flagged = excon.get("/injects/?flag=1").content.decode()
+    assert all(x in flagged for x in ("1-11", "6-32", "2-05")) 
+    assert f'<td class="nowrap"><a href="/injects/{ok.id}/">' not in flagged

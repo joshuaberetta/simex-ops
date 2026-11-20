@@ -10,10 +10,11 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from . import ai, conf
+from . import ai, checks, conf
 from .access import excon_required
-from .models import AiCall, AiGrade, AiReport, Grade, Inject, Message, ReplyAnalysis, Response, Team, audit
-from .views_excon import _u, reply_grid
+from .models import (AiCall, AiGrade, AiReport, Grade, Inject, InjectReview, Message, ReplyAnalysis, Response, Team,
+                     audit)
+from .views_excon import _u, reply_grid, safe_next
 
 # Sequential blue (light -> dark) for the rubric heatmap; ink flips to white on the dark steps.
 HEAT = [("#cde2fb", "#0b0b0b"), ("#9ec5f4", "#0b0b0b"), ("#6da7ec", "#0b0b0b"), ("#3987e5", "#0b0b0b"),
@@ -169,6 +170,36 @@ def reply_analyse(request, rid):
 
 @excon_required
 @require_POST
+def inject_ai_check(request, iid):
+    inj = get_object_or_404(Inject, pk=iid)
+    action = request.POST.get("action", "check")
+    if action in ("dismiss", "undismiss"):
+        InjectReview.objects.filter(inject=inj).update(dismissed=action == "dismiss")
+        audit(f"ai_review_{action}", inj.mel_id, _u(request))
+    else:
+        ai.queue_review(inj)
+        messages.success(request, "Queued: the AI review appears here within a minute or two." if ai.enabled() else
+                         "Queued, but AI analysis is off: turn it on in Settings.")
+    return redirect(f"/injects/{iid}/")
+
+
+@excon_required
+@require_POST
+def injects_ai_check(request):
+    """Review every unsent inject again (e.g. after changing many by hand)."""
+    n = 0
+    for inj in Inject.objects.all():
+        if checks.unsent(inj):
+            ai.queue_review(inj)
+            n += 1
+    audit("ai_review_all", f"{n} injects", _u(request))
+    messages.success(request, f"{n} unsent injects queued for the AI review; flags appear on this list as they are done."
+                     if ai.enabled() else "Queued, but AI analysis is off: turn it on in Settings.")
+    return redirect(safe_next(request.POST.get("back"), "/injects/"))
+
+
+@excon_required
+@require_POST
 def grade_analyse(request, iid, tid):
     inj, team = get_object_or_404(Inject, pk=iid), get_object_or_404(Team, pk=tid)
     ai.queue_grade(inj, team)
@@ -181,7 +212,7 @@ def grade_analyse(request, iid, tid):
 @require_POST
 def settings_ai(request):
     P = request.POST
-    for k in ("ai_enabled", "ai_auto", "ai_tests"):
+    for k in ("ai_enabled", "ai_auto", "ai_tests", "ai_injects"):
         conf.put(k, "1" if P.get(k) == "1" else "0")
     try:
         conf.put("ai_daily_usd", f"{max(0.0, float(P.get('ai_daily_usd') or 0)):g}")

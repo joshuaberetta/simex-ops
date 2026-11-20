@@ -175,3 +175,37 @@ def test_inject_code_in_subject(excon):
     assert d.subject == "[1-15] Update for Team A"
     conf.put("subject_prefix", "[SIMEX] ")
     assert render.build(inj, conf.get_all())[0][0].subject == "[SIMEX] [1-15] Update for Team A"
+
+
+def test_inject_review_flags_the_list_and_reruns_only_on_change(excon, fake):
+    from ops.models import InjectReview
+    conf.put("ai_auto", "0")
+    t = timezone.now() + timedelta(days=1)
+    inj = Inject.objects.create(mel_id="6-32", sender_local="donotreply", subject="Kits", body="Hygiene kits (see attached)",
+                                send_at=t, status="scheduled")
+    Inject.objects.create(mel_id="9-99", subject="Done", body="x", send_at=t, status="sent")
+    issue = {"severity": "fix", "kind": "attachment", "detail": "Mentions 'see attached' but no file is attached."}
+    fake.answer = lambda kw: ({"issues": [issue, {"severity": "bad", "kind": "bogus", "detail": "Odd."}]}, "end_turn")
+    assert ai.tick() == 0  # manual mode: nothing until asked
+    conf.put("ai_auto", "1")
+    assert ai.tick() == 1  # the sent inject is never reviewed
+    call = fake.calls[-1]
+    assert call["model"] == "claude-haiku-5-5" and call["system"] == ai.INJECT_SYSTEM
+    sent = json.dumps(call["messages"])
+    assert "Hygiene kits (see attached)" in sent and "Files attached: none" in sent and "9-99" in sent  # schedule context
+    rv = InjectReview.objects.get(inject=inj)
+    assert rv.status == "done" and rv.issues[1] == {"severity": "check", "kind": "other", "detail": "Odd."}
+    page = excon.get("/injects/").content.decode()
+    assert "AI: attachment" in page and "no file is attached" in page and "AI checked 1/1" in page
+    assert ai.tick() == 0  # unchanged: not read again
+    # dismissed: off the list until the inject changes
+    excon.post(f"/injects/{inj.id}/ai-check/", {"action": "dismiss"})
+    assert "AI: attachment" not in excon.get("/injects/").content.decode()
+    assert "dismissed" in excon.get(f"/injects/{inj.id}/").content.decode()
+    inj.body = "Hygiene kits, list attached"
+    inj.save()
+    assert "AI checked 0/1" in excon.get("/injects/").content.decode()  # stale review hidden
+    assert ai.tick() == 1
+    assert "AI: attachment" in excon.get("/injects/").content.decode()
+    excon.post("/injects/ai-check/")
+    assert InjectReview.objects.get(inject=inj).status == "queued"

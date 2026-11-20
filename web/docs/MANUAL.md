@@ -26,7 +26,7 @@ The tabs come in two groups: what you use while the exercise runs (**Injects**, 
 
 | Tab | What it is for |
 |---|---|
-| **Injects** | The schedule. Filter by day or status; open an inject to edit, preview, test or send it; change the channel in bulk. Import from the MEL is here too. |
+| **Injects** | The schedule, grouped by day (click a day to fold it; each shows its count, time span, statuses, files and how many need attention). Filter by day, status or **Needs attention**; open an inject to edit, preview, test or send it; change the channel in bulk. Import from the MEL is here too. |
 | **Replies** | Everything participants sent: team summary, inject × team grid, **Read / opens & clicks**, the inbox, and grading. |
 | **Team inboxes** | Each team's mailbox at a glance (received, unread, sent, last sign-in), **View as team**, and **Clear a team's mailbox** after testing (section 6). |
 | **Dashboard** | The exercise at a glance: per team, replies, response times, scores, sentiment over time and a funnel; the rubric heatmap; flags, possibly AI-written replies, what teams ask for and commit to; an AI-written exercise summary (5.7). |
@@ -93,7 +93,14 @@ When you import the MEL, the check page offers to give senders without a domain 
 - **Grace period:** 10 minutes by default (see 7.3).
 
 ### 3.5 Go through the injects
-Filter **Injects** by day and open each one:
+Start with **Needs attention** ticked: it lists only the unsent injects with something to fix, each with tags under its subject (hover a tag for the detail):
+- red: **N docs missing** (named in the MEL's *Supporting documents* but not attached; upload them on the inject page or remove the line), **no sender**, **no subject**, **no body** (and nothing attached), **failed**;
+- yellow, to look at: **no attachment** (the text says *attached* but nothing is), **unknown sender**, **placeholder** (XXX, [INSERT …], TBC, a list of team slots to cut down), **ExCon note** (`***` left in the body), **subject is a file name**, **no send time**;
+- purple **AI: …**: what Claude found reading the inject (section 5.7), e.g. a weekday that doesn't match the date, a greeting that doesn't fit the recipients, a document the text mentions that isn't attached.
+
+The inject page lists the same points under **Before sending**. If an AI point is wrong or intended, **Dismiss the AI points** hides them from the list until the inject changes. Sent and cancelled injects are never flagged. Folded days are remembered in your browser; **Expand all / Collapse all** are in the bar, and **all** selects only the injects of open days.
+
+Then open each one:
 - **Send at:** the real (Nairobi) time; the MEL's scenario time is separate.
 - **Channel:** set for all injects by Settings → Delivery channel; the inject page shows which one applies. Only in *Per inject* mode can you choose here.
 - **Sender username / name**, **Recipients** (*one per team*, *one per participant* — lands in that person's team mailbox addressed to them —, *everyone*), teams to leave out.
@@ -186,8 +193,9 @@ When **Settings → AI analysis** is on, Claude reads what teams send. It is for
 - **Each team's thread on an inject with a rubric** (Claude Sonnet, once the thread has been quiet for 3 minutes, and again if the team writes more): suggested points per criterion with a reason and a quote from the reply. On the grade page each criterion shows **AI n** with the reason; **Fill in the AI suggestions** copies them into the form, and nothing is saved until you click **Save**. The grid on the Replies tab shows *AI n / max* under the grade.
 - **"AI-written"** is a hint to look closer, never proof: it is judged from the style of the text and how fast it was written after the team opened the inject. Short messages and non-native English make it unreliable. Don't confront a participant on this alone.
 - **Dashboard tab:** a tile per team (expected injects answered, median first reply, graded score, AI-suggested score, sentiment of each reply over the exercise, tone mix, a delivered → read → answered → graded funnel), the **rubric results** heatmap (switch between *Graded* and *AI suggested*), **where the AI and the graders disagree** (a quarter of the points or more: check the rubric or the reply), **Flags**, **Possibly AI-written** (60 % and above), **What teams are asking for** and **Decisions and commitments**. **Write the summary** produces a situation summary across teams (themes, each team's strengths and concerns, what ExCon may want to act on now, points for the hotwash) in about a minute.
-- **Settings → AI analysis:** on/off; *analyse every reply as it arrives* (off: only when you click **Analyse now**); include Test team replies (useful in rehearsals); a **daily spending cap** in USD (default 5; a full exercise day costs well under a dollar). The card shows today's calls, spend and the last error.
-- What Claude sees: the inject as the team received it, the rubric you wrote, and the teams' replies. Nothing else is stored in the app to send.
+- **Each unsent inject** (Claude Haiku, before the exercise and again whenever the inject changes): reads it as ExCon wrote it, with the list of all injects for context, and reports only concrete problems: attachments it mentions but doesn't have, unfilled placeholders, notes for ExCon left in, dates, times or names that contradict each other or the scenario, a greeting that doesn't fit the recipients, a persona that doesn't fit the content. They show as purple **AI: …** tags on the Injects list and under **Before sending** on the inject page, with **Check again with AI** and **Dismiss**. **Check all with AI** on the Injects tab re-reads every unsent inject (the count next to it says how many have been read as they are now). A full pass over 100 injects costs about five cents.
+- **Settings → AI analysis:** on/off; *analyse every reply as it arrives* (off: only when you click **Analyse now**); include Test team replies (useful in rehearsals); *review unsent injects*; a **daily spending cap** in USD (default 5; a full exercise day costs well under a dollar). The card shows today's calls, spend and the last error.
+- What Claude sees: the inject as the team received it (for the inject review: as written, with the subjects of the other injects), the rubric you wrote, and the teams' replies. Nothing else is stored in the app to send.
 
 ## 6. After the exercise
 Export grades and a final backup, disarm, and disable the participant logins (People & logins) once the debrief no longer needs them.

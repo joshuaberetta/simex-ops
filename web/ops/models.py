@@ -477,6 +477,21 @@ class AiGrade(models.Model):
         return sum(float(v) for v in (self.scores or {}).values() if v not in (None, ""))
 
 
+class InjectReview(models.Model):
+    """The fast model's read of an unsent inject before it goes out: what looks missing, unfilled
+    or inconsistent. ExCon-only; dismissed until the inject changes."""
+    inject = models.OneToOneField(Inject, on_delete=models.CASCADE, related_name="review")
+    status = models.CharField(max_length=10, default="queued")  # queued | done | failed
+    model = models.CharField(max_length=120, default="")
+    prompt_version = models.IntegerField(default=0)
+    input_hash = models.CharField(max_length=64, default="")
+    attempts = models.IntegerField(default=0)
+    error = models.TextField(blank=True, null=True)
+    issues = models.JSONField(default=list, blank=True)  # [{"severity": fix|check, "kind": ..., "detail": ...}]
+    dismissed = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
 class AiReport(models.Model):
     """An exercise-wide write-up (Dashboard → Exercise summary)."""
     kind = models.CharField(max_length=10, default="live")  # live | test
@@ -491,7 +506,7 @@ class AiReport(models.Model):
 class AiCall(models.Model):
     """Every model call, for the spend cap and the Settings usage line."""
     at = models.DateTimeField(default=timezone.now)
-    purpose = models.CharField(max_length=10)  # reply | grade | summary
+    purpose = models.CharField(max_length=10)  # reply | grade | summary | inject
     ref = models.CharField(max_length=40, blank=True, default="")
     model = models.CharField(max_length=120, default="")
     input_tokens = models.IntegerField(default=0)

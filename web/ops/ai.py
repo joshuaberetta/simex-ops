@@ -7,7 +7,10 @@ Two readings, both run by the scheduler worker (ai_loop in run_scheduler), never
 - each inject x team thread with a rubric, with the deep model (Claude Sonnet 5.5): suggested
   points per criterion with a rationale and quoted evidence (AiGrade). Suggestions only: the
   human Grade is never touched and AI points never count in totals.
-Plus an on-demand exercise summary (AiReport) for the Dashboard.
+Plus an on-demand exercise summary (AiReport) for the Dashboard, and a review of each unsent
+inject with the fast model before it goes out (InjectReview): attachments it mentions but
+doesn't have, placeholders, ExCon notes, inconsistencies. Shown on the Injects list next to
+the rule checks (ops/checks.py).
 
 The model sees what the app already holds: the participant-facing inject, the rubric ExCon
 wrote, and the replies. No control-side material exists here to send.
@@ -28,9 +31,10 @@ from django.conf import settings
 from django.db.models import Max, Sum
 from django.utils import timezone
 
-from . import conf, inbound
+from . import checks, conf, inbound
 from .render import fill
-from .models import AiCall, AiGrade, AiReport, Inject, ReplyAnalysis, Response, RubricCriterion, Sender, Team
+from .models import (DELIVERY_MODES, AiCall, AiGrade, AiReport, Inject, InjectReview, ReplyAnalysis, Response,
+                     RubricCriterion, Sender, Team)
 
 log = logging.getLogger("simex.ai")
 
@@ -447,6 +451,172 @@ def grade_thread(inj, team):
     return g
 
 
+# --- per inject: review before sending -----------------------------------------------------
+
+ISSUE_KINDS = {
+    "attachment": "attachment",
+    "placeholder": "placeholder",
+    "excon_note": "ExCon note",
+    "inconsistent": "inconsistent",
+    "recipients": "recipients",
+    "sender": "sender",
+    "unclear": "unclear",
+    "other": "check",
+}
+
+INJECT_SYSTEM = EXERCISE + """
+
+Before the exercise, you check one inject that has not been sent yet, the way a careful ExCon \
+member would proofread it, and list what should be fixed or looked at before it goes out. The \
+participants will read it as a real message from the persona.
+
+Report only concrete problems a participant would notice or that would break the play:
+- attachment: the text refers to an attachment, document, map, photo or link that is not among \
+the files attached, or a listed document is clearly a different one from what the text describes.
+- placeholder: unfilled template text (XXX, [insert ...], TBC, a list of options for ExCon to pick from, \
+"name of the participant"). Placeholders in curly braces ({team}, {team_name}, {name}, {first_name}) \
+are filled in by the app for each team or person: they are correct, never report them.
+- excon_note: instructions or notes meant for ExCon or role players, not the participants \
+(e.g. "***", "ExCon to ...", "role player", "VO", "to be updated").
+- inconsistent: dates, times, places, names or figures that contradict the scenario time, the subject, \
+or each other; a reply deadline before the send time.
+- recipients: the greeting or content does not fit who receives it (e.g. "Dear Team Leader" sent to \
+everyone, one team's name in a message sent to all teams).
+- sender: the persona does not fit the content (a news outlet giving orders, a ministry signing as an NGO).
+- unclear: so garbled, truncated or contradictory that a team could not act on it.
+- other: anything else that would clearly embarrass ExCon if sent as is.
+
+Do not report style, tone, grammar or spelling unless it changes the meaning, and do not suggest \
+rewording. The scenario is fictional: do not question its facts. The automatic checks listed in the \
+input have already been flagged to ExCon: do not repeat them. Most injects are fine: then return no \
+issues. severity: fix (it must change before sending) or check (ExCon should look; may be intended). \
+detail: one short sentence naming the problem, quoting the words concerned."""
+
+INJECT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "issues": {"type": "array", "items": {
+            "type": "object",
+            "properties": {"severity": {"type": "string", "enum": ["fix", "check"]},
+                           "kind": {"type": "string", "enum": list(ISSUE_KINDS)},
+                           "detail": {"type": "string"}},
+            "required": ["severity", "kind", "detail"], "additionalProperties": False}},
+    },
+    "required": ["issues"],
+    "additionalProperties": False,
+}
+
+
+def _recipients(inj):
+    who = DELIVERY_MODES.get(inj.delivery, inj.delivery)
+    if inj.team_ids:
+        who += "; teams: " + ", ".join(Team.objects.filter(id__in=inj.team_ids).values_list("name", flat=True))
+    else:
+        who += "; all teams"
+    extra = [f"{k}: {v}" for k, v in (("To", inj.to_extra), ("Cc", inj.cc)) if v]
+    return who + (f" ({'; '.join(extra)})" if extra else "")
+
+
+def review_input(inj, filenames, senders):
+    """(the inject as ExCon wrote it, the rule checks already shown). Placeholders stay unfilled."""
+    sender = senders.get(inj.sender_local)
+    name = inj.from_name or (sender.display_name if sender else "")
+    lines = [f"INJECT {inj.mel_id}",
+             f"From: {name} <{inj.sender_local or 'no sender'}>" + ("" if sender or not inj.sender_local else " (not a known persona)"),
+             f"Recipients: {_recipients(inj)}"]
+    if inj.recipients_label:
+        lines.append(f"Recipients in the MEL: {inj.recipients_label}")
+    if inj.scenario_dt:
+        lines.append(f"Scenario time: {inj.scenario_dt}")
+    if inj.expects_reply:
+        lines.append("ExCon expects a reply" + (f" within {inj.reply_due_minutes} minutes." if inj.reply_due_minutes else "."))
+    lines += [f"Subject: {inj.subject or ''}", "", (inj.body or "").strip() or "(empty body)", ""]
+    docs = [d for d in (inj.supporting_documents or "").splitlines() if d.strip()]
+    lines.append("Documents the MEL lists for it: " + ("; ".join(docs) if docs else "none"))
+    lines.append("Files attached: " + ("; ".join(sorted(filenames)) if filenames else "none"))
+    rules = [detail for _, _, detail in checks.inject_flags(inj, filenames, senders)]
+    return "\n".join(lines), rules
+
+
+def review_hash(inj, filenames, senders):
+    text, rules = review_input(inj, filenames, senders)
+    return _hash(PROMPT_VERSION, model_id("fast"), text, rules)
+
+
+def schedule_block():
+    """Every other live inject in one line each, so the model can spot references to ones that
+    don't exist and clashes with the timeline. Stable across calls, so it is cached."""
+    rows = Inject.objects.exclude(status="cancelled").order_by("send_at", "seq")
+    lines = [f"- {i.mel_id} | scenario {i.scenario_dt or '?'} | {i.sender_local or '?'} | {(i.subject or '')[:90]}"
+             for i in rows]
+    return "The exercise's injects (id | scenario time | sender | subject), for context:\n" + "\n".join(lines)
+
+
+def review_inject(inj, filenames=None, senders=None):
+    """Read one unsent inject with the fast model; stores and returns its InjectReview."""
+    filenames = checks.files_by_inject().get(inj.id, []) if filenames is None else filenames
+    senders = senders if senders is not None else {s.local_part: s for s in Sender.objects.all()}
+    rv, _ = InjectReview.objects.get_or_create(inject=inj, defaults={"status": "queued"})
+    rv.attempts += 1
+    text, rules = review_input(inj, filenames, senders)
+    content = [_cached(schedule_block()),
+               {"type": "text", "text": "The inject to check:\n\n" + text + "\n\nAutomatic checks already flagged: "
+                + ("; ".join(rules) if rules else "none")}]
+    try:
+        out, used = call("inject", f"i{inj.id}", "fast", INJECT_SYSTEM, content, INJECT_SCHEMA, "medium", 6000)
+    except AiError as e:
+        rv.status, rv.error = "failed", str(e)
+        rv.save()
+        return rv
+    h = review_hash(inj, filenames, senders)
+    if h != rv.input_hash:
+        rv.dismissed = False  # the inject changed: show what is found now
+    rv.status, rv.error, rv.model, rv.prompt_version, rv.input_hash = "done", None, used, PROMPT_VERSION, h
+    rv.issues = [{"severity": x.get("severity") if x.get("severity") in ("fix", "check") else "check",
+                  "kind": x.get("kind") if x.get("kind") in ISSUE_KINDS else "other",
+                  "detail": str(x.get("detail") or "")[:500]}
+                 for x in (out.get("issues") or []) if x.get("detail")][:8]
+    rv.save()
+    return rv
+
+
+def current_review(inj, filenames, senders, reviews=None):
+    """The inject's review if it is done and still matches the inject as it is now, else None."""
+    rv = reviews.get(inj.id) if reviews is not None else InjectReview.objects.filter(inject=inj).first()
+    if rv and rv.status == "done" and rv.input_hash == review_hash(inj, filenames, senders):
+        return rv
+    return None
+
+
+def pending_reviews(now=None):
+    """Unsent injects to review: queued ones, then (Settings: automatic, and review injects) new
+    or changed ones."""
+    now = now or timezone.now()
+    queued = [rv.inject for rv in InjectReview.objects.filter(status="queued").select_related("inject")
+              if checks.unsent(rv.inject)]
+    if not (conf.flag("ai_auto") and conf.flag("ai_injects")):
+        return queued
+    files, senders = checks.files_by_inject(), {s.local_part: s for s in Sender.objects.all()}
+    reviews = {rv.inject_id: rv for rv in InjectReview.objects.all()}
+    out = list(queued)
+    for inj in Inject.objects.order_by("send_at", "seq"):
+        rv = reviews.get(inj.id)
+        if not checks.unsent(inj) or (rv and rv.status == "queued"):
+            continue
+        if rv and rv.status == "failed" and (rv.attempts >= MAX_ATTEMPTS or rv.updated_at > now - RETRY_AFTER):
+            continue
+        if rv and rv.status == "done" and rv.input_hash == review_hash(inj, files.get(inj.id, []), senders):
+            continue
+        out.append(inj)
+    return out
+
+
+def queue_review(inj):
+    rv, _ = InjectReview.objects.get_or_create(inject=inj, defaults={"status": "queued"})
+    rv.status, rv.attempts, rv.error = "queued", 0, None
+    rv.save(update_fields=["status", "attempts", "error", "updated_at"])
+
+
 # --- the worker --------------------------------------------------------------------------------
 
 def _kinds():
@@ -499,7 +669,8 @@ def pending_grades(now=None):
 
 
 def tick(limit=BATCH):
-    """One pass: a few replies, then a few threads. Returns the number of model calls made."""
+    """One pass: a few replies, then a few threads, then a few unsent injects. Returns the
+    number of model calls made."""
     if not enabled():
         return 0
     n = 0
@@ -514,6 +685,13 @@ def tick(limit=BATCH):
         if not under_cap():
             return n
         grade_thread(inj, team)
+        n += 1
+    if n >= limit:
+        return n
+    for inj in pending_reviews()[:limit - n]:
+        if not under_cap():
+            return n
+        review_inject(inj)
         n += 1
     return n
 
