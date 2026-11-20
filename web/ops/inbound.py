@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone as dt_tz
 from email.utils import parseaddr
 
 from django.conf import settings
+from django.db import connection
 from django.db.models import Q
 from django.utils import timezone
 
@@ -255,18 +256,39 @@ def fetch(response_id):
 
 
 def fetch_async(response_id):
-    threading.Thread(target=fetch, args=(response_id,), daemon=True).start()
+    def run():
+        try:
+            fetch(response_id)
+        finally:
+            connection.close()
+    threading.Thread(target=run, daemon=True).start()
 
 
-def sync(limit=50):
+def catch_up():
+    """Scheduler worker, every minute or so: pick up received email whose webhook never came
+    (or came while the web was restarting) and retry content fetches that failed, so no reply
+    waits on someone pressing Sync. Only with Resend (the log mailer has nothing to list)."""
+    if mailer.get().name != "resend":
+        return 0, 0
+    # Only recent mail: older items are from before (deleted replies must not come back).
+    return sync(limit=50, since=timezone.now() - timedelta(hours=2))
+
+
+def sync(limit=50, since=None):
+    """Add received emails we have no Response for (only those received after since, if
+    given) and fetch the content of any not fetched yet."""
     m_ = mailer.get()
     added = 0
     for item in m_.list_received(limit=limit):
         rid = item.get("id")
+        if since and _when(item.get("created_at")) < since:
+            continue
         if rid and not Response.objects.filter(resend_id=rid).exists():
             _new_email(rid, item)
             added += 1
-    todo = list(Response.objects.filter(channel="email", fetched=False).values_list("id", flat=True))
+    todo = list(Response.objects.filter(channel="email", fetched=False)
+                .exclude(received_at__gt=timezone.now() - timedelta(seconds=30))  # the webhook's own fetch
+                .values_list("id", flat=True))
     for rid in todo:
         fetch(rid)
     return added, len(todo)

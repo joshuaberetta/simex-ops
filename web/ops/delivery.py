@@ -87,17 +87,23 @@ def deliver(msgs, dry_run=False, respect_pause=True):
         if respect_pause and conf.flag("paused"):
             break
         if m.channel == "inapp":
-            with transaction.atomic():
-                if not Message.objects.filter(pk=m.pk, status="pending").update(status="sending", claimed_at=timezone.now()):
-                    continue
-                if dry_run:
-                    Message.objects.filter(pk=m.pk).update(status="dry", sent_at=timezone.now())
-                elif not m.inbox_team_id:
-                    Message.objects.filter(pk=m.pk).update(status="failed", error="No inbox.")
-                else:
-                    _put_mail(m)
-                    Message.objects.filter(pk=m.pk).update(status="sent", sent_at=timezone.now(),
-                                                           delivery="delivered", delivery_at=timezone.now())
+            try:
+                with transaction.atomic():
+                    if not Message.objects.filter(pk=m.pk, status="pending").update(status="sending",
+                                                                                    claimed_at=timezone.now()):
+                        continue
+                    if dry_run:
+                        Message.objects.filter(pk=m.pk).update(status="dry", sent_at=timezone.now())
+                    elif not m.inbox_team_id:
+                        Message.objects.filter(pk=m.pk).update(status="failed", error="No inbox.")
+                    else:
+                        _put_mail(m)
+                        Message.objects.filter(pk=m.pk).update(status="sent", sent_at=timezone.now(),
+                                                               delivery="delivered", delivery_at=timezone.now())
+            except Exception as e:  # rolled back: mark it failed so it can be retried, and go on
+                log.exception("in-app delivery of message %s failed", m.pk)
+                Message.objects.filter(pk=m.pk, status="pending").update(status="failed",
+                                                                         error=f"{type(e).__name__}: {e}"[:500])
             continue
         # Email
         if not Message.objects.filter(pk=m.pk, status="pending").update(status="sending", claimed_at=timezone.now()):
@@ -451,16 +457,40 @@ def tick():
                 if Inject.objects.filter(pk=iid, status="scheduled").update(status="sending", attempt=F("attempt") + 1):
                     audit("live_due", str(iid))
         for iid in Inject.objects.filter(status="sending").values_list("id", flat=True):
-            process_live(iid)
+            _guarded(process_live, iid)
         followups = list(Message.objects.filter(kind="followup", channel="email", status="pending").order_by("id"))
         if followups:
-            deliver(followups)
+            _guarded(deliver, followups)
+    # ExCon answers a crashed or slow web request left behind (put back to pending above).
+    stale = list(Message.objects.filter(kind="reply", status="pending", claimed_at__isnull=False).order_by("id"))
+    if stale:
+        _guarded(deliver, stale)
     with transaction.atomic():
         due_items = list(_locked(TestRunItem.objects.filter(run__status="active", status="pending", due_at__lte=now)
                                  .order_by("due_at")).values_list("id", flat=True))
         TestRunItem.objects.filter(id__in=due_items, status="pending").update(status="sending")
     for tid in TestRunItem.objects.filter(run__status="active", status="sending").values_list("id", flat=True):
-        process_test_item(tid)
+        _guarded(process_test_item, tid)
+
+
+def _guarded(fn, arg):
+    """One inject (or test item) that fails must not hold up every other one, tick after tick."""
+    try:
+        fn(arg)
+    except Exception as e:
+        log.exception("%s(%s) failed", fn.__name__, arg if isinstance(arg, int) else "...")
+        err = f"{type(e).__name__}: {e}"[:500]
+        if fn is process_live:
+            inj = Inject.objects.filter(pk=arg).first()
+            if not inj:
+                return
+            if Message.objects.filter(idem_key__startswith=f"live-{inj.id}-a{inj.attempt}-").exists():
+                # Some may be delivered: keep it sending (the next tick resumes it), show why.
+                Inject.objects.filter(pk=inj.pk).update(last_error=err)
+            elif Inject.objects.filter(pk=inj.pk, status="sending").update(status="failed", last_error=err):
+                audit("live_failed", f"{inj.mel_id}: {err}")
+        elif fn is process_test_item:
+            TestRunItem.objects.filter(pk=arg, status="sending").update(status="failed", error=err)
 
 
 def people_of(team):

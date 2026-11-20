@@ -966,3 +966,70 @@ def test_injects_list_flags_what_needs_fixing(excon):
     flagged = excon.get("/injects/?flag=1").content.decode()
     assert all(x in flagged for x in ("1-11", "6-32", "2-05")) 
     assert f'<td class="nowrap"><a href="/injects/{ok.id}/">' not in flagged
+
+
+# --- scheduler robustness ----------------------------------------------------------------------
+
+def test_one_broken_inject_does_not_hold_up_the_others(excon, monkeypatch):
+    do_import(excon, SAMPLE)
+    arm()
+    now = timezone.now()
+    bad, good = Inject.objects.get(mel_id="1-15"), Inject.objects.get(mel_id="3-13")
+    Inject.objects.filter(pk__in=[bad.pk, good.pk]).update(status="scheduled", send_at=now)
+    real_build = render.build
+
+    def build(inj, cfg):
+        if inj.pk == bad.pk:
+            raise ValueError("boom")
+        return real_build(inj, cfg)
+    monkeypatch.setattr(render, "build", build)
+    delivery.tick()
+    bad.refresh_from_db()
+    good.refresh_from_db()
+    assert good.status == "sent"
+    assert bad.status == "failed" and "boom" in bad.last_error  # nothing was created: safe to retry
+
+
+def test_inapp_delivery_error_marks_message_failed(excon, monkeypatch):
+    do_import(excon, SAMPLE)
+    arm()
+    calls = []
+
+    def put_mail(m):
+        calls.append(m.pk)
+        if len(calls) == 1:
+            raise RuntimeError("db hiccup")
+        return real(m)
+    real = delivery._put_mail
+    monkeypatch.setattr(delivery, "_put_mail", put_mail)
+    inj = deliver_now("1-15")
+    assert inj.status == "partial"
+    assert Message.objects.filter(kind="live", status="failed", error__contains="db hiccup").count() == 1
+    assert Mail.objects.filter(folder="inbox").count() == 3
+    # Retry delivers only the failed one
+    assert delivery.start_live(inj, retry_failed=True) is None
+    delivery.tick()
+    assert Inject.objects.get(pk=inj.pk).status == "sent"
+    assert Mail.objects.filter(folder="inbox").count() == 4
+
+
+def test_stale_pending_answer_is_delivered_by_the_scheduler(excon):
+    do_import(excon, SAMPLE)
+    arm()
+    deliver_now("1-15")
+    pa = participant("a", "Jane")
+    mail = Mail.objects.get(team__code="a")
+    pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: Update", "body": "x", "in_reply_to": mail.id})
+    resp = Response.objects.get()
+    conf.put("paused", "1")
+    m = delivery.answer(resp, "Noted.")
+    assert m.status == "pending"
+    Message.objects.filter(pk=m.pk).update(claimed_at=timezone.now())  # a web request was cut off mid-send
+    conf.put("paused", "0")
+    delivery.tick()
+    m.refresh_from_db()
+    assert m.status == "sent" and Mail.objects.filter(body="Noted.").exists()
+
+
+def test_inbound_catch_up_only_with_resend(monkeypatch):
+    assert inbound.catch_up() == (0, 0)  # log mailer: nothing to list

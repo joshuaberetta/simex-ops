@@ -14,10 +14,11 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import close_old_connections, connection
 
-from ops import ai, delivery
+from ops import ai, delivery, inbound
 
 log = logging.getLogger("simex.scheduler")
 AI_IDLE_SECONDS = 15
+INBOUND_SECONDS = 60
 
 
 def ai_loop(stop):
@@ -31,6 +32,20 @@ def ai_loop(stop):
             log.exception("AI tick failed")
         if not busy:
             time.sleep(AI_IDLE_SECONDS)
+    connection.close()
+
+
+def inbound_loop(stop):
+    """Received email the webhook missed, and failed fetches, without anyone pressing Sync."""
+    while not stop["now"]:
+        close_old_connections()
+        try:
+            added, fetched = inbound.catch_up()
+            if added:
+                log.info("inbound catch-up: %s received email(s) the webhook missed", added)
+        except Exception:
+            log.exception("inbound catch-up failed")
+        time.sleep(INBOUND_SECONDS)
     connection.close()
 
 
@@ -51,6 +66,7 @@ class Command(BaseCommand):
             return
         if not opts["no_ai"] and ai.available():
             threading.Thread(target=ai_loop, args=(stop,), daemon=True, name="ai").start()
+        threading.Thread(target=inbound_loop, args=(stop,), daemon=True, name="inbound").start()
         log.info("scheduler started (tick %ss)", settings.TICK_SECONDS)
         while not stop["now"]:
             close_old_connections()
