@@ -284,5 +284,42 @@ def test_draft_needs_ai_on(excon):
 
 def test_draft_left_running_by_a_restart_fails(excon):
     from ops.models import InjectDraft
-    d = InjectDraft.objects.create(created_at=timezone.now() - timedelta(minutes=10))
+    d = InjectDraft.objects.create(created_at=timezone.now() - timedelta(minutes=30))
     assert "Interrupted" in excon.get(f"/injects/drafts/{d.id}/").content.decode()
+
+
+def test_unexpected_client_error_fails_the_item_and_stops_retrying(excon, fake):
+    r = a_reply(excon)
+
+    def boom(kw):
+        raise ValueError("response validation")
+    fake.answer = boom
+    ai.tick()
+    a = ReplyAnalysis.objects.get(response=r)
+    assert a.status == "failed" and a.attempts == 1 and "response validation" in a.error
+    assert AiCall.objects.filter(ok=False, ref=f"r{r.id}").count() == 1  # logged, not silent
+    before = len(fake.calls)
+    ai.tick()  # not retried straight away
+    assert len(fake.calls) == before
+
+
+def test_error_outside_the_call_marks_failed_and_moves_on(excon, fake, monkeypatch):
+    r = a_reply(excon)
+    monkeypatch.setattr(ai, "analyse_reply", lambda r: (_ for _ in ()).throw(RuntimeError("db")))
+    ai.tick()
+    a = ReplyAnalysis.objects.get(response=r)
+    assert a.status == "failed" and a.attempts == 1
+
+
+def test_unknown_model_is_costed_high():
+    u = NS(input_tokens=1_000_000, output_tokens=0, cache_read_input_tokens=0, cache_creation_input_tokens=0)
+    assert ai.cost("claude-haiku-5-5-20261001", u) == 0.10
+    assert ai.cost("claude-mystery-9", u) == max(p[0] for p in ai.PRICES.values())
+
+
+def test_summary_interrupted_by_restart_expires(excon):
+    rep = AiReport.objects.create(kind="live")
+    AiReport.objects.filter(pk=rep.pk).update(created_at=timezone.now() - timedelta(hours=1))
+    excon.get("/dashboard/")
+    rep.refresh_from_db()
+    assert rep.status == "failed"

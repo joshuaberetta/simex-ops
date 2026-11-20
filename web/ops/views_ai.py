@@ -1,6 +1,7 @@
 """ExCon views for the Claude analysis (ops/ai.py): the Dashboard tab, the analyse / re-run
 buttons, Draft with AI, and Settings → AI analysis. Every view is excon_required."""
 
+import re
 from collections import Counter
 from datetime import timedelta
 
@@ -49,6 +50,7 @@ def sparkline(points, t0, t1):
 
 @excon_required
 def dashboard(request):
+    ai.expire_drafts()  # also a summary interrupted by a restart
     kind = "test" if request.GET.get("kind") == "test" else "live"
     source = "ai" if request.GET.get("score") == "ai" else "human"
     teams, all_in, matrix, team_sum = reply_grid(kind)
@@ -147,6 +149,7 @@ def ai_status(reps=None, analyses=None):
 @excon_required
 @require_POST
 def dashboard_summary(request):
+    ai.expire_drafts()
     kind = "test" if request.POST.get("kind") == "test" else "live"
     if not ai.enabled():
         messages.error(request, "AI analysis is off (Settings → AI analysis).")
@@ -309,10 +312,10 @@ def draft_use(request, did):
     while Inject.objects.filter(mel_id=f"AI-{n}").exists():
         n += 1
     base, known = d.inject, set(Sender.objects.values_list("local_part", flat=True))
-    sender = b.get("sender") or (base.sender_local if base else None)
+    sender = re.sub(r"[^a-z0-9._{}+-]", "", str(b.get("sender") or "").lower())[:120] or (base.sender_local if base else None)
     inj = Inject.objects.create(
         mel_id=f"AI-{n}", seq=(Inject.objects.aggregate(m=Max("seq"))["m"] or 0) + 1, status="draft",
-        sender_local=sender or None, from_name=None if sender in known else (b.get("from_name") or None),
+        sender_local=sender or None, from_name=None if sender in known else (str(b.get("from_name") or "")[:200] or None),
         subject=b.get("subject") or None, body=(b.get("body") or "").strip() or None,
         scenario_dt=(b.get("scenario_time") or "").strip()[:20] or None, send_at=_send_at(b.get("send_at")),
         channel=base.channel if base else "inapp", delivery=base.delivery if base else "each_team",

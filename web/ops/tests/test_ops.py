@@ -1035,5 +1035,15 @@ def test_stale_pending_answer_is_delivered_by_the_scheduler(excon):
     assert m.status == "sent" and Mail.objects.filter(body="Noted.").exists()
 
 
-def test_inbound_catch_up_only_with_resend(monkeypatch):
+def test_inbound_catch_up_only_recent_and_only_with_resend():
+    m = mailer.LogMailer()
+    old = (timezone.now() - timedelta(hours=5)).isoformat()
+    m.received = {"r-new": {"from": "x@kobotoolbox.org", "to": ["cnn@simex.kobolabs.dev"], "subject": "Hi",
+                            "created_at": timezone.now().isoformat(), "text": "hello"},
+                  "r-old": {"from": "y@kobotoolbox.org", "to": ["cnn@simex.kobolabs.dev"], "subject": "Old",
+                            "created_at": old, "text": "old"}}
+    mailer.set_mailer(m)
     assert inbound.catch_up() == (0, 0)  # log mailer: nothing to list
+    m.name = "resend"
+    added, _ = inbound.catch_up()
+    assert added == 1 and list(Response.objects.values_list("resend_id", flat=True)) == ["r-new"]
