@@ -145,6 +145,10 @@ class TestRun(models.Model):
     dry_run = models.BooleanField(default=False)
     description = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(default=timezone.now)
+    channel = models.CharField(max_length=10, blank=True, default="")  # "" = each inject's own | inapp | email
+
+    def channel_for(self, inj):
+        return self.channel or inj.effective_channel
 
 
 class TestRunItem(models.Model):

@@ -119,7 +119,7 @@ Even if you plan to use email, make SIMEX Mail ready so you can switch in a minu
 On an inject, **Test → Send test**. In-app injects land in the **Test team** mailbox (subject `[TEST]`, a banner says which team it was really for); email injects go to the address you type. The inject's status doesn't change.
 
 ### 4.2 Test run (a rehearsal on a fast clock)
-**Test runs → New test run**: choose the injects (all, a day, or ids), the start, the timing ("one every 30 s" or "real gaps, 60× faster"), and for email injects a test address pattern (`you+{key}@gmail.com`). **Dry run** builds and logs only. The run page refreshes every 10 s and has **Pause / Resume / Next one now / Cancel**, and a link to the **Test team inbox**.
+**Test runs → New test run**: choose the injects (all, a day, or ids), the start, the timing ("one every 30 s" or "real gaps, 60× faster"), and where to deliver: **SIMEX Mail** (everything lands in the Test team inbox, with a banner naming the real team) or **email** (to a test address pattern, `you+{key}@gmail.com`), whatever Settings → Delivery channel is set to for the live exercise. With *Per inject* there is a third choice, each inject's own channel. **Dry run** builds and logs only. The run page refreshes every 10 s and has **Pause / Resume / Next one now / Cancel**, and a link to the **Test team inbox**.
 
 To rehearse the whole loop, sign in as your Test team login (another browser or a private window), open the test messages, reply, and watch them appear under **Replies → Test team**.
 

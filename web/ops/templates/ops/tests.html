@@ -2,18 +2,19 @@
 {% block title %}Test runs · SIMEX ops{% endblock %}
 {% block body %}
 <h1>Test runs</h1>
-<p class="muted">A test run replays injects on a compressed clock through the real scheduler. In-app injects land in the
-<a href="/inbox/as/{{ test_team.id }}/">Test team inbox</a> (with a banner naming the real team); email injects go to the test address pattern below.
+<p class="muted">A test run replays injects on a compressed clock through the real scheduler. In SIMEX Mail, messages land in the
+<a href="/inbox/as/{{ test_team.id }}/">Test team inbox</a> (with a banner naming the real team); by email they go to the test address pattern below.
+Choose the channel for the run, whatever Settings → Delivery channel says for the live exercise.
 It uses the injects as they are when each one fires, so edits show up. Live sending does not need to be armed; <b>Pause all sending</b> also pauses test runs.</p>
 <div class="cols">
 <section class="col-main">
 <table class="list">
-  <thead><tr><th>Run</th><th>Created</th><th>Status</th><th>Progress</th><th>Email to</th></tr></thead>
+  <thead><tr><th>Run</th><th>Created</th><th>Status</th><th>Progress</th><th>Delivered in</th></tr></thead>
   {% for r in runs %}
   <tr><td><a href="/tests/{{ r.id }}/">{{ r.name }}</a><div class="muted small">{{ r.description }}{% if r.dry_run %} · dry run{% endif %}</div></td>
     <td class="small">{{ r.created_at|date:"D d M H:i" }}</td><td><span class="status {{ r.status }}">{{ r.status }}</span></td>
     <td class="small">{% for k, v in r.stats.items %}{{ k }} {{ v }}{% if not forloop.last %} · {% endif %}{% endfor %}</td>
-    <td class="small">{{ r.redirect|default:"—" }}</td></tr>
+    <td class="small">{% if r.channel == 'inapp' %}SIMEX Mail{% elif r.channel == 'email' %}email: {{ r.redirect }}{% else %}each inject's channel{% if r.redirect %} (email: {{ r.redirect }}){% endif %}{% endif %}</td></tr>
   {% empty %}<tr><td colspan="5" class="muted">No test runs yet.</td></tr>{% endfor %}
 </table>
 </section>
@@ -32,8 +33,13 @@ It uses the injects as they are when each one fires, so edits show up. Live send
     <label class="chk"><input type="radio" name="timing" value="interval" checked> one inject every <input type="number" name="interval" value="30" min="5" class="narrow"> s</label>
     <label class="chk"><input type="radio" name="timing" value="factor"> keep the real gaps, <input type="number" name="factor" value="60" min="1" class="narrow"> × faster</label>
   </fieldset>
-  <label>Email injects go to <input name="redirect" value="{{ cfg.test_redirect }}">
-    <span class="hint">Only for injects on the email channel. <code>{key}</code> becomes the original recipient's username.</span></label>
+  <fieldset><legend>Deliver in</legend>
+    <label class="chk"><input type="radio" name="channel" value="inapp" {% if channel_mode != 'email' %}checked{% endif %}> SIMEX Mail (the Test team inbox)</label>
+    <label class="chk"><input type="radio" name="channel" value="email" {% if channel_mode == 'email' %}checked{% endif %}> email (to the address below)</label>
+    {% if channel_mode == 'per_inject' %}<label class="chk"><input type="radio" name="channel" value=""> each inject's own channel</label>{% endif %}
+  </fieldset>
+  <label>Email goes to <input name="redirect" value="{{ cfg.test_redirect }}">
+    <span class="hint">Only for messages sent by email. <code>{key}</code> becomes the original recipient's username.</span></label>
   <label class="chk"><input type="checkbox" name="dry_run" value="1"> dry run (render and log only, nothing delivered)</label>
   <button class="btn primary">Create and start</button>
 </form>

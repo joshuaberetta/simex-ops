@@ -794,7 +794,8 @@ def _tests_create(request):
     if not chosen:
         messages.error(request, "No injects selected for the test run.")
         return redirect("/tests/")
-    if any(i.effective_channel == "email" for i in chosen) and not redirect_to:
+    channel = P.get("channel") if P.get("channel") in CHANNELS else ""
+    if any((channel or i.effective_channel) == "email" for i in chosen) and not redirect_to:
         messages.error(request, "Some injects go by email: give a test address pattern.")
         return redirect("/tests/")
     try:
@@ -810,7 +811,7 @@ def _tests_create(request):
     if redirect_to:
         conf.put("test_redirect", redirect_to)
     run = delivery.create_test_run(name, chosen, start, redirect_to, P.get("dry_run") == "1", factor=factor,
-                                   interval=interval, user=_u(request))
+                                   interval=interval, user=_u(request), channel=channel)
     messages.success(request, f"Test run '{name}' created with {len(chosen)} injects.")
     return redirect(f"/tests/{run.id}/")
 
@@ -818,7 +819,9 @@ def _tests_create(request):
 @excon_required
 def test_run_page(request, rid):
     run = get_object_or_404(TestRun, pk=rid)
-    items = run.items.select_related("inject")
+    items = list(run.items.select_related("inject"))
+    for it in items:
+        it.via = "SIMEX Mail" if run.channel_for(it.inject) == "inapp" else "email"
     msg_counts = dict(Message.objects.filter(run=run).values_list("status").annotate(n=Count("id"))
                       .values_list("status", "n"))
     return render(request, "ops/test_run.html", {"tab": "tests", "run": run, "items": items, "msg_counts": msg_counts,

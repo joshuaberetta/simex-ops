@@ -847,3 +847,22 @@ def test_followup_email_is_threaded_and_needs_arming(excon):
     assert "wrote:\n> Hello Team B" in payload["text"]
     m.refresh_from_db()
     assert m.status == "sent"
+
+
+def test_test_run_channel_overrides_the_delivery_setting(excon):
+    from ops.models import TestRun
+    do_import(excon, SAMPLE)
+    conf.put("channel_mode", "email")
+    r = excon.post("/tests/", {"name": "R2", "scope": "ids", "ids": "1-15", "timing": "interval", "interval": "5",
+                               "channel": "inapp"})
+    assert r.status_code == 302 and TestRun.objects.get().channel == "inapp"  # no email pattern needed
+    TestRunItem.objects.update(due_at=timezone.now() - timedelta(seconds=1))
+    n = len(mailer.get().sent)
+    delivery.tick()
+    assert len(mailer.get().sent) == n
+    assert set(Mail.objects.values_list("team__code", flat=True)) == {"test"} and Mail.objects.count() == 4
+    assert "SIMEX Mail" in excon.get(f"/tests/{TestRun.objects.get().id}/").content.decode()
+    # By email, a test address pattern is required.
+    excon.post("/tests/", {"name": "R3", "scope": "ids", "ids": "1-15", "timing": "interval", "channel": "email",
+                           "redirect": ""})
+    assert TestRun.objects.count() == 1

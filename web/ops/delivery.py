@@ -232,7 +232,8 @@ def process_test_item(item_id):
     prefix = f"test-{run.id}-{item.id}-"
 
     def build():
-        drafts, warnings = render.build(inj, conf.get_all())
+        build_fn = render.build_inapp if run.channel_for(inj) == "inapp" else render.build_email
+        drafts, warnings = build_fn(inj, conf.get_all())
         out = []
         for d in chunk(drafts):
             _test_draft(d, run.name, run.redirect)
@@ -277,10 +278,10 @@ def send_oneoff(inj, address="", all_targets=False, user=""):
     return msgs, warnings
 
 
-def create_test_run(name, injects, start, redirect, dry_run, factor=None, interval=None, user=""):
+def create_test_run(name, injects, start, redirect, dry_run, factor=None, interval=None, user="", channel=""):
     injects = sorted(injects, key=lambda i: (i.send_at is None, i.send_at or start, i.seq))
     run = TestRun.objects.create(
-        name=name, redirect=redirect, dry_run=dry_run,
+        name=name, redirect=redirect, dry_run=dry_run, channel=channel,
         description=f"{len(injects)} injects, " + (f"time / {factor:g}" if factor else f"every {interval:g} s"))
     first = next((i.send_at for i in injects if i.send_at), None)
     for n, inj in enumerate(injects):
@@ -289,7 +290,8 @@ def create_test_run(name, injects, start, redirect, dry_run, factor=None, interv
         else:
             due = start + timedelta(seconds=(interval or 60) * n)
         TestRunItem.objects.create(run=run, inject=inj, due_at=due)
-    audit("test_run_created", f"{name}: {run.description}" + (", dry run" if dry_run else ""), user)
+    audit("test_run_created", f"{name}: {run.description}" + (f", all {channel}" if channel else "")
+          + (", dry run" if dry_run else ""), user)
     return run
 
 
