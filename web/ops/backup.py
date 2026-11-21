@@ -16,7 +16,7 @@ FORMAT = "simex-inbox-backup-1"
 MODELS = [Group, get_user_model(), m.Setting, m.Team, m.Person, m.Sender, m.Inject, m.Attachment, m.TestRun,
           m.TestRunItem, m.Message, m.MessageAttachment, m.Event, m.Mail, m.MailAttachment, m.MailLabel, m.ThreadLabel, m.Response, m.ResponseAttachment, m.RubricCriterion,
           m.Grade, m.ImportBatch, m.Audit, m.ReplyAnalysis, m.AiGrade, m.AiReport, m.InjectDraft, m.AiCall,
-          m.ExerciseReport, m.Report]
+          m.ExerciseReport, m.Report, m.MailAction]
 
 
 def export():

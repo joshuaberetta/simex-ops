@@ -34,7 +34,7 @@ from django.views.decorators.http import require_POST
 
 from . import conf, inbound, push, render as rnd
 from .access import is_excon, leader_of, login_required_any, participant_of
-from .models import (Mail, MailAttachment, MailLabel, MessageAttachment, PushSubscription, Response, Sender,
+from .models import (Mail, MailAction, MailAttachment, MailLabel, MessageAttachment, PushSubscription, Response, Sender,
                      Team, ThreadLabel, audit)
 
 PAGE = 50
@@ -198,6 +198,21 @@ def address_book(v):
 
 def team_address(t):
     return f"{t.code}@teams.{settings.MAIL_DOMAIN}"
+
+
+# What participants do in their mailbox, kept with its time for the end-of-exercise reports
+# (MailAction). Reading and downloading are Events (inbound.record_read).
+TRACKED = {"star", "unstar", "read", "unread", "archive", "unarchive", "trash", "restore", "label_add", "label_remove",
+           "move", "discard", "label_create", "label_delete", "search", "draft", "send"}
+
+
+def track(v, action, threads=(), **detail):
+    """Log a participant's (or a leader's, in their own mailbox) action. Never ExCon's or a
+    read-only view."""
+    if v.readonly or not v.person or action not in TRACKED:
+        return None
+    return MailAction.objects.create(**v.box, person=v.person, action=action, threads=[t for t in threads if t][:200],
+                                     detail=detail)
 
 
 def my_identity(v):
@@ -415,6 +430,10 @@ def inbox(request, v):
     total = len(rows)
     start = (page - 1) * PAGE
     _seen(v)
+    if q and page == 1:
+        last = MailAction.objects.filter(**v.box, person=v.person, action="search").order_by("-at").first()
+        if not (last and last.detail.get("q") == q[:200] and last.at > timezone.now() - timedelta(minutes=2)):
+            track(v, "search", q=q[:200], folder=folder, results=total)
     return render(request, "ops/mail/list.html", _ctx(
         v, folder=folder, q=q, rows=rows[start:start + PAGE], total=total, first=start + 1 if total else 0,
         last=min(start + PAGE, total), page=page, has_prev=page > 1, has_next=start + PAGE < total, today=timezone.localdate()))
@@ -553,6 +572,12 @@ def action(request, v):
         ids = [int(x) for x in request.POST.getlist("draft_ids") if x.isdigit()]
         drafts = v.mails().filter(folder="drafts")
         (drafts.filter(id__in=ids) if ids else drafts.filter(thread__in=threads)).delete()
+    if act in ("label_add", "label_remove", "move"):
+        names = list(v.labels().filter(pk__in=[int(x) for x in request.POST.getlist("label") + [request.POST.get("to", "")]
+                                               if str(x).isdigit()]).values_list("name", flat=True))
+        track(v, act, threads, labels=names, to="Inbox" if request.POST.get("to") == "inbox" else "")
+    else:
+        track(v, act, threads)
     if request.headers.get("x-requested-with") == "fetch":
         return JsonResponse({"ok": True})
     return redirect(request.POST.get("next") if (request.POST.get("next") or "").startswith("/inbox") else "/inbox/")
@@ -561,7 +586,7 @@ def action(request, v):
 def _relabel(v, threads, act, ids=(), to="", from_=""):
     """label_add / label_remove the labels ids. move: to a label id or "inbox"; the conversations
     leave the Inbox (or come back to it) and the label being viewed (from_ = "l<id>")."""
-    threads = list(v.mails().filter(thread__in=threads).values_list("thread", flat=True).distinct())
+    threads = list(v.mails().filter(thread__in=threads).order_by().values_list("thread", flat=True).distinct())
     if act == "move":
         to = str(to)
         if to != "inbox" and not (to.isdigit() and v.labels().filter(pk=int(to)).exists()):
@@ -604,6 +629,7 @@ def labels_save(request, v):
     try:
         if op == "create":
             label = MailLabel.objects.create(**v.box, name=_label_name(v, P.get("name")))
+            track(v, "label_create", P.getlist("threads"), name=label.name)
             if P.getlist("threads"):
                 _relabel(v, P.getlist("threads"), "move" if P.get("move") else "label_add", [label.id], label.id,
                          P.get("from", ""))
@@ -614,6 +640,7 @@ def labels_save(request, v):
             label.colour = P.get("colour") if P.get("colour") in LABEL_COLOURS else ""
             label.save(update_fields=["colour"])
         elif op == "delete":
+            track(v, "label_delete", name=label.name)
             label.delete()  # its conversations stay where they are
         else:
             raise ValueError("Unknown action.")
@@ -645,7 +672,8 @@ def draft_save(request, v):
     d = v.mails().filter(pk=_id(P.get("draft_id")), folder="drafts").first()
     if d is None and _id(P.get("draft_id")):
         return JsonResponse({"error": "This draft was sent or discarded."}, status=410)
-    if d is None:
+    new = d is None
+    if new:
         name, addr = my_identity(v)
         d = Mail(**v.box, folder="drafts", author=v.person, from_name=name, from_addr=addr)
     parent = v.mails().filter(pk=_id(P.get("in_reply_to"))).first()
@@ -657,6 +685,8 @@ def draft_save(request, v):
     d.thread = parent.thread if parent else (d.thread or "")
     d.created_at = timezone.now()
     d.save()
+    if new:
+        track(v, "draft", [d.thread], draft=d.id)
     return JsonResponse({"id": d.id, "saved": timezone.localtime(d.created_at).strftime("%H:%M")})
 
 
@@ -711,6 +741,11 @@ def send(request, v):
                 sent = _send(request, v, P, to, cc, bcc, subject, body, files, parent, fwd)
     except SendFailed as e:
         return fail(str(e))
+    started = MailAction.objects.filter(**v.box, action="draft", detail__draft=_id(P.get("draft_id"))).first() \
+        if _id(P.get("draft_id")) else None
+    track(v, "send", [sent.thread], kind="forward" if fwd else ("reply" if parent else "new"), to=len(to), cc=len(cc),
+          bcc=len(bcc), files=len(files),
+          draft_minutes=round((timezone.now() - started.at).total_seconds() / 60, 1) if started else None)
     if ajax:
         return JsonResponse({"ok": True, "thread": sent.thread, "url": f"{v.base}/t/{sent.thread}/?folder=sent"})
     messages.success(request, "Message sent.")

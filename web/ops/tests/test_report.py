@@ -16,6 +16,7 @@ TEAM_OUT = {"headline": "Fast and clear.", "overview": "Your team kept up.", "ti
             "asks": "Trucks, from the right persona.",
             "writing_style": {"assessment": "Brief.", "good_example": "Plan by 15:00", "weak_example": "ok",
                               "tips": ["Lead with the decision"]},
+            "inbox_management": "You opened the plan before answering.",
             "recommendations": ["Keep a log"], "hotwash_questions": ["Who decided?"]}
 EXCON_OUT = {"headline": "Team A led.", "comparison": [{"team": "Team A", "summary": "fast"}],
              "themes": [{"title": "Logistics", "detail": "trucks"}], "injects_that_worked": ["1-15"],
@@ -137,7 +138,8 @@ def test_team_report_reads_only_its_team_and_can_be_edited(excon):
     a_call = next(c for c in calls if "Team: Team A" in json.dumps(c["messages"]))
     text = json.dumps(a_call["messages"], ensure_ascii=False)
     assert "Plan by 15:00" in text and "Hello Team A" in text and "No figures." in text and "must-have" in text
-    assert "CHARLIE-ONLY" not in text and "Carol" not in text  # another team's mail never reaches it
+    assert "CHARLIE-ONLY" not in text and "Carol" not in text
+    assert "Member 1" in text and "inbox_management" in a_call["system"]  # another team's mail never reaches it
     assert "likely AI-assisted" not in text and "ai_written" not in text and "AI tools" in a_call["system"]
     assert a_call["model"] == "claude-sonnet-5-5"
     excon_call = next(c for c in fake.calls if c["system"] == report.EXCON_SYSTEM)
@@ -191,3 +193,51 @@ def test_failed_write_up_keeps_the_figures(excon):
 def test_markdown_is_escaped():
     out = report.markdown_html('**hi** <img src=x onerror=alert(1)> [x](javascript:alert(1))\n\n> quote')
     assert "<strong>hi</strong>" in out and "<img" not in out and "javascript:" not in out and "<blockquote>" in out
+
+
+def test_inbox_habits_are_logged_and_reported(excon):
+    from ops.models import Attachment, MailAction, MailAttachment, Team
+    do_import(excon, SAMPLE)
+    inj = Inject.objects.get(mel_id="1-15")
+    inj.expects_reply = True
+    inj.save()
+    Attachment.objects.create(inject=inj, filename="plan.pdf", data=b"%PDF", size=4)
+    arm()
+    deliver_now("1-15")
+    pa, pa2 = participant("a", "Jane"), participant("a", "Omar")
+    mail = Mail.objects.get(owner=None, team__code="a", folder="inbox")
+    pa.get(f"/inbox/t/{mail.thread}/")
+    pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: Update", "body": "Plan by 15:00", "in_reply_to": mail.id})
+    pa.get(f"/inbox/file/{MailAttachment.objects.get(mail=mail).id}/")  # opened after answering
+    pa2.get(f"/inbox/t/{mail.thread}/")
+    pa.post("/inbox/action/", {"threads": [mail.thread], "action": "star"})
+    pa.post("/inbox/action/", {"threads": [mail.thread], "action": "unstar"})
+    pa.post("/inbox/labels/", {"op": "create", "name": "Logistics", "threads": [mail.thread]})
+    pa.get("/inbox/?q=plan")
+    pa.get("/inbox/?q=plan")  # the same search again at once: logged once
+    d = pa.post("/inbox/draft/", {"to": "p:undac-a-tl", "subject": "Fwd: Update", "body": "FYI"}).json()["id"]
+    pa2.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Fwd: Update", "body": "FYI", "draft_id": d,
+                              "forward_of": mail.id})
+    team = Team.objects.get(code="a")
+    excon.get(f"/inbox/as/{team.id}/?q=trucks")  # ExCon looking: not the team's doing
+    acts = list(MailAction.objects.filter(team=team).values_list("action", flat=True))
+    assert acts.count("search") == 1 and {"star", "unstar", "label_create", "draft", "send"} <= set(acts)
+    fwd = MailAction.objects.filter(action="send", detail__kind="forward").get()
+    assert fwd.person.name == "Omar" and fwd.detail["draft_minutes"] is not None
+
+    excon.post("/reports/compile/", {"kind": "live"})
+    rep = Report.objects.get(team=team)
+    b = rep.figures["inbox"]
+    assert {m["name"]: (m["read"], m["wrote"], m["downloads"]) for m in b["members"]} == {
+        "Jane": (1, 1, 1), "Omar": (1, 1, 0)}
+    assert b["replied_before_opening_documents"] == ["1-15"] and b["documents"][0]["opened"]
+    assert len(b["forwards"]) == 1 and b["labels"] == [{"label": "Logistics", "conversations": 1}]
+    assert b["starred_threads"] == 1 and b["starred_then_unstarred"] == 1 and b["searches"] == ["plan"]
+    assert b["writing_share_top_member_percent"] == 50
+    team_view = report.for_team(rep.figures, False)["inbox"]["members"]
+    assert [m["name"] for m in team_view] == ["Member 1", "Member 2"]
+    printed = excon.get(f"/reports/part/{rep.id}/print/").content.decode()
+    assert "How you managed your inbox" in printed and "Member 1" in printed and "Jane" not in printed
+    assert "Jane" in excon.get(f"/reports/part/{rep.id}/").content.decode()  # ExCon sees names
+    x = Report.objects.get(exercise=rep.exercise, team=None).figures
+    assert next(t for t in x["teams"] if t["team"] == "Team A")["inbox"]["forwards"] == 1

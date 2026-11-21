@@ -357,6 +357,22 @@ class ThreadLabel(models.Model):
         constraints = [models.UniqueConstraint(fields=["label", "thread"], name="thread_label_unique")]
 
 
+class MailAction(models.Model):
+    """Something a participant did in their SIMEX Mail (star, archive, label, search, draft,
+    send...): Mail only keeps the inbox as it is now; this keeps when. For the end-of-exercise
+    reports (how the team managed its inbox). Reading and downloads are Events."""
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="+")
+    owner = models.ForeignKey(Person, null=True, blank=True, on_delete=models.CASCADE, related_name="+")  # as Mail.owner
+    person = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")  # who did it
+    action = models.CharField(max_length=20)  # see views_inbox.TRACKED
+    threads = models.JSONField(default=list, blank=True)
+    detail = models.JSONField(default=dict, blank=True)  # label name, search text, draft minutes...
+    at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        indexes = [models.Index(fields=["team", "action"])]
+
+
 class PushSubscription(models.Model):
     """A participant's (or leader's) device that gets a push notification for new mail (Web Push: a phone's
     home-screen app or a browser). Not in backups: devices subscribe again on their next visit."""

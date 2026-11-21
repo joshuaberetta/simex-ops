@@ -38,5 +38,8 @@ SIMEX Mail is your team's mailbox for the exercise. Everything here is **exercis
 ## Shortcuts (when you're not typing)
 `c` compose · `/` search · `v` move to · `l` labels · `j` / `k` next / previous · `Enter` open · `r` reply · `a` reply all · `f` forward · `e` archive · `#` delete · `u` back to the list · `Esc` close the compose window.
 
+## What ExCon sees
+SIMEX Mail records what your team does in it, for the debrief: who reads and writes what and when, which files you open, and how you organise the mailbox (stars, labels, archive, searches, drafts). Your team's debrief report describes how the team handled its mail, without naming anyone.
+
 ## Problems
 Can't sign in, or something looks wrong? Ask ExCon. They can reset your password. Don't share your login with other teams.

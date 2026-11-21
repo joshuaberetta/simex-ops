@@ -41,6 +41,23 @@
   <tbody>{% for p in f.personas %}<tr><td>{{ p.persona }}</td><td>{{ p.wrote_to_team }}</td><td>{{ p.team_wrote }}</td></tr>{% endfor %}</tbody>
 </table>{% endif %}
 
+{% with b=f.inbox %}{% if b %}<h4>How you managed your inbox</h4>
+{% if b.members %}<table class="list small fig">
+  <thead><tr><th>Member</th><th>Messages read</th><th>Written</th><th>Files opened</th><th>Alerts</th></tr></thead>
+  <tbody>{% for m in b.members %}<tr><td>{{ m.name }}</td><td>{{ m.read }}</td><td>{{ m.wrote }}</td><td>{{ m.downloads }}</td><td>{% if m.alerts_on %}on{% else %}<span class="muted">off</span>{% endif %}</td></tr>{% endfor %}</tbody>
+</table>{% endif %}
+<ul class="small">
+  {% if b.documents %}<li>Injects with documents: {{ b.documents|length }}; answered before opening the documents: {% if b.replied_before_opening_documents %}{{ b.replied_before_opening_documents|joinlist }}{% else %}none{% endif %}.</li>{% endif %}
+  {% if b.read_but_never_answered %}<li>Read but never answered: {{ b.read_but_never_answered|joinlist }}.</li>{% endif %}
+  {% if b.answered_long_after_reading %}<li>Answered long after reading: {% for x in b.answered_long_after_reading %}{{ x.inject }} ({{ x.minutes_after_reading }} min){% if not forloop.last %}, {% endif %}{% endfor %}.</li>{% endif %}
+  <li>{{ b.forwards|length }} forward{{ b.forwards|length|pluralize }}, {{ b.messages_with_cc }} message{{ b.messages_with_cc|pluralize }} with copies, {{ b.messages_to_team_leader }} to the team leader.</li>
+  <li>At the end: {{ b.at_the_end.unread }} unread, {{ b.at_the_end.in_inbox }} in the inbox, {{ b.at_the_end.archived }} archived, {{ b.at_the_end.starred }} starred{% if b.at_the_end.drafts_unsent %}, {{ b.at_the_end.drafts_unsent }} unsent draft{{ b.at_the_end.drafts_unsent|pluralize }}{% endif %}.
+    {% if b.starred_threads %}{{ b.starred_threads }} conversation{{ b.starred_threads|pluralize }} starred during the exercise, {{ b.starred_then_unstarred }} unstarred again.{% endif %}</li>
+  <li>Labels: {% if b.labels %}{% for l in b.labels %}{{ l.label }} ({{ l.conversations }}){% if not forloop.last %}, {% endif %}{% endfor %}{% else %}none{% endif %}.</li>
+  {% if b.searches %}<li>Searched for: {{ b.searches|joinlist:"; " }}.</li>{% endif %}
+  {% if b.median_minutes_drafting is not None %}<li>Median {{ b.median_minutes_drafting|num }} min from starting a draft to sending it{% if b.drafts_discarded %}; {{ b.drafts_discarded }} draft{{ b.drafts_discarded|pluralize }} discarded{% endif %}.</li>{% endif %}
+</ul>{% endif %}{% endwith %}
+
 {% if f.excon_ai_drafts %}<p class="small"><b>Drafted with AI by ExCon:</b> of the messages you received,
 {% if f.excon_ai_drafts.injects %}{{ f.excon_ai_drafts.injects }} inject{{ f.excon_ai_drafts.injects|pluralize }}{% endif %}{% if f.excon_ai_drafts|get:"follow-ups" %}, {{ f.excon_ai_drafts|get:"follow-ups" }} follow-up{{ f.excon_ai_drafts|get:"follow-ups"|pluralize }}{% endif %}{% if f.excon_ai_drafts.answers %}, {{ f.excon_ai_drafts.answers }} answer{{ f.excon_ai_drafts.answers|pluralize }}{% endif %} started as an AI draft that ExCon reviewed.</p>{% endif %}
 
@@ -58,6 +75,13 @@
     <td>{{ t.asks_unanswered }}/{{ t.asks }}</td>
     <td>{{ t.writing.clarity|num }} · {{ t.writing.completeness|num }} · {{ t.writing.actionability|num }}</td></tr>{% endfor %}</tbody>
 </table>
+{% if f.teams.0.inbox %}<table class="list small fig">
+  <thead><tr><th>Team</th><th>Answered before opening documents</th><th>Read, never answered</th><th>Forwards · with copies</th><th>Top writer's share</th><th>Unread at the end</th><th>Labels · stars</th></tr></thead>
+  <tbody>{% for t in f.teams %}{% with b=t.inbox %}<tr><td><b>{{ t.team }}</b></td>
+    <td>{{ b.replied_before_opening_documents|length }}</td><td>{{ b.read_but_never_answered|length }}</td>
+    <td>{{ b.forwards }} · {{ b.messages_with_cc }}</td><td>{% if b.writing_share_top_member_percent is not None %}{{ b.writing_share_top_member_percent }}%{% else %}—{% endif %}</td>
+    <td>{{ b.at_the_end.unread }}</td><td>{{ b.labels }} · {{ b.starred_threads }}</td></tr>{% endwith %}{% endfor %}</tbody>
+</table>{% endif %}
 
 <h4>Injects</h4>
 <table class="list small fig">
