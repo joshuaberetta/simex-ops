@@ -190,16 +190,37 @@ def inject_ai_check(request, iid):
 @excon_required
 @require_POST
 def injects_ai_check(request):
-    """Review every unsent inject again (e.g. after changing many by hand)."""
-    n = 0
-    for inj in Inject.objects.all():
-        if checks.unsent(inj):
-            ai.queue_review(inj)
-            n += 1
-    audit("ai_review_all", f"{n} injects", _u(request))
-    messages.success(request, f"{n} unsent injects queued for the AI review; flags appear on this list as they are done."
-                     if ai.enabled() else "Queued, but AI analysis is off: turn it on in Settings.")
-    return redirect(safe_next(request.POST.get("back"), "/injects/"))
+    """Queue unsent injects for the AI review: every one (e.g. after changing many by hand), only
+    those without a review of them as they are now, or the ones selected on the list."""
+    scope = request.POST.get("scope", "all")
+    back_to = safe_next(request.POST.get("back"), "/injects/")
+    rows = [i for i in Inject.objects.all() if checks.unsent(i)]
+    if scope == "selected":
+        ids = {int(x) for x in request.POST.getlist("ids") if x.isdigit()}
+        if not ids:
+            messages.warning(request, "Select injects first.")
+            return redirect(back_to)
+        rows = [i for i in rows if i.id in ids]
+    elif scope == "unchecked":
+        files, senders = checks.files_by_inject(), {s.local_part: s for s in Sender.objects.all()}
+        reviews = {rv.inject_id: rv for rv in InjectReview.objects.all()}
+        rows = [i for i in rows if not ai.current_review(i, files.get(i.id, []), senders, reviews)
+                and not (reviews.get(i.id) and reviews[i.id].status == "queued")]
+    else:
+        scope = "all"
+    for inj in rows:
+        ai.queue_review(inj)
+    n = len(rows)
+    audit(f"ai_review_{scope}", f"{n} injects", _u(request))
+    if not ai.enabled():
+        messages.success(request, "Queued, but AI analysis is off: turn it on in Settings.")
+    elif not n:
+        messages.info(request, "Nothing to queue: no unsent inject " + (
+            "is selected." if scope == "selected" else "lacks a current AI review." if scope == "unchecked" else "left."))
+    else:
+        messages.success(request, f"{n} unsent inject{'s' if n != 1 else ''} queued for the AI review; "
+                                  "flags appear on this list as they are done.")
+    return redirect(back_to)
 
 
 @excon_required

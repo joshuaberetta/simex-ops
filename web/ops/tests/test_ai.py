@@ -211,6 +211,27 @@ def test_inject_review_flags_the_list_and_reruns_only_on_change(excon, fake):
     assert InjectReview.objects.get(inject=inj).status == "queued"
 
 
+def test_inject_review_queue_unchecked_or_selected(excon, fake):
+    from ops.models import InjectReview
+    conf.put("ai_auto", "0")
+    t = timezone.now() + timedelta(days=1)
+    done, new, other = (Inject.objects.create(mel_id=m, subject=m, body="x", send_at=t, status="scheduled")
+                        for m in ("1-01", "1-02", "1-03"))
+    sent = Inject.objects.create(mel_id="9-99", subject="Done", body="x", send_at=t, status="sent")
+    fake.answer = lambda kw: ({"issues": []}, "end_turn")
+    ai.review_inject(done)
+    page = excon.get("/injects/").content.decode()
+    assert "Check unchecked with AI" in page and 'formaction="/injects/ai-check/"' in page
+    excon.post("/injects/ai-check/", {"scope": "unchecked"})
+    assert {rv.inject.mel_id: rv.status for rv in InjectReview.objects.all()} == {
+        "1-01": "done", "1-02": "queued", "1-03": "queued"}
+    InjectReview.objects.exclude(inject=done).delete()
+    excon.post("/injects/ai-check/", {"scope": "selected", "ids": [new.id, sent.id]})  # the sent one is skipped
+    assert {rv.inject.mel_id: rv.status for rv in InjectReview.objects.all()} == {"1-01": "done", "1-02": "queued"}
+    resp = excon.post("/injects/ai-check/", {"scope": "selected", "back": "/injects/?day=none"})
+    assert resp["Location"] == "/injects/?day=none" and InjectReview.objects.count() == 2
+
+
 DRAFT_OUT = {"sender": "Donotreply@epeigonia.org", "from_name": "", "subject": "Road to Balanjar cut",
              "body": "Dear {team_name},\nThe coastal road is cut at km 12.", "scenario_time": "2035-05-20T10:00",
              "send_at": "2026-11-23 11:30", "recipients": "team", "expects_reply": True, "reply_due_minutes": 45,

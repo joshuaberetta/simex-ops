@@ -20,7 +20,8 @@
   <div class="actions">
     {% if ai_on and ai_stats.unsent %}<form method="post" action="/injects/ai-check/" class="inline">{% csrf_token %}<input type="hidden" name="back" value="{{ request.get_full_path }}">
       <span class="small muted" title="Unsent injects the AI has read as they are now">AI checked {{ ai_stats.checked }}/{{ ai_stats.unsent }}{% if ai_stats.queued %}, {{ ai_stats.queued }} queued{% endif %}</span>
-      <button class="btn" data-confirm="Have the AI read every unsent inject again?">Check all with AI</button></form>{% endif %}
+      <button class="btn" name="scope" value="unchecked" title="Unsent injects the AI has not read as they are now (new, changed or failed)">Check unchecked with AI</button>
+      <button class="btn" name="scope" value="all" data-confirm="Have the AI read every unsent inject again?">Check all</button></form>{% endif %}
     {% if ai_on %}<a class="btn" href="/injects/drafts/">Draft with AI</a>{% endif %}
     <a class="btn" href="/import/">Import / update</a>
     <form method="post" action="/injects/new/" class="inline">{% csrf_token %}<button class="btn">New inject</button></form>
@@ -40,6 +41,8 @@
     <span class="sep"></span>
     Shift by <input type="number" name="minutes" value="30" step="5" class="narrow"> min
     <button class="btn small" name="action" value="shift" data-confirm="Move the selected injects' send times?">Shift</button>
+    {% if ai_on %}<span class="sep"></span>
+    <button class="btn small" formaction="/injects/ai-check/" name="scope" value="selected" title="Have the AI read the selected unsent injects">Check with AI</button>{% endif %}
     <span class="sep"></span>
     {% if channel_mode == 'per_inject' %}Channel: <button class="btn small" name="action" value="inapp">In-app</button>
     <button class="btn small" name="action" value="email" data-confirm="Send the selected injects by email instead?">Email</button>
