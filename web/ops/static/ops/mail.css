@@ -465,6 +465,6 @@ body.has-tabs .gm-body { height: calc(100% - 64px - 49px); }
 
 /* From (a member's choice of address): the team's, or their own, tinted so it can't be missed. */
 .gm-from-field { display: flex; align-items: center; gap: 8px; }
-.gm-from { flex: 1; min-width: 0; border: 0; background: #e8f0fe; color: var(--ink); font: inherit; padding: 4px 8px;
+.gm-from-select { flex: 1; min-width: 0; border: 0; background: #e8f0fe; color: var(--ink); font: inherit; padding: 4px 8px;
   border-radius: 6px; }
-.gm-from-field.own .gm-from { background: #e6f4ea; }
+.gm-from-field.own .gm-from-select { background: #e6f4ea; }

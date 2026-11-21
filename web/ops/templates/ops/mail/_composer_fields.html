@@ -4,7 +4,7 @@
     <input type="hidden" name="forward_of" value="">
     {% if from_choices %}<div class="gm-field gm-from-field">
       <span class="gm-field-label">From</span>
-      <select name="from" class="gm-from" aria-label="From" data-from>
+      <select name="from" class="gm-from-select" aria-label="From" data-from>
         {% for f in from_choices %}<option value="{{ f.key }}" {% if f.key == from_default %}selected{% endif %}>{{ f.name }} &lt;{{ f.addr }}&gt;{% if f.key == "team" %} · team address{% else %} · my own address{% endif %}</option>{% endfor %}
       </select>
     </div>{% endif %}
