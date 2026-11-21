@@ -1,0 +1,36 @@
+{% extends "ops/base.html" %}{% load ops %}
+{% block title %}Reports · SIMEX ops{% endblock %}
+{% block body %}
+<div class="bar">
+  <h1><a href="/dashboard/?kind={{ kind }}" class="muted">Dashboard</a> / Reports</h1>
+  <nav class="seg">
+    <a href="/reports/?kind=live" class="{% if kind == 'live' %}on{% endif %}">Exercise</a>
+    <a href="/reports/?kind=test" class="{% if kind != 'live' %}on{% endif %}">Test team</a>
+  </nav>
+  <span class="small muted">
+    {% if not ai_available %}AI analysis: no provider configured{% elif not ai_enabled %}AI analysis is off (<a href="/settings/#ai">Settings</a>): figures only{% else %}about ${{ ai_spent|floatformat:2 }} of ${{ ai_cap|num }} today{% endif %}
+  </span>
+</div>
+<p class="small muted">At the end of the exercise: a report for each team ({{ teams|length }}), written for the team to read at the debrief, and one for ExCon comparing the teams. The figures come from the app's records; Claude writes about them. Read and edit every section before you print. A team's report is written from that team's mail only, with the human grades (never the AI-suggested scores).</p>
+
+<form method="post" action="/reports/compile/" class="card form">{% csrf_token %}
+  <input type="hidden" name="kind" value="{{ kind }}">
+  <h3>Compile the reports</h3>
+  <label class="chk"><input type="checkbox" name="include_ai_written" value="1"> Include the AI-written estimate in the team reports <span class="hint">off: only ExCon sees it</span></label>
+  <button class="btn primary">Compile</button>
+  <span class="hint">{% if ai_enabled %}A few minutes; roughly $1 per team report (it reads all of the team's mail). Each compile is a new version; older ones stay below.{% else %}AI analysis is off, so only the figures are compiled.{% endif %}</span>
+</form>
+
+<h2>Compiled</h2>
+{% if compiles %}
+<table class="list">
+  <thead><tr><th>When</th><th>By</th><th>Reports</th><th></th></tr></thead>
+  <tbody>{% for ex in compiles %}<tr>
+    <td class="nowrap"><a href="/reports/{{ ex.id }}/">{{ ex.created_at|date:"D d M H:i" }}</a></td>
+    <td>{{ ex.user }}</td>
+    <td class="small">{% for r in ex.reports.all %}<a href="/reports/part/{{ r.id }}/">{{ r.team.name|default:"ExCon" }}</a> <span class="status {{ r.status|status_class }}">{{ r.status }}</span>{% if not forloop.last %} · {% endif %}{% endfor %}</td>
+    <td class="nowrap small"><a href="/reports/{{ ex.id }}/print/" target="_blank">Print all</a></td>
+  </tr>{% endfor %}</tbody>
+</table>
+{% else %}<p class="muted">Nothing compiled yet.</p>{% endif %}
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "ops/base.html" %}{% load ops %}
+{% block title %}Reports · SIMEX ops{% endblock %}
+{% block head %}{% if busy %}<meta http-equiv="refresh" content="15">{% endif %}{% endblock %}
+{% block body %}
+<div class="bar">
+  <h1><a href="/reports/?kind={{ ex.kind }}" class="muted">Reports</a> / {{ ex.created_at|date:"D d M H:i" }}</h1>
+  <span class="small">
+    <a href="/reports/{{ ex.id }}/print/?only=teams" target="_blank">Print the team reports</a> ·
+    <a href="/reports/{{ ex.id }}/print/" target="_blank">Print all</a>
+  </span>
+</div>
+<p class="small muted">{% if ex.kind == 'test' %}Test team. {% endif %}AI-written estimate in the team reports: {% if ex.include_ai_written %}included{% else %}ExCon only{% endif %}.{% if busy %} Claude is writing: the team reports first, then ExCon's. This page refreshes.{% endif %}</p>
+<table class="list">
+  <thead><tr><th>Report</th><th>Status</th><th>Headline</th><th></th></tr></thead>
+  <tbody>{% for r in reps %}<tr>
+    <td class="nowrap"><a href="/reports/part/{{ r.id }}/"><b>{{ r.team.name|default:"ExCon (all teams)" }}</b></a></td>
+    <td><span class="status {{ r.status|status_class }}">{{ r.status }}</span>{% if r.edited %} <span class="small muted">{{ r.edited|length }} section{{ r.edited|length|pluralize }} edited</span>{% endif %}</td>
+    <td class="small">{% if r.error %}<span class="err">{{ r.error }}</span>{% else %}{{ r.body.headline|default:"" }}{% endif %}</td>
+    <td class="nowrap small"><a href="/reports/part/{{ r.id }}/print/" target="_blank">Print</a></td>
+  </tr>{% endfor %}</tbody>
+</table>
+{% endblock %}

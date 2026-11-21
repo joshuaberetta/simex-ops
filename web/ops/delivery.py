@@ -308,7 +308,14 @@ def create_test_run(name, injects, start, redirect, dry_run, factor=None, interv
 
 # --- ExCon answering a participant in character ----------------------------------------------
 
-def answer(response, body, user="", files=(), attachments=()):
+def drafted(m, draft, text):
+    """Record that m was sent from an AI draft, and whether ExCon changed the draft's text."""
+    if draft:
+        m.ai_draft = draft
+        m.ai_edited = " ".join(text.split()) != " ".join(str(draft.body.get("body") or "").split())
+
+
+def answer(response, body, user="", files=(), attachments=(), ai_draft=None):
     """Reply as the persona the participant wrote to: into their team's inbox (in-app
     thread) or by email (email thread), with files ExCon uploaded ((filename, content_type,
     data) tuples) and inject documents (Attachment rows). Returns the Message."""
@@ -345,6 +352,7 @@ def answer(response, body, user="", files=(), attachments=()):
         m.response = response
         if response.message_id_header:
             m.extra_headers = {"In-Reply-To": response.message_id_header, "References": response.message_id_header}
+    drafted(m, ai_draft, body)
     with transaction.atomic():  # the files are in place before anything can deliver the Message
         m.save()
         for name, ctype, data in files:
@@ -391,7 +399,7 @@ def _thread_headers(parent, m_):
     return {"In-Reply-To": parent.message_id_header, "References": parent.message_id_header}
 
 
-def send_followup(inj, parents, subject, body, attachment_ids, user=""):
+def send_followup(inj, parents, subject, body, attachment_ids, user="", ai_draft=None):
     """The inject's persona writes again to the recipients of some of its deliveries (a
     correction, a missing document), in each one's existing conversation. {subject} in the
     subject is the original subject; the body takes the inject placeholders. In-app is
@@ -429,6 +437,7 @@ def send_followup(inj, parents, subject, body, attachment_ids, user=""):
                                  body=text + (f"\n\nOn {when}, {name} wrote:\n{quoted}" if quoted else ""))
             m = new_message(inj, d, "followup", f"followup-{inj.id}-{batch}-{i}")
             m.parent = p
+            drafted(m, ai_draft, body)
             if p.channel == "inapp":
                 mail = p.mails.filter(folder="inbox").first()
                 m.thread = mail.thread if mail else ""

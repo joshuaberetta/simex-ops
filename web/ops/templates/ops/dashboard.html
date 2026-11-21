@@ -8,6 +8,7 @@
     <a href="/dashboard/?kind=live&score={{ source }}" class="{% if kind == 'live' %}on{% endif %}">Exercise</a>
     <a href="/dashboard/?kind=test&score={{ source }}" class="{% if kind != 'live' %}on{% endif %}">Test team</a>
   </nav>
+  <a href="/reports/?kind={{ kind }}" class="btn">End-of-exercise reports</a>
   <span class="small muted">
     {% if not ai_available %}AI analysis: no provider configured{% elif not ai_enabled %}AI analysis is off (<a href="/settings/#ai">Settings</a>){% else %}AI analysis on · {{ ai_unanalysed }} repl{{ ai_unanalysed|pluralize:"y,ies" }} waiting{% if ai_pending %}, {{ ai_pending }} queued{% endif %} · about ${{ ai_spent|floatformat:2 }} of ${{ ai_cap|num }} today{% endif %}
   </span>

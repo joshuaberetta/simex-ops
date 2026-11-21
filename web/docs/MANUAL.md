@@ -29,7 +29,7 @@ The tabs come in two groups: what you use while the exercise runs (**Injects**, 
 | **Injects** | The schedule, grouped by day (click a day to fold it; each shows its count, time span, statuses, files and how many need attention). Filter by day, status or **Needs attention**; open an inject to edit, preview, test or send it; change the channel in bulk. Import from the MEL is here too, and **Draft with AI** (5.8). |
 | **Replies** | Everything participants sent: team summary, inject × team grid, **Read / opens & clicks**, the inbox, and grading. |
 | **Team inboxes** | Each team's mailbox at a glance (received, unread, sent, last sign-in), **View as team**, and **Clear a team's mailbox** after testing (section 6). |
-| **Dashboard** | The exercise at a glance: per team, replies, response times, scores, sentiment over time and a funnel; the rubric heatmap; flags, possibly AI-written replies, what teams ask for and commit to; an AI-written exercise summary (5.7). |
+| **Dashboard** | The exercise at a glance: per team, replies, response times, scores, sentiment over time and a funnel; the rubric heatmap; flags, possibly AI-written replies, what teams ask for and commit to; an AI-written exercise summary (5.7). **End-of-exercise reports** for each team and for ExCon (6.1). |
 | **Log** | Every delivery the app made, with content and status, plus the activity log of every action. |
 | **People & logins** | Teams, participants, and their logins (create, reset password, disable, printable credential sheet). |
 | **Senders** | The personas: username (`cnn`), display name ("CNN Breaking News"). They are also the participants' address book. |
@@ -106,7 +106,7 @@ Then open each one:
 - **Sender username / name**, **Recipients** (*one per team*, *one per participant* — lands in that person's team mailbox addressed to them —, *everyone*), teams to leave out.
 - **Subject and body:** plain text; `{team}`, `{team_name}`, `{name}`, `{first_name}` are filled per message.
 - **Preview** (right): exactly what each team gets. **Clear every orange warning.**
-- **Replies & rubric:** tick "teams are expected to reply", set "within (minutes)", add criteria with max points (or copy another inject's rubric).
+- **Replies & rubric:** tick "teams are expected to reply", set "within (minutes)", add criteria with max points (or copy another inject's rubric). Tick **critical** for a key inject, and **must-have** for a criterion a team must not miss: in the end-of-exercise reports (6.1) a critical inject with no reply in time, or a must-have criterion graded at a third of its points or less, is listed as a *critical point missed*. Set them before the exercise.
 
 Bulk: tick injects in the list and use **Schedule / Back to draft / Cancel / Shift by N min / Channel: In-app | Email** (the Channel buttons appear only in *Per inject* mode; otherwise Settings decides for all injects).
 
@@ -212,9 +212,19 @@ Claude (Sonnet) can draft a message for you to edit and send. It never sends any
   - A follow-up opens the inject's **Send a follow-up** form, filled in and ticked for the team it was drafted for.
   - An answer opens the reply's **Answer as <persona>** box, filled in.
   - Either way you read it and send it yourself. A persona Claude made up shows as *new persona*: add it on **Senders** or pick an existing one.
+- The app records which injects, follow-ups and answers were sent from an AI draft, and whether you changed the text first. The end-of-exercise reports count them (6.1).
 
 ## 6. After the exercise
 Export grades and a final backup, disarm, and disable the participant logins (People & logins) once the debrief no longer needs them.
+
+### 6.1 End-of-exercise reports
+**Dashboard → End-of-exercise reports** (Exercise or Test team). **Compile** makes a report for each team, written for the team to read at the debrief, and one for ExCon comparing the teams. Each compile is a new version; older ones stay listed. Finish grading first: the reports use the grades as they are when you compile.
+
+- **Figures** (from the app's records, also with AI analysis off): injects received and opened; expected replies sent, **missed** and **late**; time to reply (median, 90th percentile, fastest, slowest, from delivery and from the team first opening it, first half of the exercise against the second); **critical points missed** (3.5); every inject with its reply and score; **what the team asked for**, to whom, and whether and how fast the persona answered; writing (clarity, completeness, actionability, words per message, tone); who they corresponded with; how many of the messages they received ExCon drafted with AI. The ExCon report adds a table of the teams, how each inject went across teams, ExCon's own answers (how many, how fast, per persona), AI drafts made, used and edited, failed deliveries and bounces, AI cost, and where the AI-suggested scores and the grades are far apart.
+- **The write-up** (Claude Sonnet, AI analysis on; a few minutes; roughly a dollar per team): for each team an overview, timeliness, what went well, what to improve, critical points missed with evidence, a comment on what they asked for, **writing style** with a strong and a weaker quote from their own messages and tips, recommendations and questions for the debrief. It reads only that team's mail: the injects it received, its messages, your answers and follow-ups, the reading of each message and your grades and grader's notes. It uses the human grades only, never the AI-suggested scores. ExCon's report reads the team reports (as you edited them) and a note on every message, and covers the comparison, themes, injects that worked and injects to revise for the next SIMEX, how ExCon ran it, and the AI suggestions against the grades.
+- **AI-written estimate:** left out of the team reports (and of what Claude reads for them) unless you tick **Include the AI-written estimate** when compiling. ExCon always sees it on the report page, marked *ExCon only*.
+- **Check and edit:** open each report. Every section has **Edit** (Markdown: `**bold**`, `- ` list items, `> ` quotes) and **Reset to Claude's**; edited sections are marked. **Write it again** redoes one report from the same figures and replaces your edits to it (write ExCon's again after editing the team reports, so it reads your text). If a write-up fails, the figures are still there.
+- **Print:** **Print** on a report, or on the compile **Print the team reports** / **Print all**, opens a printable page: use the browser's Print → Save as PDF. Each report starts on a new page. Give each team only its own report; the ExCon report is not for participants.
 
 **Clearing a team's mailbox after testing:** **Team inboxes → Clear a team's mailbox**, pick the team, type `CLEAR`. It deletes everything in that team's mailbox (received, sent, drafts, and the team's labels), its replies on the Replies tab with their AI analysis, the persona answers to them and the team's grades. Deliveries stay in the Log. It can't be undone, so download a backup first.
 

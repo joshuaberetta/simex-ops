@@ -115,6 +115,7 @@ class Inject(models.Model):
     last_error = models.TextField(blank=True, null=True)
     sent_at = models.DateTimeField(null=True, blank=True)
     expects_reply = models.BooleanField(default=False)
+    critical = models.BooleanField(default=False)  # ExCon's key inject: no reply in time is a critical miss (reports)
     reply_due_minutes = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -223,6 +224,10 @@ class Message(models.Model):
     # Follow-up (kind followup): the delivery of the inject it continues, in that thread.
     parent = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="followups")
     message_id_header = models.CharField(max_length=300, blank=True, default="")  # email: its Message-ID, from Resend
+    # A follow-up or answer ExCon sent from an AI draft (Injects → Draft with AI), and whether
+    # they changed its text first. Injects made from a draft link through InjectDraft.created.
+    ai_draft = models.ForeignKey("InjectDraft", null=True, blank=True, on_delete=models.SET_NULL, related_name="messages")
+    ai_edited = models.BooleanField(null=True, blank=True)
 
     class Meta:
         ordering = ["-id"]
@@ -392,6 +397,7 @@ class RubricCriterion(models.Model):
     description = models.TextField(blank=True, null=True)
     max_points = models.IntegerField(default=3)
     sort = models.IntegerField(default=0)
+    critical = models.BooleanField(default=False)  # a must-have point: a low score is a critical miss (reports)
 
     class Meta:
         ordering = ["sort", "id"]
@@ -511,6 +517,37 @@ class AiReport(models.Model):
     error = models.TextField(blank=True, null=True)
     user = models.CharField(max_length=150, blank=True, default="")
     created_at = models.DateTimeField(default=timezone.now)
+
+
+class ExerciseReport(models.Model):
+    """One compile of the end-of-exercise reports (Dashboard → Reports, ops/report.py): a
+    Report for each team and one for ExCon."""
+    kind = models.CharField(max_length=10, default="live")  # live | test
+    include_ai_written = models.BooleanField(default=False)  # the AI-written estimate in the team reports
+    user = models.CharField(max_length=150, blank=True, default="")
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-id"]
+
+
+class Report(models.Model):
+    """A team's report (written for the team, read at the debrief) or, with no team, ExCon's.
+    figures are computed in code and kept as they were when it was compiled; body is
+    Claude's write-up; sections is what is shown and printed, ExCon's edits included."""
+    exercise = models.ForeignKey(ExerciseReport, on_delete=models.CASCADE, related_name="reports")
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    status = models.CharField(max_length=10, default="queued")  # queued | running | done | failed
+    model = models.CharField(max_length=120, default="")
+    figures = models.JSONField(default=dict)
+    body = models.JSONField(default=dict)
+    sections = models.JSONField(default=dict)  # section key -> Markdown
+    edited = models.JSONField(default=list)  # section keys ExCon changed
+    error = models.TextField(blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["team__sort", "team__name"]
 
 
 class InjectDraft(models.Model):

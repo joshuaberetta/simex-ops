@@ -4,6 +4,7 @@ from django.urls import include, path
 from . import views_ai as a
 from . import views_excon as x
 from . import views_inbox as p
+from . import views_report as rp
 
 # The participant mail client. Mounted twice: /inbox/ for the logged-in team, and
 # /inbox/as/<team id>/ for ExCon's read-only "view as team".
@@ -84,6 +85,14 @@ urlpatterns = [
     path("grades/<int:iid>/<int:tid>/analyse/", a.grade_analyse),
     path("dashboard/", a.dashboard),
     path("dashboard/summary/", a.dashboard_summary),
+    path("reports/", rp.reports),
+    path("reports/compile/", rp.reports_compile),
+    path("reports/<int:eid>/", rp.exercise_report),
+    path("reports/<int:eid>/print/", rp.exercise_print),
+    path("reports/part/<int:rid>/", rp.report_page),
+    path("reports/part/<int:rid>/section/", rp.report_section),
+    path("reports/part/<int:rid>/rewrite/", rp.report_rewrite),
+    path("reports/part/<int:rid>/print/", rp.report_print),
     path("help/", x.help_page),
     path("log/", x.log_page),
     path("log/<int:mid>/", x.message_page),

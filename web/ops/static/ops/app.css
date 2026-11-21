@@ -141,7 +141,7 @@ tr.st-cancelled td a { color: var(--muted); text-decoration: line-through; }
 
 .status { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 2px 8px; border-radius: 999px; line-height: 16px; background: #eceff3; color: #4b5563; }
 .status.scheduled, .status.active { background: #e3eefa; color: #1f5f99; }
-.status.sending, .status.pending { background: #efe6fb; color: #5b2a9c; }
+.status.sending, .status.pending, .status.queued, .status.running { background: #efe6fb; color: #5b2a9c; }
 .status.sent, .status.done, .status.dry { background: #e5f3eb; color: var(--ok); }
 .status.partial, .status.overdue, .status.paused { background: #fde7c6; color: #7a4100; }
 .status.failed { background: #fbe1df; color: var(--err); }
@@ -249,3 +249,10 @@ table.heat td.cell a.muted { font-weight: 400; }
 .toast .x { position: absolute; top: 6px; right: 8px; background: none; border: 0; color: #c9d2de; cursor: pointer; font-size: 13px; }
 @keyframes toast-in { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
+/* end-of-exercise reports */
+.report-md p, .report-md ul { margin: 4px 0 8px; }
+.report-md blockquote { margin: 6px 0; padding-left: 10px; border-left: 3px solid var(--line); color: #374151; }
+.report-section textarea { width: 100%; font-family: inherit; }
+table.list.fig td, table.list.fig th { padding: 5px 8px; }
+.fig-stats { grid-template-columns: repeat(2, 1fr); }

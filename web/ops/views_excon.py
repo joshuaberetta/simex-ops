@@ -308,7 +308,8 @@ def inject_followup(request, iid):
             return redirect(back)
     for up in request.FILES.getlist("files"):  # new files also become attachments of the inject
         att_ids.append(documents.put_attachment(inj, PurePosixPath(up.name).name, up.read()).id)
-    msgs, err = delivery.send_followup(inj, parents, subject, body, att_ids, user=_u(request))
+    draft = InjectDraft.objects.filter(pk=_int(P.get("ai_draft")), inject=inj, mode="followup", status="done").first()
+    msgs, err = delivery.send_followup(inj, parents, subject, body, att_ids, user=_u(request), ai_draft=draft)
     if err:
         messages.error(request, err)
     elif any(m.channel == "email" for m in msgs):
@@ -1183,7 +1184,9 @@ def reply_answer(request, rid):
         raise Http404
     files = [(re.sub(r"[\r\n]+", " ", PurePosixPath(f.name.replace("\\", "/")).name) or "file",
               f.content_type or "application/octet-stream", f.read()) for f in uploads]
-    m = delivery.answer(r, body, user=_u(request), files=files, attachments=docs)
+    draft = InjectDraft.objects.filter(pk=_int(request.POST.get("ai_draft")), mode="answer", status="done",
+                                       response__in=Response.objects.filter(team=r.team, inject=r.inject)).first()
+    m = delivery.answer(r, body, user=_u(request), files=files, attachments=docs, ai_draft=draft)
     if m.status == "sent":
         messages.success(request, "Reply delivered." if r.channel == "inapp" else "Reply sent.")
     else:
@@ -1325,6 +1328,7 @@ def rubric_save(request, iid):
     inj = get_object_or_404(Inject, pk=iid)
     P = request.POST
     inj.expects_reply = P.get("expects_reply") == "1"
+    inj.critical = P.get("critical") == "1"
     try:
         inj.reply_due_minutes = int(P["reply_due_minutes"]) if P.get("reply_due_minutes") else None
     except ValueError:
@@ -1342,16 +1346,18 @@ def rubric_save(request, iid):
         c.label = (P.get(f"label{c.id}") or c.label).strip()
         c.description = (P.get(f"desc{c.id}") or "").strip() or None
         c.max_points = max(1, _int(P.get(f"max{c.id}")) or c.max_points)
+        c.critical = P.get(f"crit{c.id}") == "1"
         c.sort = _int(P.get(f"sort{c.id}")) if _int(P.get(f"sort{c.id}")) is not None else c.sort
         c.save()
     label = (P.get("new_label") or "").strip()
     if label:
         RubricCriterion.objects.create(inject=inj, label=label, description=(P.get("new_desc") or "").strip() or None,
-                                       max_points=max(1, _int(P.get("new_max")) or 3), sort=inj.rubric.count())
+                                       max_points=max(1, _int(P.get("new_max")) or 3), sort=inj.rubric.count(),
+                                       critical=P.get("new_crit") == "1")
     if _int(P.get("copy_from")):
         for c in RubricCriterion.objects.filter(inject_id=_int(P["copy_from"])):
             RubricCriterion.objects.create(inject=inj, label=c.label, description=c.description,
-                                           max_points=c.max_points, sort=c.sort)
+                                           max_points=c.max_points, sort=c.sort, critical=c.critical)
     audit("rubric_save", inj.mel_id, _u(request))
     messages.success(request, "Rubric saved.")
     return redirect(f"/injects/{iid}/#rubric")

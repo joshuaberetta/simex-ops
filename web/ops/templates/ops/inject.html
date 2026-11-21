@@ -100,6 +100,7 @@
   <div class="row">
     <label class="chk"><input type="checkbox" name="expects_reply" value="1" {% if inj.expects_reply %}checked{% endif %}> teams are expected to reply</label>
     <label>within (minutes) <input type="number" name="reply_due_minutes" value="{{ inj.reply_due_minutes|default:'' }}" min="1" class="narrow"></label>
+    <label class="chk" title="In the end-of-exercise reports, a missing or late reply to it is a critical miss"><input type="checkbox" name="critical" value="1" {% if inj.critical %}checked{% endif %}> critical</label>
     <p class="small"><a href="/replies/?inject={{ inj.id }}">{{ reply_count }} repl{{ reply_count|pluralize:"y,ies" }} received</a></p>
   </div>
   {% for c in rubric %}
@@ -108,6 +109,7 @@
     <input name="label{{ c.id }}" value="{{ c.label }}" required>
     <input name="desc{{ c.id }}" value="{{ c.description|default:'' }}" placeholder="what a full score looks like" class="wide">
     <span>max <input type="number" name="max{{ c.id }}" value="{{ c.max_points }}" min="1" class="narrow"></span>
+    <label class="chk small" title="In the end-of-exercise reports, a third of its points or less is a critical miss"><input type="checkbox" name="crit{{ c.id }}" value="1" {% if c.critical %}checked{% endif %}> must-have</label>
     <label class="chk small"><input type="checkbox" name="del{{ c.id }}" value="1"> remove</label>
   </div>
   {% endfor %}
@@ -116,6 +118,7 @@
     <input name="new_label" placeholder="New criterion, e.g. Timeliness">
     <input name="new_desc" placeholder="what a full score looks like" class="wide">
     <span>max <input type="number" name="new_max" value="3" min="1" class="narrow"></span>
+    <label class="chk small"><input type="checkbox" name="new_crit" value="1"> must-have</label>
   </div>
   {% if with_rubric %}<label>or copy the rubric of <select name="copy_from"><option value="">—</option>{% for w in with_rubric %}<option value="{{ w.id }}">{{ w.mel_id }}</option>{% endfor %}</select></label>{% endif %}
   <button class="btn">Save rubric</button>
@@ -136,7 +139,8 @@
 {% if followup_targets %}
 <form method="post" action="/injects/{{ inj.id }}/followup/" enctype="multipart/form-data" class="card form live-card" id="followup">{% csrf_token %}
   <h3>Send a follow-up <span class="muted">in the same conversation</span></h3>
-  {% if ai_draft %}<p class="small"><span class="flag ai">AI draft</span> Filled in from <a href="/injects/drafts/{{ ai_draft.id }}/">your AI draft</a>{% if ai_draft.team %}, ticked for {{ ai_draft.team.name }}{% endif %}: read it before sending.</p>{% endif %}
+  {% if ai_draft %}<p class="small"><span class="flag ai">AI draft</span> Filled in from <a href="/injects/drafts/{{ ai_draft.id }}/">your AI draft</a>{% if ai_draft.team %}, ticked for {{ ai_draft.team.name }}{% endif %}: read it before sending.</p>
+  <input type="hidden" name="ai_draft" value="{{ ai_draft.id }}">{% endif %}
   <p class="small">A correction or a missing document after this inject went out: {{ inj.sender_local|default:"the persona" }} writes again to the recipients you tick, in their existing
   conversation (in-app) or email thread. Replies to it count as replies to this inject. This is a live send.</p>
   <fieldset><legend>To</legend>

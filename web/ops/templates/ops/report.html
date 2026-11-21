@@ -1,0 +1,45 @@
+{% extends "ops/base.html" %}{% load ops %}
+{% block title %}{{ rep.team.name|default:"ExCon" }} report · SIMEX ops{% endblock %}
+{% block head %}{% if busy %}<meta http-equiv="refresh" content="15">{% endif %}{% endblock %}
+{% block body %}
+<div class="bar">
+  <h1><a href="/reports/{{ ex.id }}/" class="muted">Reports</a> / {% if rep.team %}{{ rep.team.name }}{% else %}ExCon (all teams){% endif %}</h1>
+  <span class="small">
+    <span class="status {{ rep.status|status_class }}">{{ rep.status }}</span>
+    <a href="/reports/part/{{ rep.id }}/print/" target="_blank">Print</a>
+  </span>
+</div>
+<p class="small muted">{% if rep.team %}Written for {{ rep.team.name }}, to read at the debrief.{% else %}For ExCon and the exercise director, not for participants.{% endif %}
+Figures as of {{ ex.created_at|date:"D d M H:i" }}{% if rep.model %}; written by {{ rep.model }}{% endif %}. Edit any section: the print uses your text. <b>Reset</b> puts Claude's back.</p>
+{% if rep.error %}<p class="err">{{ rep.error }}</p>{% endif %}
+
+<div class="cols">
+<section class="col-main">
+{% if busy %}<div class="card"><p>Claude is writing this report{% if not rep.team %} (after the team reports){% endif %}. This page refreshes.</p></div>{% endif %}
+{% for key, title, text, edited in parts %}
+<form method="post" action="/reports/part/{{ rep.id }}/section/" class="card form report-section" id="s-{{ key }}">{% csrf_token %}
+  <input type="hidden" name="key" value="{{ key }}">
+  <h3>{{ title }}{% if edited %} <span class="flag">edited</span>{% endif %}</h3>
+  {% if text %}<div class="report-md">{{ text|report_md }}</div>{% elif not busy %}<p class="muted small">Empty.</p>{% endif %}
+  <details{% if not text and not busy and rep.status == 'done' %} open{% endif %}><summary class="small">Edit</summary>
+    <textarea name="text" rows="8">{{ text }}</textarea>
+    <p class="hint">Markdown: **bold**, "- " for a list item, "> " for a quote. Name injects by their id, e.g. (1-15).</p>
+    <button class="btn" name="action" value="save">Save</button>
+    {% if rep.body %}<button class="btn link" name="action" value="reset">Reset to Claude's</button>{% endif %}
+  </details>
+</form>
+{% endfor %}
+{% if ai_enabled %}<form method="post" action="/reports/part/{{ rep.id }}/rewrite/" class="inline">{% csrf_token %}
+  <button class="btn" {% if busy %}disabled{% endif %} data-confirm="Write the whole report again? Your edits to it are replaced.">Write it again</button>
+  <span class="hint">same figures; {% if rep.team %}about $1{% else %}reads the team reports as they are now{% endif %}</span>
+</form>{% endif %}
+</section>
+
+<section class="col-side">
+<div class="card">
+  <h3>Figures</h3>
+  {% include "ops/_report_figures.html" with printing=False %}
+</div>
+</section>
+</div>
+{% endblock %}

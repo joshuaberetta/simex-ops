@@ -169,6 +169,12 @@ ICONS = {
 }
 
 
+@register.filter
+def report_md(text):
+    from ops import report
+    return report.markdown_html(text)
+
+
 @register.simple_tag
 def icon(name, size=20, cls=""):
     return format_html('<svg class="ic {}" width="{}" height="{}" viewBox="0 0 24 24" aria-hidden="true">'

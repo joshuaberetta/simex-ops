@@ -1,0 +1,81 @@
+{% load ops %}{% if rep.team_id %}
+<div class="stats fig-stats">
+  <div><span class="stat">{{ f.replies.answered }}<span class="of">/{{ f.replies.replies_expected }}</span></span><span class="lab">expected replies sent</span></div>
+  <div><span class="stat">{{ f.replies.missed|length }}<span class="of"> missed, {{ f.replies.late|length }} late</span></span><span class="lab">replies</span></div>
+  <div><span class="stat">{% if f.time_to_reply.median_minutes_from_delivery is not None %}{{ f.time_to_reply.median_minutes_from_delivery }}<span class="of"> min</span>{% else %}—{% endif %}</span><span class="lab">median time to reply{% if f.time_to_reply.median_minutes_from_first_open is not None %} ({{ f.time_to_reply.median_minutes_from_first_open|num }} from opening){% endif %}</span></div>
+  <div><span class="stat">{% if f.grades.percent is not None %}{{ f.grades.percent }}<span class="of">%</span>{% else %}—{% endif %}</span><span class="lab">score{% if f.grades.max %} ({{ f.grades.score|num }}/{{ f.grades.max|num }}){% endif %}</span></div>
+</div>
+<p class="small">{{ f.delivery.injects_delivered }} inject{{ f.delivery.injects_delivered|pluralize }} received, {{ f.delivery.opened }} opened{% if f.delivery.median_minutes_to_open is not None %} (median {{ f.delivery.median_minutes_to_open|num }} min after arriving){% endif %}; {{ f.replies.messages_sent }} message{{ f.replies.messages_sent|pluralize }} sent.
+{% if f.time_to_reply.median_first_half is not None and f.time_to_reply.median_second_half is not None %}Median time to reply: {{ f.time_to_reply.median_first_half }} min in the first half of the exercise, {{ f.time_to_reply.median_second_half }} min in the second.{% endif %}
+{% if f.time_to_reply.fastest_minutes is not None %}Fastest {{ f.time_to_reply.fastest_minutes }} min, slowest {{ f.time_to_reply.slowest_minutes }} min.{% endif %}</p>
+
+{% if f.critical_missed and not printing %}<h4>Critical points missed</h4>
+<ul class="small">{% for c in f.critical_missed %}<li><b>{{ c.inject }}</b>: {{ c.kind }}{% if c.criterion %} ({{ c.criterion }}){% endif %}</li>{% endfor %}</ul>{% endif %}
+
+<h4>Injects</h4>
+<table class="list small fig">
+  <thead><tr><th>Inject</th><th>Subject</th><th>Reply</th><th>Minutes to reply</th><th>Score</th></tr></thead>
+  <tbody>{% for i in f.injects %}<tr>
+    <td class="nowrap">{{ i.inject }}{% if i.critical %} <span class="flag">critical</span>{% endif %}</td>
+    <td>{{ i.subject|truncatechars:70 }}</td>
+    <td>{% if i.state == 'missing' %}missed{% elif i.state == 'late' %}late{% elif i.state == 'replied' %}sent{% if i.replies > 1 %} ({{ i.replies }}){% endif %}{% elif i.state == 'waiting' %}none yet{% else %}not expected{% endif %}</td>
+    <td>{% if i.minutes is not None %}{{ i.minutes }}{% if i.due_minutes %} <span class="muted">/ {{ i.due_minutes }}</span>{% endif %}{% else %}—{% endif %}</td>
+    <td>{% if i.score is not None and i.max %}{{ i.score|num }}/{{ i.max|num }}{% else %}—{% endif %}</td>
+  </tr>{% endfor %}</tbody>
+</table>
+
+{% if f.asks %}<h4>What you asked for</h4>
+<table class="list small fig">
+  <thead><tr><th>Ask</th><th>To</th><th>Inject</th><th>Answer</th></tr></thead>
+  <tbody>{% for a in f.asks %}<tr><td>{{ a.ask }}</td><td>{{ a.to }}</td><td class="nowrap">{{ a.inject|default:"—" }}</td>
+    <td class="nowrap">{% if a.answered %}after {{ a.answer_minutes }} min{% else %}<span class="muted">no answer</span>{% endif %}</td></tr>{% endfor %}</tbody>
+</table>{% endif %}
+
+<h4>Writing</h4>
+<p class="small">{% if f.writing.messages_analysed %}Across {{ f.writing.messages_analysed }} message{{ f.writing.messages_analysed|pluralize }}: clarity {{ f.writing.clarity|num }}, completeness {{ f.writing.completeness|num }}, actionability {{ f.writing.actionability|num }} (out of 5); {{ f.writing.words_per_message|num }} words a message on average.
+{% if f.writing.tones %}Tone: {% for t, n in f.writing.tones.items %}{{ t }} {{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}.{% endif %}{% else %}No messages read by the AI.{% endif %}</p>
+
+{% if f.personas %}<h4>Who you corresponded with</h4>
+<table class="list small fig">
+  <thead><tr><th>Persona</th><th>Messages to you</th><th>Your messages</th></tr></thead>
+  <tbody>{% for p in f.personas %}<tr><td>{{ p.persona }}</td><td>{{ p.wrote_to_team }}</td><td>{{ p.team_wrote }}</td></tr>{% endfor %}</tbody>
+</table>{% endif %}
+
+{% if f.excon_ai_drafts %}<p class="small"><b>Drafted with AI by ExCon:</b> of the messages you received,
+{% if f.excon_ai_drafts.injects %}{{ f.excon_ai_drafts.injects }} inject{{ f.excon_ai_drafts.injects|pluralize }}{% endif %}{% if f.excon_ai_drafts|get:"follow-ups" %}, {{ f.excon_ai_drafts|get:"follow-ups" }} follow-up{{ f.excon_ai_drafts|get:"follow-ups"|pluralize }}{% endif %}{% if f.excon_ai_drafts.answers %}, {{ f.excon_ai_drafts.answers }} answer{{ f.excon_ai_drafts.answers|pluralize }}{% endif %} started as an AI draft that ExCon reviewed.</p>{% endif %}
+
+{% if f.ai_written %}<h4>Possibly written with AI help {% if not printing %}{% if not ex.include_ai_written %}<span class="flag">ExCon only</span>{% endif %}{% endif %}</h4>
+<p class="small muted">An estimate from the wording and the writing speed, never a finding.</p>
+<ul class="small">{% for x in f.ai_written %}<li>{% if not printing %}<a href="/replies/{{ x.response }}/">{{ x.inject|default:"message" }}</a>{% else %}{{ x.inject|default:"message" }}{% endif %}: {{ x.band }}{% if x.signals %} ({{ x.signals }}){% endif %}{% if x.wpm %}, {{ x.wpm|num }} words a minute{% endif %}</li>{% endfor %}</ul>{% endif %}
+
+{% else %}
+<h4>Teams</h4>
+<table class="list small fig">
+  <thead><tr><th>Team</th><th>Expected replies sent</th><th>Missed / late</th><th>Median minutes</th><th>Critical misses</th><th>Score</th><th>Asks unanswered</th><th>Clarity · completeness · actionability</th></tr></thead>
+  <tbody>{% for t in f.teams %}<tr><td><b>{{ t.team }}</b></td><td>{{ t.replies.answered }}/{{ t.replies.replies_expected }}</td>
+    <td>{{ t.replies.missed|length }} / {{ t.replies.late|length }}</td><td>{{ t.time_to_reply.median_minutes_from_delivery|default:"—" }}</td>
+    <td>{{ t.critical_missed|length }}</td><td>{% if t.grade_percent is not None %}{{ t.grade_percent }}%{% else %}—{% endif %}{% if t.ai_suggested_percent is not None %} <span class="muted">(AI {{ t.ai_suggested_percent }}%)</span>{% endif %}</td>
+    <td>{{ t.asks_unanswered }}/{{ t.asks }}</td>
+    <td>{{ t.writing.clarity|num }} · {{ t.writing.completeness|num }} · {{ t.writing.actionability|num }}</td></tr>{% endfor %}</tbody>
+</table>
+
+<h4>Injects</h4>
+<table class="list small fig">
+  <thead><tr><th>Inject</th><th>Subject</th><th>Answered</th><th>Late or missing</th><th>Median minutes</th><th>Mean score</th></tr></thead>
+  <tbody>{% for i in f.injects %}<tr><td class="nowrap">{{ i.inject }}{% if i.critical %} <span class="flag">critical</span>{% endif %}</td><td>{{ i.subject|default:""|truncatechars:60 }}</td>
+    <td>{{ i.answered }}/{{ i.teams }}</td><td>{{ i.late_or_missing }}</td><td>{{ i.median_minutes|default:"—" }}</td>
+    <td>{% if i.mean_grade_percent is not None %}{{ i.mean_grade_percent|num }}%{% else %}—{% endif %}</td></tr>{% endfor %}</tbody>
+</table>
+
+<h4>ExCon</h4>
+<p class="small">{{ f.excon.answers_sent }} answer{{ f.excon.answers_sent|pluralize }} in character{% if f.excon.median_minutes_to_answer is not None %}, a median {{ f.excon.median_minutes_to_answer|floatformat:0 }} min after the team's message{% endif %}.
+{% with d=f.excon.ai_drafts %}AI drafts: {{ d.new_drafted|default:0 }} new injects drafted ({{ d.new_used|default:0 }} used, {{ d.new_edited|default:0 }} edited), {{ d.followup_drafted|default:0 }} follow-ups ({{ d.followup_used|default:0 }} sent, {{ d.followup_edited|default:0 }} edited), {{ d.answer_drafted|default:0 }} answers ({{ d.answer_used|default:0 }} sent, {{ d.answer_edited|default:0 }} edited).{% endwith %}
+{{ f.excon.deliveries_failed }} failed deliver{{ f.excon.deliveries_failed|pluralize:"y,ies" }}, {{ f.excon.emails_bounced }} bounced email{{ f.excon.emails_bounced|pluralize }}{% if f.excon.injects_overdue_or_failed %}; overdue or failed injects: {{ f.excon.injects_overdue_or_failed|joinlist }}{% endif %}. AI cost about ${{ f.excon.ai_cost_usd|floatformat:2 }}.</p>
+{% if f.excon.by_persona %}<table class="list small fig">
+  <thead><tr><th>Persona</th><th>Answers</th><th>Median minutes</th></tr></thead>
+  <tbody>{% for p in f.excon.by_persona %}<tr><td>{{ p.persona }}</td><td>{{ p.answers }}</td><td>{{ p.median_minutes }}</td></tr>{% endfor %}</tbody>
+</table>{% endif %}
+
+{% if f.grades_vs_ai_suggestions %}<h4>Grades and AI suggestions far apart</h4>
+<ul class="small">{% for d in f.grades_vs_ai_suggestions %}<li>{{ d.inject }}, {{ d.team }}: graded {{ d.grade|num }}, AI {{ d.ai_suggested|num }} of {{ d.max|num }}</li>{% endfor %}</ul>{% endif %}
+{% endif %}

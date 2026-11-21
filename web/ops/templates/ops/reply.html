@@ -48,7 +48,8 @@
 {% if r.persona %}
 <form method="post" action="/replies/{{ latest.id }}/answer/" class="card form" id="answer" enctype="multipart/form-data">{% csrf_token %}
   <h3>Answer as {% if sender %}{{ sender.display_name }}{% else %}{{ r.persona }}{% endif %} &lt;{{ persona_addr }}&gt;</h3>
-  {% if ai_draft %}<p class="small"><span class="flag ai">AI draft</span> Filled in from <a href="/injects/drafts/{{ ai_draft.id }}/">your AI draft</a>: read it before sending.</p>{% endif %}
+  {% if ai_draft %}<p class="small"><span class="flag ai">AI draft</span> Filled in from <a href="/injects/drafts/{{ ai_draft.id }}/">your AI draft</a>: read it before sending.</p>
+  <input type="hidden" name="ai_draft" value="{{ ai_draft.id }}">{% endif %}
   <textarea name="body" rows="6" placeholder="In character.{% if r.channel == 'email' %} The original is quoted below your text.{% else %} It appears in the team's inbox in the same conversation.{% endif %}">{% if ai_draft %}{{ ai_draft.body.body }}{% endif %}</textarea>
   <label>Attach files <input type="file" name="files" multiple></label>
   {% if inject_files %}<fieldset><legend>Attach documents of {{ r.inject.mel_id }}</legend>
