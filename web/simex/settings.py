@@ -46,6 +46,9 @@ MAILER = env("MAILER", "resend" if RESEND_API_KEY else "log")
 RESEND_MIN_INTERVAL = float(env("RESEND_MIN_INTERVAL", "0.6"))
 TICK_SECONDS = float(env("TICK_SECONDS", "10"))
 
+# The source code (AGPL-3.0, which asks that network users are offered it), linked in the app's footers.
+SOURCE_URL = env("SOURCE_URL", "https://github.com/joshuaberetta/simex-ops")
+
 # Push notifications for new SIMEX Mail (optional, ops/push.py): a VAPID key pair, made with
 # `manage.py vapid_keys`. Only the private key is set; the public key is derived from it.
 VAPID_PRIVATE_KEY = env("VAPID_PRIVATE_KEY")
@@ -93,6 +96,7 @@ TEMPLATES = [{
         "django.contrib.auth.context_processors.auth",
         "django.contrib.messages.context_processors.messages",
         "ops.context.status",
+        "ops.context.source",
     ]},
 }]
 WSGI_APPLICATION = "simex.wsgi.application"

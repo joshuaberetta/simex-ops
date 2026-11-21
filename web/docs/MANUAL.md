@@ -4,6 +4,8 @@ For ExCon members who deliver the SIMEX injects, watch the team mailboxes, answe
 
 Read section 7, "Safety controls", before your first shift.
 
+SIMEX ops and SIMEX Mail are open source under the GNU AGPL-3.0: every page of both links to the source code on GitHub (the footer in ops, the bottom of the folder list and the sign-in page in SIMEX Mail). Exercise content is never in the repository.
+
 ---
 
 ## 1. How it works in one minute

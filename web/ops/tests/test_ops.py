@@ -411,6 +411,15 @@ def test_mail_host_serves_only_simex_mail(mail_host, excon):
     assert excon.get(f"/inbox/as/{team.id}/", HTTP_HOST="mail.x.test").url == f"https://ops.x.test/inbox/as/{team.id}/"
 
 
+
+def test_source_code_linked_on_every_app(mail_host, excon, settings):
+    settings.SOURCE_URL = "https://github.com/x/simex-ops"
+    link = b'href="https://github.com/x/simex-ops"'
+    assert link in Client(HTTP_HOST="mail.x.test").get("/login/").content
+    assert link in Client(HTTP_HOST="ops.x.test").get("/login/").content
+    assert link in participant("a").get("/inbox/", HTTP_HOST="mail.x.test").content
+    assert link in excon.get("/injects/", HTTP_HOST="ops.x.test").content
+
 # --- labels ----------------------------------------------------------------------------------------------
 
 def test_labels_like_gmail(excon):

@@ -9,6 +9,10 @@ from .access import is_excon, participant_of
 from .models import Inject, Mail, Response
 
 
+def source(request):
+    return {"SOURCE_URL": settings.SOURCE_URL}
+
+
 def status(request):
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated:

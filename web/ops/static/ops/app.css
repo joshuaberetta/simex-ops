@@ -164,6 +164,8 @@ body.login { display: grid; place-items: center; min-height: 100vh; padding: 20p
 .login-head { margin-bottom: 22px; }
 .login-head .brand.big { margin-bottom: 4px; }
 .login-head p { margin: 0; font-size: 13px; }
+.login-foot { margin: 16px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
+.foot { padding: 0 24px 24px; font-size: 12px; color: var(--muted); }
 .loginbox label { display: block; margin-bottom: 14px; font-size: 13px; font-weight: 600; color: #374151; }
 .loginbox input { display: block; width: 100%; margin-top: 5px; min-height: 38px; }
 .loginbox .btn { width: 100%; min-height: 38px; margin-top: 6px; }

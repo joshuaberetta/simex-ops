@@ -117,6 +117,7 @@
     <div class="gm-side-foot">
       <div class="gm-side-team">{% icon "label" 18 %} {% if v.leader_box %}{{ team.name }} · team leader{% elif v.member_box %}{{ v.owner.name }} · {{ team.name }}{% else %}{{ team.name }}{% endif %}</div>
       <p>Exercise mail for the UNDAC SIMEX. Not a real emergency. <a href="{{ base }}/help/" class="gm-link">How to use SIMEX Mail</a></p>
+      <p class="gm-source">Open source (AGPL-3.0). <a href="{{ SOURCE_URL }}" class="gm-link" target="_blank" rel="noopener">Source code</a></p>
     </div>
   </nav>{% endblock %}
   <main class="gm-main">

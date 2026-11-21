@@ -1,18 +1,21 @@
 # SIMEX inbox (Django)
 
-The Django version of SIMEX ops, **the app in production at https://ops.simex.kobolabs.dev** (spec `../.do/app.yaml`). It keeps every feature of the first, FastAPI app (`../app/`) and adds **in-app team mailboxes (SIMEX Mail)**. Settings → Delivery channel chooses email (Resend, the main flow), SIMEX Mail (the backup if email has problems) or per inject. Operator manual: [`docs/MANUAL.md`](docs/MANUAL.md) (served at `/help/`); participant guide: [`docs/PARTICIPANT_GUIDE.md`](docs/PARTICIPANT_GUIDE.md) (at `/inbox/help/`).
+The Django version of SIMEX ops, **the app in production at https://ops.simex.kobolabs.dev** (spec `../.do/app.yaml`). It keeps every feature of the first, FastAPI app (`../app/`) and adds **in-app team mailboxes (SIMEX Mail)**. Settings → Delivery channel chooses email (Resend, the main flow, and the default), SIMEX Mail (the backup if email has problems) or per inject. Operator manual: [`docs/MANUAL.md`](docs/MANUAL.md) (served at `/help/`); participant guide: [`docs/PARTICIPANT_GUIDE.md`](docs/PARTICIPANT_GUIDE.md) (at `/inbox/help/`).
 
 ## What is different from the FastAPI app
 
 | | FastAPI app | Django app |
 |---|---|---|
-| Delivery | Email via Resend | Per inject: **in-app** (default) or email via Resend |
-| Participants | Email addresses only | Logins (one per person), each in a team; a shared **team mailbox** ("SIMEX Mail", a familiar webmail layout) |
+| Delivery | Email via Resend | Email via Resend (default) or **in-app** (SIMEX Mail), for all injects or per inject (Settings → Delivery channel); follow-ups in the same thread |
+| Participants | Email addresses only | Logins (one per person, also as a QR code on the login slip), each in a team; a shared **team mailbox** ("SIMEX Mail", a familiar webmail layout) and, with Settings → Personal mailboxes (on by default), each member's own mailbox (My mail) with a copy of all team mail; optional team roles (e.g. Deputy Team Leader) for the figures |
 | Replies | Resend inbound webhook, matched by reply token or a guess | In-app replies matched **exactly**; email as before |
 | ExCon view of teams | — | **View as team** (read-only, nothing marked read) |
 | Team leaders | — | One per team, from ExCon (role `tl`, never a participant): in SIMEX Mail, their own mailbox as the team leader persona, their team's inbox read-only with Claude's reading of each reply, and the team's Dashboard (`ops/views_leader.py`); guide [`docs/LEADER_GUIDE.md`](docs/LEADER_GUIDE.md) |
 | Engagement | Resend opens/clicks | In-app **read** (first read, times opened) and attachment downloads; email opens/clicks/bounces as before |
 | Users | One shared login | Django auth: ExCon = staff or group `excon`; participants see only `/inbox/` for their team, on its own host (`MAIL_URL`, https://mail.simex.kobolabs.dev, with a webmail-style sign-in), installable on a phone's home screen with push notifications for new mail (`ops/push.py`, `VAPID_PRIVATE_KEY` from `manage.py vapid_keys`) |
+| AI | — | Claude's reading of each reply (tags, rubric suggestions, exercise summary; Dashboard), a review of each unsent inject, Draft with AI (injects, follow-ups, answers), **AI personas** that answer the teams in character (off by default); never written to grades |
+| Reports | CSV export | End-of-exercise report per team and one for ExCon (Dashboard → Reports): figures from the app, sections written by Claude and edited by ExCon, printed to PDF |
+| ExCon alerts | — | Notifications panel (new replies, AI flags, delivery problems, finished jobs, scheduler stopped) |
 | Scheduler | Thread in the web process | Separate worker (`manage.py run_scheduler`) |
 | Schema | `create_all` | Django migrations |
 
@@ -20,7 +23,7 @@ The Django version of SIMEX ops, **the app in production at https://ops.simex.ko
 
 - **Accounts:** one login per participant; one shared mailbox per team; every sent message records who wrote it. ExCon creates logins on **People & logins** (single, or bulk CSV `name,email,team code,role`), sees generated passwords once, can print a credential sheet, reset passwords, disable logins. Django admin is a secondary tool only.
 - **Who participants can write to:** the active Senders (personas) as an address book, their own team leader among them (the team leader persona). **Team-to-team** messages are a setting, off by default. A team leader writes only to their own team.
-- **Channel per inject:** `inapp` by default (also for imports); `email` keeps the Resend path with idempotency keys, placeholder stripping, reply tokens and the Svix-verified webhook.
+- **Channel:** Settings → Delivery channel (`email` by default, `inapp`, or `per_inject` to use each inject's own); always read through `Inject.effective_channel`. `email` keeps the Resend path with idempotency keys, placeholder stripping, reply tokens and the Svix-verified webhook.
 - **In-app delivery:** each_team → that team's mailbox; each_person → the person's team mailbox, addressed to them; everyone → a copy in every team's mailbox. "Only these addresses" is email-only.
 - **Tests:** in-app test sends and test runs go to the **Test team** mailbox with a banner naming the real team; email tests keep the address redirect.
 - **Scheduler as a worker component** rather than a thread: the web runs several gunicorn workers, and a separate process keeps deliveries going during web redeploys. Rows are claimed with conditional UPDATEs and `SELECT … FOR UPDATE SKIP LOCKED` on Postgres; in-app items are created in the same transaction that marks the delivery sent.
@@ -37,14 +40,18 @@ uv venv -p 3.12 .venv && uv pip install -p .venv -r requirements.txt pytest pyte
 .venv/bin/python -m pytest -q                                                   # tests (SQLite, log mailer)
 ```
 
-Environment: `DATABASE_URL` (default SQLite), `SECRET_KEY`, `APP_USERNAME`, `APP_PASSWORD`, `PUBLIC_URL` (an `https://` URL switches on production settings), `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `MAIL_DOMAIN`, `EXERCISE_TZ`, `TICK_SECONDS`.
+Environment: `DATABASE_URL` (default SQLite), `SECRET_KEY`, `APP_USERNAME`, `APP_PASSWORD`, `PUBLIC_URL` (an `https://` URL switches on production settings), `MAIL_URL` (SIMEX Mail's own host; unset, it is served on `PUBLIC_URL`), `RESEND_API_KEY` (absent: log-only mailer), `RESEND_WEBHOOK_SECRET`, `MAIL_DOMAIN`, `MAILER` (`resend` | `log`), `RESEND_MIN_INTERVAL`, `EXERCISE_TZ`, `TICK_SECONDS`, `VAPID_PRIVATE_KEY` (push notifications, from `manage.py vapid_keys`), `SOURCE_URL` (the source code linked in the footers, default the GitHub repo).
 
 AI analysis (`ops/ai.py`, Dashboard tab, manual 5.7): `AI_PROVIDER` = `anthropic` (with `ANTHROPIC_API_KEY`), `bedrock` (AWS credentials: `AWS_BEARER_TOKEN_BEDROCK`, or a profile / SSO session locally; `AWS_REGION`, default us-east-1) or `off`; when unset it is `anthropic` if `ANTHROPIC_API_KEY` is set, else `bedrock` if `AWS_BEARER_TOKEN_BEDROCK` is, else off. `AI_MODEL_FAST` / `AI_MODEL_DEEP` override the models (default Claude Haiku 5.5 for each reply and the review of unsent injects, Claude Sonnet 5.5 for rubric suggestions and the summary; on Bedrock the `us.anthropic.` inference profiles). It runs in a thread of `run_scheduler` (`--no-ai` to skip). Locally with AWS SSO: `aws sso login`, then `AI_PROVIDER=bedrock .venv/bin/python manage.py run_scheduler`, and turn it on in Settings → AI analysis. Tests use a fake client and never call a model.
 
 ## Deploy
 
-`.do/app-django.yaml` (app `simex-inbox`, components `web` and `scheduler`). Render the secrets into a copy before `doctl apps create --spec`, then add the app to the database cluster's trusted sources. Not deployed yet.
+`../.do/app.yaml` (app `simex-ops`, components `web` and `scheduler`, both built from this directory). A push to `main` deploys, so run the tests first. Secrets are not in the spec: `.venv/bin/python .do/render_spec.py <app-id>` (from the repo root) renders a copy with them for `doctl apps update <app-id> --spec .do/app.rendered.yaml`; delete it afterwards. The database is its own database and user on an existing cluster, with the app in the cluster's trusted sources.
 
 ## Layout
 
-`simex/` settings and URLs · `ops/models.py` · `ops/importer.py`, `render.py`, `mailer.py` (ported) · `ops/delivery.py` scheduler and delivery for both channels · `ops/inbound.py` email webhook, in-app responses, engagement · `ops/views_excon.py` ExCon tabs · `ops/views_inbox.py` the participant mail client (also mounted read-only at `/inbox/as/<team>/`) · `ops/templates/ops/mail/` participant templates, `ops/static/ops/mail.{css,js}` · `ops/tests/`.
+`simex/` settings and URLs · `ops/models.py` · `ops/conf.py` settings kept in the database · `ops/importer.py`, `render.py`, `mailer.py` (ported) · `ops/documents.py` zip of inject documents · `ops/legacy_import.py` backup from the first app · `ops/delivery.py` scheduler and delivery for both channels · `ops/inbound.py` email webhook, in-app responses, engagement · `ops/views_excon.py` ExCon tabs · `ops/views_inbox.py` the participant mail client (also mounted read-only at `/inbox/as/<team>/`) · `ops/views_leader.py` team leaders' views · `ops/signin.py` QR sign-in · `ops/push.py` Web Push · `ops/ai.py`, `views_ai.py`, `checks.py` Claude analysis, drafts and inject checks · `ops/npc.py`, `views_npc.py` AI personas · `ops/report.py`, `views_report.py` reports · `ops/notices.py` ExCon notifications · `ops/templates/ops/mail/` participant templates, `ops/static/ops/mail.{css,js}` · `ops/tests/`.
+
+## Licence
+
+GNU Affero General Public License v3.0: see [`../LICENSE`](../LICENSE). Every page of ops and SIMEX Mail links to the source code (`SOURCE_URL`), as the AGPL asks of software used over a network.

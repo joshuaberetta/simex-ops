@@ -6,7 +6,9 @@ Web app for UNDAC SIMEX exercise control at **https://ops.simex.kobolabs.dev**: 
 - **Email (Resend)**, the main flow. Personas send from and receive at `@simex.kobolabs.dev`.
 - **SIMEX Mail**, the backup if email has problems: in-app team mailboxes with a webmail-style client and participant logins. No mail server is involved.
 
-Each team has **team members** (the participants, sharing one team mailbox) and **one team leader** from ExCon, who plays the team leader persona in SIMEX Mail: their own mailbox (what is sent as that persona is in their Sent, the team's mail to it in their Inbox, plus injects marked "also to team leaders"), a read-only view of the team's inbox with Claude's reading of each reply, and the team's Dashboard. Teams never see or write to each other.
+Each team has **team members** (the participants, sharing one team mailbox) and **one team leader** from ExCon, who plays the team leader persona in SIMEX Mail: their own mailbox (what is sent as that persona is in their Sent, the team's mail to it in their Inbox, plus injects marked "also to team leaders"), a read-only view of the team's inbox with Claude's reading of each reply, and the team's Dashboard. Teams never see or write to each other. With personal mailboxes on, each member also has their own mailbox with a copy of the team's mail.
+
+Also in the Django app: Claude's reading of the replies and a Dashboard, a review of each unsent inject, Draft with AI, AI personas that answer the teams in character (off by default), end-of-exercise reports per team and for ExCon, ExCon's Notifications panel, push notifications and QR-code sign-in for SIMEX Mail.
 
 | Where | What |
 |---|---|
@@ -14,6 +16,8 @@ Each team has **team members** (the participants, sharing one team mailbox) and 
 | `app/` | The first version (FastAPI, email only), kept for rollback. Spec: `.do/app-fastapi.yaml`; its manual is `docs/MANUAL.md`. Its backup file can be loaded into the Django app (Settings → Restore merges it in). |
 
 Exercise content never goes into this repo; it reaches the app only through the import page.
+
+Open source under the GNU AGPL-3.0 (see [Licence](#licence)); every page of ops and SIMEX Mail links here.
 
 ---
 
@@ -127,14 +131,14 @@ Environment: `DATABASE_URL` (default SQLite), `APP_USERNAME`, `APP_PASSWORD`, `S
 
 ## Deployment (DigitalOcean App Platform)
 
-- **App**: `simex-ops`, region fra, one instance. The spec is in `.do/app.yaml` and a push to
-  `main` deploys.
+- **App**: `simex-ops`, region fra, one instance. Its spec is `.do/app-fastapi.yaml`, used only to
+  roll back (`.do/app.yaml` is now the Django app's, and a push to `main` deploys that).
 - **Database**: an App Platform dev Postgres. The account is at its managed-cluster limit, and
   the dev database has **no automatic backups**. Use Settings → Download backup (everything,
   attachments included, as one JSON file) before and after each exercise day. Restore is on the
   same page: it replaces the configuration, clears the logs, and always comes back disarmed.
 - **Updating the spec**: secrets are not in the file. Run
-  `.venv/bin/python .do/render_spec.py <app-id>`, then
+  `SPEC=app-fastapi.yaml .venv/bin/python .do/render_spec.py <app-id>`, then
   `doctl apps update <app-id> --spec .do/app.rendered.yaml`, then delete the rendered file.
 - **Exactly one instance.** The scheduler runs inside the web process.
 - **Tables are created at startup.** There are no migrations yet; add Alembic before changing
@@ -161,3 +165,7 @@ Environment: `DATABASE_URL` (default SQLite), `APP_USERNAME`, `APP_PASSWORD`, `S
 - Emails are sent one at a time, with a gap between Resend calls, and retried on 429/5xx.
 - An inject is **sent** when all its emails went out, **partial** when some did ("only retry the
   failed emails" is then offered), and **failed** when none did.
+
+## Licence
+
+GNU Affero General Public License v3.0: see [LICENSE](LICENSE). The app links to the source code on every page (`SOURCE_URL`, default https://github.com/joshuaberetta/simex-ops), as the AGPL asks of software used over a network.
