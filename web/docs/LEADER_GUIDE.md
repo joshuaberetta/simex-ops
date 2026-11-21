@@ -2,12 +2,13 @@
 
 You are your team's **team leader**: part of ExCon, not of the team. You play the team leader persona (e.g. *UNDAC Team A TL*) in the exercise, follow how your team works and help it along. Everything here is **exercise material**, not a real emergency.
 
-## The three tabs at the top
+## The tabs at the top
 - **My mail**: your own mailbox, used like any webmail (Compose, labels, stars, search, alerts).
 - **Team inbox** (read-only): exactly what your team has, so you can follow its work. Opening mail here does **not** mark it read for the team. The red number is new mail in the team's inbox since you last looked.
+- **Team leaders** (read-only): the other team leaders' own mailboxes (pick one in the side bar), to see what they are sending their teams and what their teams write to them. Opening mail here doesn't mark it read for them. They can read yours the same way.
 - **Dashboard**: your team's replies in figures, and Claude's reading of them.
 
-You only ever see your own team. The other teams are independent of yours.
+You only ever see your own team's inbox. The other teams are independent of yours.
 
 ## My mail
 - **Sent** holds everything sent as the team leader persona: the injects ExCon schedules in your name, ExCon's answers in your name, and what you write yourself. **Inbox** holds what your team writes to the team leader persona (also when they copy you in), and the injects ExCon sends to the team leaders too.

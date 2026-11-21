@@ -56,6 +56,7 @@ button { font: inherit; color: inherit; }
 .gm-folders a:hover { background: var(--hover); }
 .gm-folders a.on { background: var(--sel); color: #001d35; font-weight: 700; }
 .gm-folders a.bold { font-weight: 700; }
+.gm-peers { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .gm-flabel { flex: 1; }
 .gm-count { font-size: 12px; font-weight: 700; }
 .gm-side-foot { margin-top: auto; padding: 16px 8px; color: var(--muted); font-size: 12px; }

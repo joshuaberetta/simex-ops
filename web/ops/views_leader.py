@@ -1,18 +1,18 @@
 """A team leader's Dashboard (the Dashboard tab above their SIMEX Mail): their team's replies
 and Claude's reading of them. The figures come from views_ai.dashboard_data, as ExCon's
 Dashboard, for this team only and without grades. Every view is leader_required; a leader
-never sees another team."""
+never sees another team's inbox (only, read-only, the other team leaders' mailboxes)."""
 
 from collections import Counter
 from datetime import timedelta
 
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from . import ai, push
 from .access import leader_required, leader_of
 from .views_ai import dashboard_data
-from .views_inbox import ai_band, leader_tabs
+from .views_inbox import ai_band, leader_tabs, peer_teams
 
 
 @leader_required
@@ -51,3 +51,10 @@ def dashboard(request):
         "t0": data["t0"], "t1": data["t1"], "ai_enabled": ai.enabled(), "now": timezone.now(),
         "simex_js": {"base": "/inbox", "readonly": True, "book": [], "team": team.name, "leader": True,
                      "folder": "", "unread": 0, "vapid": push.public_key(), "pushBase": "/inbox", "labels": []}})
+
+
+@leader_required
+def peers(request):
+    """The Team leaders tab: the first other team leader's mailbox (the others are in its side bar)."""
+    first = peer_teams(leader_of(request.user)).first()
+    return redirect(f"/inbox/leaders/{first.id}/" if first else "/inbox/")

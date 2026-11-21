@@ -24,7 +24,8 @@ mail_patterns = [
     path("push/", p.push_subscribe),
     path("labels/", p.labels_save),
 ]
-# A team leader's read-only view of their team's inbox: no route that changes anything.
+# A team leader's read-only view of their team's inbox, or of another team leader's mailbox
+# (/inbox/leaders/<team id>/): no route that changes anything.
 team_patterns = [
     path("", p.inbox),
     path("t/<str:thread>/", p.thread_view),
@@ -44,6 +45,8 @@ urlpatterns = [
     path("inbox/as/<int:as_team>/leader/", include(mail_patterns), {"box": "leader"}),
     path("inbox/as/<int:as_team>/", include(mail_patterns)),
     path("inbox/team/", include(team_patterns), {"box": "team"}),
+    path("inbox/leaders/", lead.peers),
+    path("inbox/leaders/<int:as_team>/", include(team_patterns), {"box": "peer"}),
     path("inbox/dashboard/", lead.dashboard),
     path("inbox/", include(mail_patterns)),
     # ExCon

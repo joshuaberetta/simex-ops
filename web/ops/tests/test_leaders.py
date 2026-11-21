@@ -182,6 +182,37 @@ def test_excon_views_the_leaders_mailbox(excon):
     assert la.get(f"/inbox/as/{ta.id}/leader/").status_code == 403
 
 
+def test_leaders_read_the_other_leaders_mailboxes(excon):
+    setup_exercise(excon)
+    la, lb, pa = leader("a"), leader("b"), participant("a")
+    ta, tb, test = (Team.objects.get(code=c) for c in ("a", "b", "test"))
+    deliver_now("1-15")
+    b_sent = Mail.objects.get(owner=lb.person, folder="sent")
+    b_in = Mail.objects.create(team=tb, owner=lb.person, folder="inbox", thread="tb-in", subject="To B's leader", body="x")
+    r = la.get("/inbox/leaders/")
+    assert r.status_code == 302 and r["Location"] == f"/inbox/leaders/{tb.id}/"
+    r = la.get(f"/inbox/leaders/{tb.id}/?folder=sent")
+    assert r.status_code == 200 and r.context["readonly"] and [x["thread"] for x in r.context["rows"]] == [b_sent.thread]
+    assert r.context["leader_tabs"]["current"] == "peer" and ta not in r.context["leader_tabs"]["peers"]
+    assert test not in r.context["leader_tabs"]["peers"]  # the Test team's leader stays out of the exercise
+    assert la.get(f"/inbox/leaders/{tb.id}/t/{b_in.thread}/").status_code == 200
+    assert Mail.objects.get(pk=b_in.pk).read_at is None  # nothing marked read for B's leader
+    for path in ("action/", "send/", "star/1/", "draft/", "labels/", "push/"):
+        assert la.post(f"/inbox/leaders/{tb.id}/{path}").status_code == 404  # not mounted: nothing to change
+    f = MailAttachment.objects.create(mail=b_in, filename="b.txt", size=1, data=b"b")
+    assert la.get(f"/inbox/leaders/{tb.id}/file/{f.id}/").status_code == 200
+    # Never a team's inbox, never their own team as a "peer", never for members or ExCon.
+    b_team = Mail.objects.get(owner=None, team=tb)
+    assert b_team not in la.get(f"/inbox/leaders/{tb.id}/t/{b_team.thread}/").context["mails"]  # the leader's copy only
+    b_only = Mail.objects.create(team=tb, owner=None, folder="sent", thread="tb-team", subject="Team B only", body="x")
+    assert la.get(f"/inbox/leaders/{tb.id}/t/{b_only.thread}/").status_code == 404
+    team_file = MailAttachment.objects.create(mail=b_team, filename="t.txt", size=1, data=b"t")
+    assert la.get(f"/inbox/leaders/{tb.id}/file/{team_file.id}/").status_code == 404
+    assert la.get(f"/inbox/leaders/{ta.id}/").status_code == 404 and la.get(f"/inbox/leaders/{test.id}/").status_code == 404
+    assert pa.get(f"/inbox/leaders/{tb.id}/").status_code == 403 and excon.get(f"/inbox/leaders/{tb.id}/").status_code == 403
+    assert b"Team leaders" in la.get("/inbox/").content and b"Team leaders" not in pa.get("/inbox/").content
+
+
 def test_one_leader_per_team(excon):
     ta = Team.objects.get(code="a")
     r = excon.post("/people/save/", {"name": "Second Lead", "team_id": ta.id, "role": "tl"}, follow=True)
@@ -250,7 +281,7 @@ def test_leader_routes_are_leaders_only():
                 yield prefix + str(p.pattern), p.callback
 
     for route, cb in walk(get_resolver().url_patterns):
-        if not (getattr(cb, "leader_only", False) or route.startswith("inbox/team/")):
+        if not (getattr(cb, "leader_only", False) or route.startswith(("inbox/team/", "inbox/leaders/"))):
             continue
         url = "/" + re.sub(r"<int:\w+>", "1", re.sub(r"<str:\w+>", "x", route))
         assert pa.get(url).status_code in (403, 404), url

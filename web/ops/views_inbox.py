@@ -6,6 +6,8 @@ here reads control-side data.
 
 A team leader also opens their team's inbox read-only at /inbox/team/ (with the AI reading
 of the team's replies, shown to leaders only) and the team Dashboard (views_leader.py).
+A team leader can also read the other team leaders' mailboxes, read-only, at
+/inbox/leaders/<team id>/ (never another team's inbox).
 ExCon can open any team's inbox read-only at /inbox/as/<team id>/ ("view as team") and its
 leader's at /inbox/as/<team id>/leader/: exactly what they see, without marking anything read.
 """
@@ -40,6 +42,8 @@ FOLDERS = [("inbox", "Inbox"), ("starred", "Starred"), ("sent", "Sent"), ("draft
            ("trash", "Trash")]
 # A leader's read-only view of their team's inbox: what the team wrote first, no drafts or trash.
 TEAM_FOLDERS = [("replies", "Team replies"), ("inbox", "Inbox"), ("sent", "Sent"), ("all", "All mail")]
+# A leader's read-only view of another team leader's mailbox: no drafts or trash.
+PEER_FOLDERS = [("inbox", "Inbox"), ("starred", "Starred"), ("sent", "Sent"), ("all", "All mail")]
 # The team's own labels show as folders "l<id>" (?folder=l12). Gmail's palette: background -> text.
 LABEL_COLOURS = {"#fb4c2f": "#fff", "#ffad47": "#462a00", "#fad165": "#4a3b00", "#16a766": "#fff", "#43d692": "#063d22",
                  "#4a86e8": "#fff", "#a479e2": "#fff", "#f691b3": "#4d0f25", "#8e8e8e": "#fff", "#2a2b2e": "#fff"}
@@ -97,13 +101,23 @@ def healthz(request):
 class Viewer:
     """The mailbox shown (box: team and owner), who is looking (person: the member or leader,
     "me") and whether they may change it. box "team" = a leader's read-only view of their
-    team's inbox; box "leader" = ExCon viewing a team leader's mailbox."""
+    team's inbox; box "peer" = a leader's read-only view of another team leader's mailbox
+(as_team: that team); box "leader" = ExCon viewing a team leader's mailbox."""
 
     def __init__(self, request, as_team=None, box=""):
         self.person = participant_of(request.user)
         self.leader = leader_of(request.user)
         self.owner, self.leader_mode = None, False  # leader_mode: a leader reading their team's inbox
-        if as_team is not None:
+        self.peer = box == "peer"
+        if self.peer:
+            if not self.leader:
+                raise PermissionDenied("Team leaders only.")
+            self.team = get_object_or_404(peer_teams(self.leader), pk=as_team)
+            self.owner = self.team.leader()
+            if not self.owner:
+                raise Http404
+            self.person, self.readonly, self.base = self.leader, True, f"/inbox/leaders/{self.team.id}"
+        elif as_team is not None:
             if not is_excon(request.user):
                 raise PermissionDenied
             self.team = get_object_or_404(Team, pk=as_team)
@@ -126,7 +140,7 @@ class Viewer:
         else:
             raise Http404
         self.box = {"team": self.team, "owner": self.owner}
-        self.folders = TEAM_FOLDERS if self.leader_mode else FOLDERS
+        self.folders = TEAM_FOLDERS if self.leader_mode else PEER_FOLDERS if self.peer else FOLDERS
 
     def mails(self):
         return Mail.objects.filter(**self.box)
@@ -138,6 +152,13 @@ class Viewer:
     def leader_box(self):
         """A team leader's own mailbox (their own or, for ExCon, viewed)."""
         return self.owner is not None
+
+
+def peer_teams(leader):
+    """The teams whose leader's mailbox a team leader may read: the other active teams with a
+    leader (the Test team only for the Test team's leader, and the other way round)."""
+    return (Team.objects.filter(active=True, is_test=leader.team.is_test, people__role="tl", people__active=True)
+            .exclude(pk=leader.team_id).distinct())
 
 
 def mailbox_view(view):
@@ -336,11 +357,12 @@ def _counts(v):
 
 
 def leader_tabs(leader, current):
-    """The tab bar a team leader sees above SIMEX Mail: their mail, the team inbox, the Dashboard."""
+    """The tab bar a team leader sees above SIMEX Mail: their mail, the team inbox, the other
+    team leaders' mailboxes, the Dashboard."""
     team = leader.team
     mine = Mail.objects.filter(team=team, owner=leader, folder="inbox", archived=False, read_at__isnull=True,
                                trashed_at__isnull=True)
-    return {"current": current, "team": team, "mail_unread": mine.values("thread").distinct().count(),
+    return {"current": current, "team": team, "peers": list(peer_teams(leader)), "mail_unread": mine.values("thread").distinct().count(),
             "team_new": Mail.objects.filter(team=team, owner=None, id__gt=leader.lead_seen).exclude(folder="drafts").count()}
 
 
@@ -362,7 +384,7 @@ def _ctx(v, **extra):
     c["folder_name"] = dict(v.folders).get(folder) or next((lab["name"] for lab in c["labels"] if lab["key"] == folder), "")
     c["label_colours"] = LABEL_COLOURS
     if v.leader:
-        c["leader_tabs"] = leader_tabs(v.leader, "team" if v.leader_mode else "mail")
+        c["leader_tabs"] = leader_tabs(v.leader, "team" if v.leader_mode else "peer" if v.peer else "mail")
     c["simex_js"] = {"base": v.base, "readonly": v.readonly, "book": address_book(v), "team": v.team.name,
                      "maxMb": int(conf.get("max_upload_mb") or 10), "folder": c.get("folder", ""),
                      "unread": c["inbox_unread"], "leader": bool(v.leader),
@@ -877,7 +899,9 @@ def mail_file(request, fid, as_team=None, box=""):
     mine = (person and mail.team_id == person.team_id and mail.owner_id is None) or \
         (leader and mail.team_id == leader.team_id and mail.owner_id == leader.id)
     team_view = leader and mail.team_id == leader.team_id and mail.owner_id is None  # read-only
-    if not (mine or team_view or is_excon(request.user)):
+    peer = leader and mail.owner_id and peer_teams(leader).filter(pk=mail.team_id).first()
+    peer_view = peer and mail.owner_id == getattr(peer.leader(), "id", None)  # another leader's mailbox, read-only
+    if not (mine or team_view or peer_view or is_excon(request.user)):
         raise Http404
     data = a.content()
     if data is None:
