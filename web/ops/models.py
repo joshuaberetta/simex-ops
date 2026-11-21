@@ -354,6 +354,9 @@ class MailLabel(models.Model):
     owner = models.ForeignKey(Person, null=True, blank=True, on_delete=models.CASCADE, related_name="+")  # as Mail.owner
     name = models.CharField(max_length=60)
     colour = models.CharField(max_length=7, blank=True, default="")  # one of views_inbox.LABEL_COLOURS
+    # Put on by the app (views_inbox.AUTO_LABELS): in a team leader's mailbox, mail from the team's
+    # address ("team") or from a member's own ("member"). The leader may rename or recolour it.
+    auto = models.CharField(max_length=10, blank=True, default="")
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:

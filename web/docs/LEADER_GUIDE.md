@@ -12,6 +12,7 @@ You are your team's **team leader**: part of ExCon, not of the team. You play th
 You only ever see your own team's inbox. The other teams are independent of yours.
 
 ## My mail
+- **Labels Team account and Personal account** are put on by themselves: what your team writes to you from the team's address, and what a member writes to you from their own. Click one on the left to see only those; you can rename or recolour them.
 - **Sent** holds everything sent as the team leader persona: the injects ExCon schedules in your name, ExCon's answers in your name, and what you write yourself. **Inbox** holds what your team writes to the team leader persona (also when they copy you in), and the injects ExCon sends to the team leaders too.
 - **Writing to your team:** click **Compose** and pick your team, or open a conversation and click **Reply**. Your message reaches the team's inbox (and every member's **My mail**) from the team leader persona, in the same conversation. You can only write to your own team and its members.
 - **Writing to some members only:** pick them by name in To or Cc (e.g. two or three of them). It reaches only their own mailboxes (**My mail**), not the team inbox. A member who writes to you from their own mailbox has your reply in theirs: **Reply** answers them personally, **Reply all** everyone else on it too. Add your team to the recipients to reach everyone.

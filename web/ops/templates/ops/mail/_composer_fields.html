@@ -2,6 +2,12 @@
     <input type="hidden" name="draft_id" value="">
     <input type="hidden" name="in_reply_to" value="">
     <input type="hidden" name="forward_of" value="">
+    {% if from_choices %}<div class="gm-field gm-from-field">
+      <span class="gm-field-label">From</span>
+      <select name="from" class="gm-from" aria-label="From" data-from>
+        {% for f in from_choices %}<option value="{{ f.key }}" {% if f.key == from_default %}selected{% endif %}>{{ f.name }} &lt;{{ f.addr }}&gt;{% if f.key == "team" %} · team address{% else %} · my own address{% endif %}</option>{% endfor %}
+      </select>
+    </div>{% endif %}
     <div class="gm-field gm-recips" data-field="to">
       <span class="gm-field-label">To</span>
       <div class="gm-chips" data-chips="to"><input class="gm-chip-input" autocomplete="off" aria-label="To" data-chip-input="to"></div>

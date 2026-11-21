@@ -66,6 +66,7 @@
       form.addEventListener("input", (e) => { if (!e.target.matches("[data-chip-input]")) this.touch(); });
       form.addEventListener("submit", (e) => { e.preventDefault(); this.send(); });
       $("[data-discard]", form).onclick = () => this.discard();
+      if (form.elements.from) { form.elements.from.addEventListener("change", () => this.paintFrom()); this.paintFrom(); }
       this.timer = setInterval(() => { if (this.dirty) this.save(); }, 4000);
     }
     touch() { this.dirty = true; $("[data-draft-state]", this.form).textContent = ""; }
@@ -140,12 +141,18 @@
       for (const f of ["to", "cc", "bcc"]) { this.keys[f] = []; (d[f] || []).forEach((k) => this.add(f, k)); this.renderChips(f); }
       this.form.elements.subject.value = d.subject || "";
       this.form.elements.body.value = d.body || "";
+      if (this.form.elements.from) { this.form.elements.from.value = d.from || CFG.fromDefault || "team"; this.paintFrom(); }
       this.files = []; this.renderFiles();
       this.dirty = false;
+    }
+    paintFrom() {  // which address it goes from, plain to see: the team's or the member's own
+      const sel = this.form.elements.from;
+      if (sel) sel.closest(".gm-from-field").classList.toggle("own", sel.value === "me");
     }
     data(withFiles) {
       const fd = new FormData();
       for (const n of ["draft_id", "in_reply_to", "forward_of", "subject", "body"]) fd.append(n, this.form.elements[n].value);
+      if (this.form.elements.from) fd.append("from", this.form.elements.from.value);
       for (const f of ["to", "cc", "bcc"]) fd.append(f, this.keys[f].join(","));
       if (withFiles) this.files.forEach((f) => fd.append("files", f));
       return fd;
@@ -644,14 +651,15 @@
       if (fresh.length) {
         const m = fresh[0];
         const more = fresh.length > 1 ? ` (+${fresh.length - 1} more)` : "";
-        snack(`New message from ${m.from}: ${m.subject}${more}`, { label: "Open", run: () => { location.href = `${BASE}/t/${m.thread}/`; } }, true);
+        const url = m.url || `${BASE}/t/${m.thread}/`;  // mail to a member personally opens in My mail
+        snack(`New message from ${m.from}: ${m.subject}${more}`, { label: "Open", run: () => { location.href = url; } }, true);
         if (!CFG.readonly) {
-          N.alert({ title: `${m.from}${more}`, body: m.subject, url: `${location.origin}${BASE}/t/${m.thread}/`, tag: `mail-${m.id}`,
+          N.alert({ title: `${m.from}${more}`, body: m.subject, url: `${location.origin}${url}`, tag: `mail-${m.id}`,
                     flashText: `New message from ${m.from}`, desktop: !pushing() });
         }
-        if (CFG.folder === "inbox" && bulk && !$$('input[name="threads"]:checked').length && (!win || win.hidden)) {
+        if (!m.other && CFG.folder === "inbox" && bulk && !$$('input[name="threads"]:checked').length && (!win || win.hidden)) {
           setTimeout(() => {  // show the new row; the alert comes back after the reload
-            sessionStorage.setItem("simex-snack-new", JSON.stringify({ text: `New message from ${m.from}: ${m.subject}${more}`, url: `${BASE}/t/${m.thread}/` }));
+            sessionStorage.setItem("simex-snack-new", JSON.stringify({ text: `New message from ${m.from}: ${m.subject}${more}`, url }));
             location.reload();
           }, 4000);
         }

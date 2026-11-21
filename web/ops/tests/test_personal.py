@@ -147,3 +147,62 @@ def test_personal_mailboxes_off(excon):
     page = pa.get("/inbox/")
     assert not page.context.get("member_tabs") and not any(b["kind"] == "member" for b in page.context["simex_js"]["book"])
     assert Client().get("/inbox/me/").status_code == 302
+
+
+def test_members_choose_the_from_address(excon):
+    setup_exercise(excon)
+    pa, po = participant("a", "Jane"), participant("a", "Omar")
+    ta = Team.objects.get(code="a")
+    deliver_now("1-15")
+    choices = pa.get("/inbox/").context["from_choices"]
+    assert [c["addr"] for c in choices] == ["a@teams.simex.kobolabs.dev", "jane@a.teams.simex.kobolabs.dev"]
+    assert pa.get("/inbox/").context["from_default"] == "team" and pa.get("/inbox/me/").context["from_default"] == "me"
+    # From My mail, as the team: the team inbox's Sent from the team's address, and her own Sent too.
+    mine = Mail.objects.get(owner=pa.person, folder="inbox")
+    j = send(pa, **{"from": "team"}, to="p:undac-a-tl", subject="Re: Update", body="As the team.", in_reply_to=mine.id)
+    r = Response.objects.get()
+    assert (r.mail.owner, r.mail.from_addr, r.match) == (None, "a@teams.simex.kobolabs.dev", "exact")
+    assert Mail.objects.filter(owner=pa.person, folder="sent", body="As the team.", thread=mine.thread).exists()
+    assert j["url"].startswith("/inbox/me/t/")
+    # From the team inbox, as herself: her own Sent, and the team's (an answer to a persona).
+    team_mail = Mail.objects.get(owner=None, folder="inbox", team=ta)
+    send(pa, base="/inbox", **{"from": "me"}, to="p:undac-a-tl", subject="Re: Update", body="As me.",
+         in_reply_to=team_mail.id)
+    r2 = Response.objects.latest("id")
+    assert r2.mail.owner is None and r2.mail.from_addr == "jane@a.teams.simex.kobolabs.dev"
+    assert Mail.objects.filter(owner=pa.person, folder="sent", body="As me.").exists()
+    # Personal mail sent from the team tab stays out of the team inbox.
+    j = send(pa, base="/inbox", **{"from": "me"}, to=f"m:{po.person.id}", subject="Just you", body="x")
+    assert not Mail.objects.filter(owner=None, subject="Just you").exists() and j["url"].startswith("/inbox/me/")
+    # The team writing to itself makes no sense.
+    r = pa.post("/inbox/send/", {"from": "team", "to": f"t:{ta.id}", "subject": "x", "body": "y"}, **AJAX)
+    assert r.status_code == 400
+
+
+def test_leader_labels_mail_from_the_team_account_and_personal_accounts(excon):
+    from ops.models import MailLabel, ThreadLabel
+    setup_exercise(excon)
+    pa, la = participant("a", "Jane"), leader("a")
+    deliver_now("1-15")
+    send(pa, base="/inbox", to="p:undac-a-tl", subject="From the team", body="x")
+    send(pa, to="p:undac-a-tl", subject="From me", body="y")
+    labels = {lb.auto: lb for lb in MailLabel.objects.filter(owner=la.person)}
+    assert labels["team"].name == "Team account" and labels["member"].name == "Personal account"
+    on = {(tl.label.auto, Mail.objects.filter(owner=la.person, thread=tl.thread).first().subject)
+          for tl in ThreadLabel.objects.filter(label__owner=la.person)}
+    assert on == {("team", "From the team"), ("member", "From me")}
+    labels["member"].name = "Members"
+    labels["member"].save()
+    send(pa, to="p:undac-a-tl", subject="Again", body="z")
+    assert MailLabel.objects.filter(owner=la.person).count() == 2  # renamed, still the one used
+
+
+def test_team_tab_announces_personal_mail_too(excon):
+    setup_exercise(excon)
+    pa, po = participant("a", "Jane"), participant("a", "Omar")
+    since = pa.get("/inbox/poll/").json()["latest"]
+    deliver_now("1-15")
+    send(po, to=f"m:{pa.person.id}", subject="Psst", body="x")
+    new = pa.get(f"/inbox/poll/?since={since}").json()["new"]
+    assert sorted((n["subject"], n["url"].split("/t/")[0]) for n in new) == [("Psst", "/inbox/me"),
+                                                                             ("Update for Team A", "/inbox")]

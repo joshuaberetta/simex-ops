@@ -232,7 +232,7 @@ body.side-collapsed .gm-labels-head, body.side-collapsed .gm-lmore { display: no
 .gm-compose-ctl { display: inline-flex; }
 .gm-compose-form { flex: 1; display: flex; flex-direction: column; padding: 0 16px; min-height: 0; }
 .gm-field { display: flex; align-items: center; min-height: 40px; border-bottom: 1px solid #f1f3f4; position: relative; gap: 6px; }
-.gm-field-label { color: var(--ink2); width: 28px; flex: none; }
+.gm-field-label { color: var(--ink2); width: 36px; flex: none; }
 .gm-chips { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 4px 0; min-width: 0; }
 .gm-chip { display: inline-flex; align-items: center; gap: 4px; height: 26px; border: 1px solid #dadce0; border-radius: 13px;
   padding: 0 4px 0 2px; font-size: 13px; background: #fff; max-width: 100%; }
@@ -462,3 +462,9 @@ body.has-tabs .gm-body { height: calc(100% - 64px - 49px); }
 }
 .gm-search-space { flex: 0 1 720px; padding-left: 12px; font-size: 16px; color: var(--ink2); }
 .gm-ro-bar { display: none; }
+
+/* From (a member's choice of address): the team's, or their own, tinted so it can't be missed. */
+.gm-from-field { display: flex; align-items: center; gap: 8px; }
+.gm-from { flex: 1; min-width: 0; border: 0; background: #e8f0fe; color: var(--ink); font: inherit; padding: 4px 8px;
+  border-radius: 6px; }
+.gm-from-field.own .gm-from { background: #e6f4ea; }
