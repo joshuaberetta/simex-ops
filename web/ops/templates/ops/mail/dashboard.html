@@ -23,9 +23,18 @@
     </section>
     <section>
       <h2>Who is writing</h2>
-      <table class="gm-dtable">{% for name, n in members %}<tr><td>{{ name }}</td><td>{{ n }}</td></tr>{% empty %}<tr><td class="muted">No replies yet.</td></tr>{% endfor %}</table>
+      <table class="gm-dtable">{% for name, role, n in members %}<tr><td>{{ name }}{% if role %} <span class="muted small">· {{ role }}</span>{% endif %}</td><td>{{ n }}</td></tr>{% empty %}<tr><td class="muted">No replies yet.</td></tr>{% endfor %}</table>
     </section>
   </div>
+  {% if by_role %}
+  <h2>By team role</h2>
+  <table class="gm-dtable">
+    <tr><th></th><th>members</th><th>written</th><th>share</th><th>median min to reply</th><th>read per member</th><th>documents opened</th></tr>
+    {% for g in by_role %}<tr><td>{{ g.role }}</td><td>{{ g.people }}</td><td>{{ g.written }}</td><td>{% if g.share is not None %}{{ g.share }}%{% else %}—{% endif %}</td>
+      <td>{% if g.median_minutes is not None %}{{ g.median_minutes|floatformat:0 }}{% else %}—{% endif %}</td><td>{{ g.read_per_person }}</td><td>{{ g.downloads }}</td></tr>{% endfor %}
+  </table>
+  <p class="small muted">The team's members grouped by the team role ExCon gave them: messages written, their share of the team's, minutes from first seeing what they answer, inject messages read, documents downloaded.</p>
+  {% endif %}
   {% if hours %}
   <h2>Replies per hour</h2>
   <div class="gm-bars" role="img" aria-label="Replies per hour">{% for h in hours %}<span style="height:{{ h.pct }}%" title="{{ h.at|date:'D H:i' }}: {{ h.n }}"></span>{% endfor %}</div>

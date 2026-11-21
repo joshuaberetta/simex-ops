@@ -42,10 +42,30 @@ The <b>Test team</b> receives test runs and test sends; give yourself a login in
   <input name="sort" value="{{ teams|length }}" class="narrow"><input name="code" placeholder="e" class="narrow" required><input name="name" placeholder="Team E" required><input name="email" placeholder="email inbox (optional)">
   <button class="btn small primary">Add team</button></form>
 
+<h2 id="team-roles">Team roles</h2>
+<p class="muted small">Functions team members hold within their team, such as <i>Deputy Team Leader</i>. Give each member theirs in the list below: the Dashboard and the end-of-exercise reports then break reading, writing and inbox work down by team role. A team role changes nothing in SIMEX Mail (the member still shares the team's inbox); team leaders, from ExCon, have none.</p>
+<table class="list">
+  <thead><tr><th>Order · name · team members holding it</th></tr></thead>
+  {% for r in team_roles %}
+  <tr><td><form method="post" action="/team-roles/save/" class="rowform">{% csrf_token %}
+    <input type="hidden" name="id" value="{{ r.id }}">
+    <input name="sort" value="{{ r.sort }}" class="narrow">
+    <input name="name" value="{{ r.name }}" required maxlength="80">
+    <span class="muted small">{{ r.n }} member{{ r.n|pluralize }}</span>
+    <button class="btn small">Save</button>
+  </form>
+  <form method="post" action="/team-roles/{{ r.id }}/delete/" class="inline">{% csrf_token %}<button class="link" data-confirm="Delete the team role {{ r.name }}? Its members keep their accounts, without a team role.">delete</button></form></td></tr>
+  {% empty %}<tr><td class="muted small">No team roles yet.</td></tr>
+  {% endfor %}
+</table>
+<form method="post" action="/team-roles/save/" class="card rowform">{% csrf_token %}<b>Add team role</b>
+  <input name="name" placeholder="Deputy Team Leader" required maxlength="80">
+  <button class="btn small primary">Add team role</button></form>
+
 <h2>People</h2>
 <p class="muted small">Every login slip has a QR code: scanning it with a phone's camera signs that person in and walks them through alerts (and, on an iPhone, adding SIMEX Mail to the home screen). <a href="/people/slips/" target="_blank">Sign-in slips for everyone</a> (QR code and username, passwords unchanged); a team's or one person's from their row. A code works on any number of devices for {{ SIGNIN_DAYS }} days, or until that password is reset.</p>
 <table class="list">
-  <thead><tr><th colspan="7">Name · email · team · role (team member: participant; team leader: ExCon, one per team) · active · login</th></tr></thead>
+  <thead><tr><th colspan="7">Name · email · team · role (team member: participant; team leader: ExCon, one per team) · team role (members) · active · login</th></tr></thead>
   {% for p in people %}
   <tr><td colspan="7"><form method="post" action="/people/save/" class="rowform">{% csrf_token %}
     <input type="hidden" name="id" value="{{ p.id }}">
@@ -53,6 +73,7 @@ The <b>Test team</b> receives test runs and test sends; give yourself a login in
     <input name="email" value="{{ p.email }}" placeholder="email (optional)" class="{% if 'placeholder.invalid' in p.email %}placeholder{% endif %}">
     <select name="team_id"><option value="">— no team —</option>{% for t in teams %}<option value="{{ t.id }}" {% if t.id == p.team_id %}selected{% endif %}>{{ t.name }}</option>{% endfor %}</select>
     <select name="role">{% for k, label in ROLES.items %}<option value="{{ k }}" {% if p.role == k %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    {% if team_roles and p.role == "member" %}<select name="team_role_id" title="Team role"><option value="">— no team role —</option>{% for r in team_roles %}<option value="{{ r.id }}" {% if r.id == p.team_role_id %}selected{% endif %}>{{ r.name }}</option>{% endfor %}</select>{% endif %}
     <label class="chk"><input type="checkbox" name="active" value="1" {% if p.active %}checked{% endif %}></label>
     <button class="btn small">Save</button>
   </form>
@@ -70,14 +91,15 @@ The <b>Test team</b> receives test runs and test sends; give yourself a login in
   <input name="name" placeholder="Name" required><input name="email" placeholder="email (optional)">
   <select name="team_id"><option value="">— no team —</option>{% for t in teams %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}</select>
   <select name="role">{% for k, label in ROLES.items %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select>
+  {% if team_roles %}<select name="team_role_id" title="Team role (members)"><option value="">— no team role —</option>{% for r in team_roles %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}</select>{% endif %}
   <label class="chk"><input type="checkbox" name="account" value="1" checked> create login</label>
   <button class="btn small primary">Add</button></form>
 </section>
 <section class="col-side">
 <form method="post" action="/people/bulk/" class="card form">{% csrf_token %}
   <h3>Paste a roster</h3>
-  <p class="small">CSV lines: <code>name,email,team code,role</code> (email optional; role <code>tl</code> for the team's leader, from ExCon, one per team; empty for team members). Unknown team codes create a team. Existing people (same email) are updated.</p>
-  <textarea name="csv" rows="10" placeholder="Jane Doe,jane@example.org,a,tl&#10;John Roe,,a"></textarea>
+  <p class="small">CSV lines: <code>name,email,team code,role</code> (email optional; role <code>tl</code> for the team's leader, from ExCon, one per team; empty for team members, or a member's team role, e.g. <code>Deputy Team Leader</code>, added to Team roles if new). Unknown team codes create a team. Existing people (same email) are updated.</p>
+  <textarea name="csv" rows="10" placeholder="Jane Doe,jane@example.org,a,tl&#10;John Roe,,a,Deputy Team Leader&#10;Ann Poe,,a"></textarea>
   <label class="chk"><input type="checkbox" name="accounts" value="1" checked> create logins for people without one</label>
   <label class="chk"><input type="checkbox" name="replace_placeholders" value="1" checked> remove the placeholder people</label>
   <button class="btn primary">Add people</button>

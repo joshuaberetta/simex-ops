@@ -165,7 +165,7 @@ def test_team_inbox_read_only_with_the_ai_reading(excon):
         assert "Uniform structure" not in c.get(url).content.decode()
     # The team leader's Dashboard: their team only, no grades.
     d = la.get("/inbox/dashboard/")
-    assert d.status_code == 200 and d.context["likely"] == 1 and d.context["members"] == [("Amina Diallo", 1)]
+    assert d.status_code == 200 and d.context["likely"] == 1 and d.context["members"] == [("Amina Diallo", "", 1)]
     assert b"Team B" not in d.content and b"Grade" not in d.content
     assert excon.get("/inbox/dashboard/").status_code == 403
 

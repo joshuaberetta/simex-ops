@@ -351,6 +351,40 @@ def test_bulk_roster_creates_logins(excon):
     assert c.get("/").url == "/inbox/"
 
 
+def test_team_roles_on_accounts_and_dashboard(excon):
+    from ops.models import TeamRole
+    excon.post("/team-roles/save/", {"name": " Deputy  Team Leader "})
+    r = excon.post("/team-roles/save/", {"name": "deputy team leader"}, follow=True)
+    assert b"already a team role" in r.content and TeamRole.objects.get().name == "Deputy Team Leader"
+    excon.post("/people/bulk/", {"csv": "Jane Doe,,a,Deputy Team Leader\nAnn Poe,,a,Logistics\nJohn Roe,,a"})
+    roles = {p.name: p.team_role.name if p.team_role else None for p in Person.objects.filter(team__code__in="ab")}
+    assert roles["Jane Doe"] == "Deputy Team Leader" and roles["Ann Poe"] == "Logistics"
+    assert roles["John Roe"] is None
+    dtl = TeamRole.objects.get(name="Deputy Team Leader")
+    tl = Team.objects.get(code="b").leader()
+    excon.post("/people/save/", {"id": tl.id, "name": tl.name, "team_id": tl.team_id, "role": "tl",
+                                 "team_role_id": dtl.id, "active": "1"})
+    assert Person.objects.get(pk=tl.pk).team_role is None  # a leader is ExCon: no team role
+    page = excon.get("/people/").content.decode()
+    assert "Team roles" in page and "Logistics" in page
+
+    do_import(excon, SAMPLE)
+    arm()
+    deliver_now("1-15")
+    pa = participant("a", "Jane")
+    excon.post("/people/save/", {"id": pa.person.id, "name": "Jane", "team_id": pa.person.team_id, "role": "member",
+                                 "team_role_id": dtl.id, "active": "1"})
+    mail = Mail.objects.get(owner=None, team__code="a")
+    pa.get(f"/inbox/t/{mail.thread}/")
+    pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: Update", "body": "Plan", "in_reply_to": mail.id})
+    d = excon.get("/dashboard/")
+    rows = {g["role"]: g for g in d.context["by_role"]}
+    assert rows["Deputy Team Leader"]["written"] == 1 and rows["Deputy Team Leader"]["share"] == 100
+    assert rows["Deputy Team Leader"]["read_per_person"] == 1.0 and "By team role" in d.content.decode()
+    TeamRole.objects.get(name="Logistics").delete()
+    assert Person.objects.get(name="Ann Poe").team_role is None
+
+
 # --- mail host ---------------------------------------------------------------------------------------
 
 @pytest.fixture

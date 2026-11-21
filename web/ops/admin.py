@@ -4,7 +4,7 @@ from django.contrib import admin
 
 from . import models as m
 
-for model in (m.Team, m.Person, m.Sender, m.Setting, m.TestRun, m.RubricCriterion, m.Grade, m.Audit):
+for model in (m.Team, m.TeamRole, m.Person, m.Sender, m.Setting, m.TestRun, m.RubricCriterion, m.Grade, m.Audit):
     admin.site.register(model)
 
 

@@ -84,6 +84,8 @@ urlpatterns = [
     path("people/<int:pid>/account/", x.person_account),
     path("teams/save/", x.team_save),
     path("teams/<int:tid>/delete/", x.team_delete),
+    path("team-roles/save/", x.team_role_save),
+    path("team-roles/<int:rid>/delete/", x.team_role_delete),
     path("inboxes/", x.inboxes),
     path("inboxes/clear/", x.inbox_clear),
     path("excon/poll/", x.excon_poll),

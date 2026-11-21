@@ -7,15 +7,15 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib import messages
-from django.db.models import Max
+from django.db.models import Count, Max
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from . import ai, checks, conf, delivery
 from .access import excon_required
-from .models import (AiCall, AiGrade, AiReport, Grade, Inject, InjectDraft, InjectReview, Message, ReplyAnalysis,
-                     Response, Sender, Team, audit)
+from .models import (AiCall, AiGrade, AiReport, Event, Grade, Inject, InjectDraft, InjectReview, MailAction, Message,
+                     Person, ReplyAnalysis, Response, Sender, Team, TeamRole, audit)
 from .views_excon import _int, _u, from_local_input, reply_grid, safe_next
 
 # Sequential blue (light -> dark) for the rubric heatmap; ink flips to white on the dark steps.
@@ -114,7 +114,60 @@ def dashboard_data(kind, team=None):
     commitments = [(r, c) for r in reversed(reps) if r.ai for c in r.ai.commitments][:30]
     asks = [(r, c) for r in reversed(reps) if r.ai for c in r.ai.asks][:30]
     return {"teams": teams, "tiles": tiles, "matrix": matrix, "reps": reps, "analyses": analyses, "flagged": flagged,
-            "ai_written": ai_written, "commitments": commitments, "asks": asks, "t0": t0, "t1": t1}
+            "ai_written": ai_written, "commitments": commitments, "asks": asks, "t0": t0, "t1": t1,
+            "by_role": by_team_role(teams, reps, msg_kinds)}
+
+
+NO_ROLE = "No team role"
+
+
+def by_team_role(teams, reps, msg_kinds):
+    """The teams' members grouped by team role (People & logins → Team roles): what each group
+    read, opened, wrote and did in its inbox, in total and per team. [] while there are no
+    team roles. reps: the teams' replies, with r.ai set (dashboard_data)."""
+    roles = list(TeamRole.objects.all())
+    if not roles:
+        return []
+    people = list(Person.objects.participants().filter(team__in=teams).select_related("team_role"))
+    ids = [p.id for p in people]
+    reads = Counter(pid for pid, _ in Event.objects.filter(person_id__in=ids, type="read", message__kind__in=msg_kinds)
+                    .values_list("person_id", "message_id").distinct())
+    downloads = Counter(Event.objects.filter(person_id__in=ids, type="download", message__kind__in=msg_kinds)
+                        .values_list("person_id", flat=True))
+    actions = dict(MailAction.objects.filter(person_id__in=ids, owner=None).values_list("person_id")
+                   .annotate(n=Count("id")).values_list("person_id", "n"))
+    mine = {}
+    for r in reps:
+        if r.person_id:
+            mine.setdefault(r.person_id, []).append(r)
+    total = sum(len(xs) for xs in mine.values())
+    rows = []
+    for name in [r.name for r in roles] + [NO_ROLE]:
+        group = [p for p in people if (p.team_role.name if p.team_role else NO_ROLE) == name]
+        written = [r for p in group for r in mine.get(p.id, [])]
+        active = [p for p in group if mine.get(p.id) or reads[p.id] or downloads[p.id] or (p.active and p.user_id)]
+        if not active:
+            continue
+        n = len(active)
+        an = [r.ai for r in written if r.ai]
+        quality = [(a.clarity + a.completeness + a.actionability) / 3 for a in an
+                   if None not in (a.clarity, a.completeness, a.actionability)]
+        minutes = [m for m in (ai.timing(r)[0] for r in written) if m is not None]
+        per_team = {t.id: (sum(1 for p in active if p.team_id == t.id),
+                           sum(1 for r in written if r.team_id == t.id)) for t in teams}
+        rows.append({
+            "role": name, "people": n, "written": len(written), "per_person": round(len(written) / n, 1),
+            "share": round(100 * len(written) / total) if total else None,
+            "injects": len({r.inject_id for r in written if r.inject_id}),
+            "median_minutes": _median(minutes),
+            "read_per_person": round(sum(reads[p.id] for p in active) / n, 1),
+            "downloads": sum(downloads[p.id] for p in active),
+            "actions": sum(actions.get(p.id, 0) for p in active),
+            "quality": round(sum(quality) / len(quality), 1) if quality else None,
+            "ai_likely": sum(1 for a in an if (a.ai_written or 0) >= 70),
+            "teams": [{"team": t, "people": per_team[t.id][0], "written": per_team[t.id][1]} for t in teams],
+        })
+    return rows
 
 
 @excon_required

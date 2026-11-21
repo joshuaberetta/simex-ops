@@ -43,9 +43,10 @@
 
 {% with b=f.inbox %}{% if b %}<h4>How you managed your inbox</h4>
 {% if b.members %}<table class="list small fig">
-  <thead><tr><th>Member</th><th>Messages read</th><th>Written</th><th>Files opened</th><th>Alerts</th></tr></thead>
-  <tbody>{% for m in b.members %}<tr><td>{{ m.name }}</td><td>{{ m.read }}</td><td>{{ m.wrote }}</td><td>{{ m.downloads }}</td><td>{% if m.alerts_on %}on{% else %}<span class="muted">off</span>{% endif %}</td></tr>{% endfor %}</tbody>
+  <thead><tr><th>Member</th>{% if b.by_team_role %}<th>Team role</th>{% endif %}<th>Messages read</th><th>Written</th><th>Files opened</th><th>Alerts</th></tr></thead>
+  <tbody>{% for m in b.members %}<tr><td>{{ m.name }}</td>{% if b.by_team_role %}<td>{{ m.team_role|default:"—" }}</td>{% endif %}<td>{{ m.read }}</td><td>{{ m.wrote }}</td><td>{{ m.downloads }}</td><td>{% if m.alerts_on %}on{% else %}<span class="muted">off</span>{% endif %}</td></tr>{% endfor %}</tbody>
 </table>{% endif %}
+{% if b.by_team_role %}{% include "ops/_report_roles.html" with groups=b.by_team_role %}{% endif %}
 <ul class="small">
   {% if b.documents %}<li>Injects with documents: {{ b.documents|length }}; answered before opening the documents: {% if b.replied_before_opening_documents %}{{ b.replied_before_opening_documents|joinlist }}{% else %}none{% endif %}.</li>{% endif %}
   {% if b.read_but_never_answered %}<li>Read but never answered: {{ b.read_but_never_answered|joinlist }}.</li>{% endif %}
@@ -82,6 +83,7 @@
     <td>{{ b.forwards }} · {{ b.messages_with_cc }}</td><td>{% if b.writing_share_top_member_percent is not None %}{{ b.writing_share_top_member_percent }}%{% else %}—{% endif %}</td>
     <td>{{ b.at_the_end.unread }}</td><td>{{ b.labels }} · {{ b.starred_threads }}</td></tr>{% endwith %}{% endfor %}</tbody>
 </table>{% endif %}
+{% if f.by_team_role %}<h4>By team role, all teams</h4>{% include "ops/_report_roles.html" with groups=f.by_team_role %}{% endif %}
 
 <h4>Injects</h4>
 <table class="list small fig">

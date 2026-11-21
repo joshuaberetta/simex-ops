@@ -56,6 +56,26 @@
 <p class="muted small">Funnel, in injects: delivered to the team, read (in-app) or opened (email, a lower bound), answered, graded. Dots: hover for the reply's summary, click to open it.</p>
 {% else %}<p class="muted">No active teams.</p>{% endif %}
 
+{% if by_role %}
+<h2 id="team-roles">By team role</h2>
+<div class="scroll">
+<table class="list small">
+  <thead><tr><th>Team role</th><th class="num">Members</th><th class="num">Messages written</th><th class="num">Per member</th><th class="num">Share</th>
+    <th class="num">Injects answered</th><th class="num">Median min to reply</th><th class="num">Messages read per member</th><th class="num">Documents opened</th>
+    <th class="num">Inbox actions</th><th class="num">Quality (AI)</th><th class="num">Likely AI-written</th>{% for t in teams %}<th class="num">{{ t.name }}</th>{% endfor %}</tr></thead>
+  {% for g in by_role %}
+  <tr><td><b>{{ g.role }}</b></td><td class="num">{{ g.people }}</td><td class="num">{{ g.written }}</td><td class="num">{{ g.per_person }}</td>
+    <td class="num">{% if g.share is not None %}{{ g.share }}%{% else %}—{% endif %}</td><td class="num">{{ g.injects }}</td>
+    <td class="num">{% if g.median_minutes is not None %}{{ g.median_minutes|floatformat:0 }}{% else %}—{% endif %}</td>
+    <td class="num">{{ g.read_per_person }}</td><td class="num">{{ g.downloads }}</td><td class="num">{{ g.actions }}</td>
+    <td class="num">{% if g.quality %}{{ g.quality }}<span class="muted">/5</span>{% else %}—{% endif %}</td><td class="num">{{ g.ai_likely }}</td>
+    {% for c in g.teams %}<td class="num" title="{{ c.team.name }}: {{ c.people }} {{ g.role }}, {{ c.written }} message{{ c.written|pluralize }}">{% if c.people or c.written %}{{ c.written }} <span class="muted">({{ c.people }})</span>{% else %}<span class="muted">—</span>{% endif %}</td>{% endfor %}</tr>
+  {% endfor %}
+</table>
+</div>
+<p class="muted small">Team members grouped by the team role ExCon gave them (People &amp; logins → Team roles). Messages written: replies and new messages to personas; median minutes from first seeing what they answer; read: inject messages opened in SIMEX Mail; documents: downloads; inbox actions: star, archive, label, search, send… Per team: messages written (members holding the role).</p>
+{% endif %}
+
 <div class="bar"><h2>Rubric results</h2>
   <nav class="seg small">
     <a href="/dashboard/?kind={{ kind }}&score=human" class="{% if source == 'human' %}on{% endif %}">Graded</a>

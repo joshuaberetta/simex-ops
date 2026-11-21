@@ -280,6 +280,8 @@ def timing(r):
 def reply_block(r, label="REPLY"):
     minutes, words, wpm = timing(r)
     who = r.person.name if r.person else (r.from_name or r.from_addr)
+    if r.person and r.person.team_role_id:
+        who += f" ({r.person.team_role.name})"
     lines = [f"{label} from {who}, {r.team.name if r.team else 'unknown team'}",
              f"To: {persona_label(r.persona)}",
              f"Subject: {r.subject or ''}"]

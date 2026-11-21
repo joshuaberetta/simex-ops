@@ -29,6 +29,8 @@ IMPORT_FIELDS = ["seq", "method", "mailbox", "scenario_dt", "send_at", "sender_l
 # The team leader is the ExCon person who monitors the team (one per team): never a
 # participant, with their own mailbox, a read-only view of the team's and the team Dashboard.
 ROLES = {"member": "Team member", "tl": "Team leader (ExCon)"}
+# Within a team, members may also hold a team role (TeamRole: Deputy Team Leader, Logistics...),
+# set by ExCon on People & logins, so the Dashboard and reports can break behaviour down by it.
 
 
 class Team(models.Model):
@@ -50,6 +52,19 @@ class Team(models.Model):
         return self.people.filter(role="tl", active=True).first()
 
 
+class TeamRole(models.Model):
+    """A function a team member holds in the team (e.g. Deputy Team Leader). Only a label for
+    the figures: a member with one is still a participant sharing the team's inbox."""
+    name = models.CharField(max_length=80, unique=True)
+    sort = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort", "name"]
+
+    def __str__(self):
+        return self.name
+
+
 class PersonQuerySet(models.QuerySet):
     def participants(self):
         """Team members only: the leaders are ExCon and never get a participant's copy."""
@@ -63,6 +78,8 @@ class Person(models.Model):
     email = models.CharField(max_length=320, blank=True, default="")
     team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.SET_NULL, related_name="people")
     role = models.CharField(max_length=20, default="member")  # member | tl (see ROLES)
+    team_role = models.ForeignKey(TeamRole, null=True, blank=True, on_delete=models.SET_NULL,
+                                  related_name="people")  # members only
     active = models.BooleanField(default=True)
     user = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
                                 related_name="person")

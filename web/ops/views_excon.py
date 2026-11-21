@@ -26,7 +26,7 @@ from .access import excon_required
 from .models import (CHANNELS, DELIVERY_MODES, ROLES, STATUSES, AiGrade, Attachment, AttachmentImport, Audit, Grade,
                      ImportBatch, Inject, InjectDraft, InjectReview, Mail, MailAttachment, MailLabel, Message,
                      MessageAttachment, Person, PushSubscription, ReplyAnalysis, Response,
-                     ResponseAttachment, RubricCriterion, Sender, Team, TestRun, TestRunItem, audit)
+                     ResponseAttachment, RubricCriterion, Sender, Team, TeamRole, TestRun, TestRunItem, audit)
 
 MAX_ATTACHMENT = documents.MAX_ATTACHMENT
 User = get_user_model()
@@ -602,7 +602,9 @@ def people_page(request):
         mine = [p for p in people if p.team_id == t.id and p.active]
         t.n_leaders = sum(p.role == "tl" for p in mine)
         t.n_members = sum(p.role == "member" for p in mine)
+    team_roles = list(TeamRole.objects.annotate(n=Count("people", filter=Q(people__role="member"))))
     return render(request, "ops/people.html", {"tab": "people", "teams": teams, "people": people, "ROLES": ROLES,
+                                               "team_roles": team_roles,
                                                "has_placeholders": has_placeholders, "creds": creds,
                                                "SIGNIN_DAYS": signin.TOKEN_DAYS,
                                                "creds_json": json.dumps(creds or [])})
@@ -647,6 +649,47 @@ def team_delete(request, tid):
     return redirect("/people/")
 
 
+@excon_required
+@require_POST
+def team_role_save(request):
+    """A team role (Deputy Team Leader...) that team members' accounts can hold."""
+    P = request.POST
+    rid = P.get("id")
+    name = " ".join((P.get("name") or "").split())[:80]
+    if not name:
+        messages.error(request, "A team role needs a name.")
+        return redirect("/people/#team-roles")
+    if TeamRole.objects.filter(name__iexact=name).exclude(pk=_int(rid) or 0).exists():
+        messages.error(request, f"There is already a team role '{name}'.")
+        return redirect("/people/#team-roles")
+    r = get_object_or_404(TeamRole, pk=_int(rid)) if rid else TeamRole(sort=TeamRole.objects.count())
+    r.name = name
+    if P.get("sort") not in (None, ""):
+        r.sort = _int(P.get("sort")) or 0
+    r.save()
+    audit("team_role_save", name, _u(request))
+    return redirect("/people/#team-roles")
+
+
+@excon_required
+@require_POST
+def team_role_delete(request, rid):
+    r = TeamRole.objects.filter(pk=rid).first()
+    if r:  # its people keep their accounts, without a team role
+        audit("team_role_delete", r.name, _u(request))
+        r.delete()
+    return redirect("/people/#team-roles")
+
+
+def _team_role(name):
+    """The TeamRole called name (any case), created if new; None for an empty name."""
+    name = " ".join((name or "").split())[:80]
+    if not name:
+        return None
+    return TeamRole.objects.filter(name__iexact=name).first() or TeamRole.objects.create(
+        name=name, sort=TeamRole.objects.count())
+
+
 def _store_creds(request, rows):
     request.session["new_credentials"] = rows
 
@@ -675,6 +718,7 @@ def person_save(request):
     p.name, p.email = name, email
     p.team_id = _int(P.get("team_id"))
     p.role = "tl" if P.get("role") == "tl" else "member"
+    p.team_role = TeamRole.objects.filter(pk=_int(P.get("team_role_id"))).first() if p.role == "member" else None
     p.active = P.get("active") == "1" or not pid
     problem = _leader_problem(p)
     if problem:
@@ -730,7 +774,8 @@ def person_account(request, pid):
 @require_POST
 @transaction.atomic  # replace_placeholders deletes first: an error later must undo that too
 def people_bulk(request):
-    """Paste CSV: name,email,team code,role. Creates logins for new people; the passwords are
+    """Paste CSV: name,email,team code,role (tl, empty for a member, or a team role such as
+    Deputy Team Leader, created if new). Creates logins for new people; the passwords are
     shown once (and on a printable sheet)."""
     text = request.POST.get("csv") or ""
     added, errors, creds = 0, [], []
@@ -746,7 +791,9 @@ def people_bulk(request):
             continue
         name, email = row[0], row[1] if len(row) > 1 else ""
         code = re.sub(r"[^a-z0-9-]", "", row[2].lower()) if len(row) > 2 else ""
-        role = "tl" if len(row) > 3 and row[3].lower() in ("tl", "team leader", "leader") else "member"
+        role_cell = row[3] if len(row) > 3 else ""
+        role = "tl" if role_cell.lower() in ("tl", "team leader", "leader") else "member"
+        team_role = role_cell if role == "member" and role_cell.lower() not in ("member", "team member") else ""
         if email and not rnd.EMAIL.match(email):
             errors.append(f"line {n}: bad email '{email}'")
             continue
@@ -763,6 +810,7 @@ def people_bulk(request):
         if problem:
             errors.append(f"line {n}: {problem}")
             continue
+        p.team_role = _team_role(team_role)
         p.save()
         if old_role and old_role != p.role:
             PushSubscription.objects.filter(person=p).delete()
@@ -1026,7 +1074,7 @@ def reply_grid(kind):
     kinds = ["live", "reply", "followup", "leader"] if kind == "live" else ["test", "oneoff"]
     teams = list(Team.objects.filter(active=True, is_test=(kind != "live")) if kind != "live"
                  else Team.objects.filter(active=True, is_test=False))
-    all_in = list(Response.objects.filter(kind=kind).select_related("inject", "team", "person", "mail")
+    all_in = list(Response.objects.filter(kind=kind).select_related("inject", "team", "person__team_role", "mail", "message")
                   .prefetch_related(Prefetch("attachments", ResponseAttachment.objects.defer("data")),
                                     Prefetch("mail__files", MailAttachment.objects.defer("data")))
                   .order_by("received_at"))

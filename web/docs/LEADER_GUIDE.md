@@ -22,7 +22,7 @@ You only ever see your own team's inbox. The other teams are independent of your
 - "Likely / possibly AI-assisted" is Claude's estimate from the text and the time taken to write it. Short messages and non-native English make it unreliable: a reason to look closer, never proof. Don't confront a participant on it alone. Participants never see any of this.
 
 ## Dashboard
-Messages written, injects answered, median time to the first reply, late or missing replies, delivered → read → answered, who in the team is writing, replies per hour, and Claude's reading: tone, quality, possibly AI-written replies with the reasons, flags, what the team asks for and what it commits to. Click a time to open the conversation in the Team inbox. The page refreshes every two minutes.
+Messages written, injects answered, median time to the first reply, late or missing replies, delivered → read → answered, who in the team is writing (with their team role, e.g. Deputy Team Leader, if ExCon gave them one), the work by team role (messages written and their share, time to reply, messages read, documents opened), replies per hour, and Claude's reading: tone, quality, possibly AI-written replies with the reasons, flags, what the team asks for and what it commits to. Click a time to open the conversation in the Team inbox. The page refreshes every two minutes.
 
 ## Alerts
 Scan the QR code on your login slip with your phone: it signs you in and shows how to turn alerts on. As in the team's SIMEX Mail: a chime and a blue bar for new mail in **My mail**, and, once you click **Turn on alerts**, notifications on your computer or phone (on an iPhone, from the home-screen app: **Share → Add to Home Screen**).

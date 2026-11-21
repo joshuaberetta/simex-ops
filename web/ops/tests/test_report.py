@@ -6,7 +6,7 @@ from datetime import timedelta
 from django.utils import timezone
 
 from ops import ai, report
-from ops.models import (ExerciseReport, Grade, Inject, InjectDraft, Mail, Message, Report, Response, RubricCriterion)
+from ops.models import (ExerciseReport, Grade, Inject, InjectDraft, Mail, Message, Report, Response, RubricCriterion, TeamRole)
 from ops.tests.test_ai import DRAFT_OUT, REPLY_OUT, FakeClient, a_reply, answers
 from ops.tests.test_ops import SAMPLE, _rubric, arm, deliver_now, do_import, participant
 
@@ -225,9 +225,16 @@ def test_inbox_habits_are_logged_and_reported(excon):
     fwd = MailAction.objects.filter(action="send", detail__kind="forward").get()
     assert fwd.person.name == "Omar" and fwd.detail["draft_minutes"] is not None
 
+    pa.person.team_role = TeamRole.objects.create(name="Deputy Team Leader")
+    pa.person.save()
     excon.post("/reports/compile/", {"kind": "live"})
     rep = Report.objects.get(team=team)
     b = rep.figures["inbox"]
+    roles = {g["team_role"]: g for g in b["by_team_role"]}
+    assert [g["team_role"] for g in b["by_team_role"]][-1] == "No team role"
+    assert (roles["Deputy Team Leader"]["members"], roles["Deputy Team Leader"]["wrote"],
+            roles["Deputy Team Leader"]["writing_share_percent"], roles["Deputy Team Leader"]["downloads"]) == (1, 1, 50, 1)
+    assert roles["Deputy Team Leader"]["inbox_actions"] > 0 and roles["No team role"]["members"] == 1
     assert {m["name"]: (m["read"], m["wrote"], m["downloads"]) for m in b["members"]} == {
         "Jane": (1, 1, 1), "Omar": (1, 1, 0)}
     assert b["replied_before_opening_documents"] == ["1-15"] and b["documents"][0]["opened"]
@@ -241,3 +248,5 @@ def test_inbox_habits_are_logged_and_reported(excon):
     assert "Jane" in excon.get(f"/reports/part/{rep.id}/").content.decode()  # ExCon sees names
     x = Report.objects.get(exercise=rep.exercise, team=None).figures
     assert next(t for t in x["teams"] if t["team"] == "Team A")["inbox"]["forwards"] == 1
+    assert {g["team_role"] for g in x["by_team_role"]} == {"Deputy Team Leader", "No team role"}
+    assert "Deputy Team Leader" in printed

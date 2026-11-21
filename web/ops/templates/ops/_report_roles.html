@@ -1,0 +1,5 @@
+<table class="list small fig">
+  <thead><tr><th>Team role</th><th>Members</th><th>Written</th><th>Share of the writing</th><th>Messages read per member</th><th>Files opened</th><th>Inbox actions</th></tr></thead>
+  <tbody>{% for g in groups %}<tr><td>{{ g.team_role }}</td><td>{{ g.members }}</td><td>{{ g.wrote }}</td><td>{% if g.writing_share_percent is not None %}{{ g.writing_share_percent }}%{% else %}—{% endif %}</td>
+    <td>{{ g.read_per_member }}</td><td>{{ g.downloads }}</td><td>{{ g.inbox_actions }}</td></tr>{% endfor %}</tbody>
+</table>

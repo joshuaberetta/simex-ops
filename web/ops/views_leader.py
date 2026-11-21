@@ -27,7 +27,8 @@ def dashboard(request):
         r.thread = r.mail.thread if r.mail_id and r.mail else ""
     for r in data["flagged"]:
         r.band = ai_band(r.ai.ai_written)
-    by_member = Counter(r.person.name if r.person else (r.from_name or "?") for r in reps)
+    by_member = Counter((r.person.name, r.person.team_role.name if r.person.team_role else "") if r.person
+                        else (r.from_name or "?", "") for r in reps)
     # Replies per hour of the exercise, for a small bar strip.
     hours = []
     if reps:
@@ -44,7 +45,8 @@ def dashboard(request):
     ai_list = sorted([r for r in analysed if r.band], key=lambda r: -(r.ai.ai_written or 0))[:30]
     return render(request, "ops/mail/dashboard.html", {
         "team": team, "me": lead, "base": "/inbox", "readonly": True, "leader_tabs": leader_tabs(lead, "dashboard"),
-        "tile": tile, "reps": reps, "members": by_member.most_common(), "hours": hours,
+        "tile": tile, "reps": reps, "members": [(name, role, n) for (name, role), n in by_member.most_common()],
+        "by_role": data["by_role"], "hours": hours,
         "analysed": len(analysed), "likely": likely, "possibly": possibly,
         "mean_wpm": round(sum(wpm) / len(wpm)) if wpm else None, "ai_list": ai_list,
         "flagged": data["flagged"], "commitments": data["commitments"], "asks": data["asks"],
