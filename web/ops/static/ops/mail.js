@@ -5,7 +5,12 @@
   const BASE = CFG.base;
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
-  const csrf = () => ($('[name="csrfmiddlewaretoken"]') || {}).value || "";
+  // The cookie first: signing in again (in another tab) rotates the token and the page's copy goes stale.
+  const csrf = () => (document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/) || [])[1] || ($('[name="csrfmiddlewaretoken"]') || {}).value || "";
+  // A fetch that ended on the sign-in page (the session ended with the page open).
+  const signedOut = (r) => r && (r.redirected && /\/login\//.test(r.url) || r.status === 401);
+  const signInAgain = () => snack("You are signed out. Sign in again (in a new tab), then come back: what you wrote is still here.",
+    { label: "Sign in", run: () => window.open("/login/", "_blank") }, true);
   const BOOK = CFG.book || [];
   const byKey = Object.fromEntries(BOOK.map((b) => [b.key, b]));
   const COLOURS = ["#1a73e8", "#d93025", "#188038", "#e37400", "#9334e6", "#007b83", "#c5221f", "#5f6368", "#b06000", "#1967d2", "#a142f4", "#12b5cb"];
@@ -65,6 +70,10 @@
       $("[data-files]", form).onchange = (e) => { this.files.push(...e.target.files); e.target.value = ""; this.renderFiles(); };
       form.addEventListener("input", (e) => { if (!e.target.matches("[data-chip-input]")) this.touch(); });
       form.addEventListener("submit", (e) => { e.preventDefault(); this.send(); });
+      // Enter in a one-line field (subject, an address being typed) doesn't send the message.
+      form.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !(e.metaKey || e.ctrlKey) && e.target.matches("input:not([type=submit]):not([type=button])")) e.preventDefault();
+      });
       $("[data-discard]", form).onclick = () => this.discard();
       if (form.elements.from) { form.elements.from.addEventListener("change", () => this.paintFrom()); this.paintFrom(); }
       this.timer = setInterval(() => { if (this.dirty) this.save(); }, 4000);
@@ -165,6 +174,7 @@
         try {
           const r = await post(`${BASE}/draft/`, this.data(false));
           if (r.status === 410) return;  // sent or discarded meanwhile: no new draft
+          if (!r.ok) { this.dirty = true; return; }  // signed out or offline: saved on a later try
           const j = await r.json();
           this.form.elements.draft_id.value = j.id;
           $("[data-draft-state]", this.form).textContent = "Draft saved";
@@ -173,6 +183,7 @@
       return this.saving;
     }
     async send() {
+      if (this.sending) return;  // a second press (or Ctrl+Enter) while the first is on its way
       const btn = $(".gm-send", this.form);
       const mb = this.files.reduce((s, f) => s + f.size, 0) / 1048576;
       if (mb > CFG.maxMb) { snack(`Attachments are over ${CFG.maxMb} MB.`); return; }
@@ -189,8 +200,9 @@
       } finally {
         btn.disabled = false;
       }
+      if (signedOut(r)) { this.sending = false; signInAgain(); return; }
       const j = r ? await r.json().catch(() => ({})) : {};
-      if (!r || !r.ok) { this.sending = false; snack(j.error || "Sending failed. Check your connection and try again."); return; }
+      if (!r || !r.ok || !j.ok) { this.sending = false; snack(j.error || "Sending failed. Check your connection and try again."); return; }
       clearInterval(this.timer);
       sessionStorage.setItem("simex-snack", "Message sent");
       if (this.opts.onSent) this.opts.onSent(j);
@@ -627,9 +639,12 @@
 
   const seenKey = `simex-latest:${BASE}`;
   let latest = localStorage.getItem(seenKey) === null ? null : Number(localStorage.getItem(seenKey));
+  let pollSignedOut = false;
   async function poll() {
     try {
-      const r = await fetch(latest === null ? `${BASE}/poll/` : `${BASE}/poll/?since=${latest}`, { credentials: "same-origin" });
+      const r = await fetch(latest === null ? `${BASE}/poll/` : `${BASE}/poll/?since=${latest}`, { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } });
+      if (signedOut(r)) { if (!pollSignedOut) signInAgain(); pollSignedOut = true; return; }
+      pollSignedOut = false;
       if (!r.ok) return;
       const j = await r.json();
       const n = j.unread;
@@ -659,6 +674,7 @@
         }
         if (!m.other && CFG.folder === "inbox" && bulk && !$$('input[name="threads"]:checked').length && (!win || win.hidden)) {
           setTimeout(() => {  // show the new row; the alert comes back after the reload
+            if ($$('input[name="threads"]:checked').length || (win && !win.hidden) || $("[data-composer] textarea:focus")) return;
             sessionStorage.setItem("simex-snack-new", JSON.stringify({ text: `New message from ${m.from}: ${m.subject}${more}`, url }));
             location.reload();
           }, 4000);

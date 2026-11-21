@@ -85,7 +85,8 @@ def guess(r: Response):
     team, preferring the same subject. Marked "guess"."""
     if not r.persona:
         return
-    qs = Message.objects.filter(from_addr__icontains=f"<{r.persona}@", status="sent", sent_at__lte=r.received_at,
+    qs = Message.objects.filter(Q(persona=r.persona) | Q(from_addr__icontains=f"<{r.persona}@"), status="sent",
+                                sent_at__lte=r.received_at,
                                 kind__in=["live", "reply", "followup", "leader"])
     if r.team_id:
         qs = qs.filter(Q(team_id=r.team_id) | Q(team__isnull=True) | Q(inbox_team_id=r.team_id))
@@ -231,8 +232,8 @@ def _new_email(rid, data):
         received = timezone.now()
     r = Response(channel="email", resend_id=rid, from_addr=addr, from_name=name, to=to, cc=cc,
                  subject=data.get("subject") or "", persona=persona, reply_token=token, received_at=received)
-    if _ours(addr):
-        r.status = "ignored"  # our own all-Bcc emails arrive here too
+    if _ours(addr) or is_auto_reply(r.subject):
+        r.status = "ignored"  # our own all-Bcc emails arrive here too; so do out-of-office answers
     match_email(r)
     r.save()
     audit("inbound", f"{addr} -> {persona or '?'}: {r.subject[:80]}")
@@ -240,6 +241,27 @@ def _new_email(rid, data):
     from . import npc
     npc.on_response(r)  # answered once its content is fetched
     return r
+
+
+AUTO_SUBJECT = re.compile(r"^\s*(automatic reply|auto(matic)?[- ]?reply|out of (the )?office|autoreply|r[ée]ponse automatique|abwesenheit)\b", re.I)
+
+
+def is_auto_reply(subject, headers=None):
+    """An out-of-office or other automatic answer (RFC 3834 Auto-Submitted, the usual X- headers,
+    or an Outlook-style subject): kept, but not a team's reply (no AI persona answer, no figures)."""
+    if AUTO_SUBJECT.match(subject or ""):
+        return True
+    items = headers.items() if isinstance(headers, dict) else (
+        [(h.get("name"), h.get("value")) for h in headers if isinstance(h, dict)] if isinstance(headers, list) else [])
+    h = {str(k or "").lower(): str(v or "").strip().lower() for k, v in items}
+    return (h.get("auto-submitted", "no") not in ("", "no") or "x-autoreply" in h or "x-autorespond" in h
+            or h.get("precedence") == "auto_reply")
+
+
+def _ignore_auto(r):
+    r.status = "ignored"
+    from .models import NpcReply
+    NpcReply.objects.filter(response=r, status="queued").update(status="skipped", note="An automatic reply (out of office).")
 
 
 def fetch(response_id):
@@ -259,10 +281,14 @@ def fetch(response_id):
                                               content_type=a.get("content_type") or "application/octet-stream",
                                               size=size or len(data or b""), data=data)
         r.fetched, r.error = True, None
+        if r.status != "ignored" and is_auto_reply(r.subject, r.headers):
+            _ignore_auto(r)
     except Exception as e:  # keep the row; Sync retries
         log.exception("fetch of received email failed")
         r.error = f"{type(e).__name__}: {e}"
-    r.save()
+    # Only what the fetch filled in: ExCon may have matched or reviewed it in the meantime.
+    r.save(update_fields=["text", "html", "headers", "message_id_header", "subject", "fetched", "error"]
+           + (["status"] if r.status == "ignored" else []))
     if r.fetched:
         notices.reply(r)  # now with its opening words
 

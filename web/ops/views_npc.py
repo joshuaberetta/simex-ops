@@ -210,7 +210,10 @@ def npc_reply_action(request, jid):
             messages.error(request, "The answer is empty.")
         else:
             npc.send(job, body, _u(request))
-            messages.success(request, f"Sent to {job.team.name}.")
+            if job.status == "failed":
+                messages.error(request, f"Not sent to {job.team.name}: {job.error}")
+            else:
+                messages.success(request, f"Sent to {job.team.name}.")
     elif act == "skip" and job.status in ("queued", "held", "failed"):
         NpcReply.objects.filter(pk=job.pk).update(status="skipped", note=f"Skipped by {_u(request)}.", updated_at=now)
     elif act == "retry" and job.status in ("failed", "skipped"):

@@ -19,11 +19,12 @@ import math
 import random
 import re
 import threading
+import uuid
 from datetime import timedelta
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
 
 from . import ai, conf, delivery, inbound, notices
@@ -259,13 +260,19 @@ def send(job, body=None, user="npc"):
     if body is not None:
         job.body = body.strip()
     key = f"npc-{job.id}"
-    m = Message.objects.filter(idem_key=key).first()
-    if m is None:
-        m = delivery.answer(job.response, job.body, user=user, idem_key=key, npc=True)
+    m = Message.objects.filter(Q(idem_key=key) | Q(idem_key__startswith=f"{key}-r")).order_by("-id").first()
+    if m is None or m.status == "failed":  # trying again: a new key, so the provider doesn't replay the failure
+        m = delivery.answer(job.response, job.body, user=user, npc=True,
+                            idem_key=key if m is None else f"{key}-r{uuid.uuid4().hex[:6]}")
     elif m.status == "pending":
         delivery.deliver([m])
-    job.message, job.status = m, "sent"
-    job.note = "" if user == "npc" else f"Sent by {user}."
+    m.refresh_from_db()
+    job.message = m
+    if m.status == "failed":
+        job.status, job.error = "failed", f"Not delivered: {m.error or 'unknown error'}"[:500]
+    else:
+        job.status, job.error = "sent", None
+        job.note = "" if user == "npc" else f"Sent by {user}."
     job.save()
     return m
 

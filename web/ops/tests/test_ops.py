@@ -1291,3 +1291,83 @@ def test_email_answer_sends_its_files():
     assert m.status == "sent"
     att = lm.sent[-1][0]["attachments"]
     assert [a["filename"] for a in att] == ["photo.png"]
+
+
+def test_guess_matches_persona_with_its_own_inapp_address():
+    """A fresh message to a persona shown as j.mwangi@ndma.go.ep is linked to its latest inject."""
+    from ops.models import Sender
+    Sender.objects.create(local_part="ndma-dir", display_name="NDMA", inapp_local="j.mwangi", domain="ndma.go.ep")
+    arm()
+    inj = Inject.objects.create(mel_id="Z-1", sender_local="ndma-dir", subject="Situation", body="x", channel="inapp",
+                                delivery="each_team", status="scheduled", send_at=timezone.now() - timedelta(seconds=5))
+    pa = participant("a")
+    delivery.tick()
+    pa.post("/inbox/send/", {"to": "p:ndma-dir", "subject": "Something else", "body": "Hello"})
+    r = Response.objects.get()
+    assert (r.match, r.inject_id) == ("guess", inj.id)
+
+
+def test_send_to_many_recipients_keeps_every_name():
+    """The To line of a message to a dozen personas is longer than 500 characters (Postgres used to refuse it)."""
+    from ops.models import Sender
+    for i in range(14):
+        Sender.objects.create(local_part=f"ministry-official-{i}", display_name=f"Ministry of Interior Official {i}")
+    pa = participant("a")
+    to = ",".join(f"p:ministry-official-{i}" for i in range(14))
+    r = pa.post("/inbox/send/", {"to": to, "cc": to, "subject": "Sitrep", "body": "All"}, HTTP_X_REQUESTED_WITH="fetch")
+    assert r.status_code == 200 and r.json()["ok"]
+    sent = Mail.objects.get(team__code="a", owner=None, folder="sent")
+    assert len(sent.to_label) > 500 and "Official 13" in sent.to_label and len(sent.cc_label) > 500
+
+
+def test_signed_out_page_is_told_so():
+    """A page left open after the session ended gets 401 (not the sign-in page as a "success")."""
+    c = Client()
+    r = c.post("/inbox/send/", {"to": "p:x", "body": "lost?"}, HTTP_X_REQUESTED_WITH="fetch")
+    assert r.status_code == 401 and "signed out" in r.json()["error"]
+    assert c.get("/inbox/poll/?since=3", HTTP_X_REQUESTED_WITH="fetch").status_code == 401
+    assert c.get("/inbox/").status_code == 302  # a plain visit still goes to the sign-in page
+
+
+def test_out_of_office_answers_are_kept_but_ignored():
+    assert inbound.is_auto_reply("Automatic reply: Update for Team B")
+    assert inbound.is_auto_reply("Re: x", {"Auto-Submitted": "auto-replied"})
+    assert inbound.is_auto_reply("Re: x", [{"name": "X-Autoreply", "value": "yes"}])
+    assert not inbound.is_auto_reply("Re: x", {"Auto-Submitted": "no", "Precedence": "list"})
+    assert not inbound.is_auto_reply("Re: automatic reply settings for the warehouse")
+    mailer.get().received["rcv-oof"] = {"text": "I am away", "html": None, "headers": {"Auto-Submitted": "auto-replied"},
+                                        "message_id": "<o@b>", "attachments": []}
+    r = inbound._new_email("rcv-oof", {"from": "real-b@kobotoolbox.org", "to": ["undac-b-tl@simex.kobolabs.dev"],
+                                       "subject": "Re: Update"})
+    assert r.status == "new"
+    inbound.fetch(r.id)
+    r.refresh_from_db()
+    assert r.fetched and r.status == "ignored" and r.text == "I am away"
+
+
+def test_preflight_runs_and_flags_placeholder_teams():
+    from io import StringIO
+    from django.core.management import call_command
+    out = StringIO()
+    call_command("preflight", stdout=out)
+    text = out.getvalue()
+    assert "ERROR  Team A: looks like a seeded placeholder team" in text and "== Injects" in text
+
+
+def test_push_goes_through_a_few_worker_threads(monkeypatch):
+    """Many Mails at once (an inject to every team) share a few push threads, not one each."""
+    import threading
+    from ops import push
+    done, names = threading.Semaphore(0), set()
+
+    def fake_send_team(*args):
+        names.add(threading.current_thread().name)
+        done.release()
+    monkeypatch.setattr(push, "send_team", fake_send_team)
+    before = threading.active_count()
+    for i in range(30):
+        push._start(i, {"title": "x"}, None)
+    for _ in range(30):
+        assert done.acquire(timeout=5)
+    assert names <= {f"push-{i}" for i in range(push.WORKERS)}
+    assert threading.active_count() - before <= push.WORKERS

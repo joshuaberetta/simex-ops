@@ -28,7 +28,7 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Prefetch, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -386,8 +386,13 @@ def auto_label(mail, kind):
     name, colour = AUTO_LABELS[kind]
     box = {"team_id": mail.team_id, "owner_id": mail.owner_id}
     label = (MailLabel.objects.filter(**box, auto=kind).first()
-             or MailLabel.objects.filter(**box, name__iexact=name).first()
-             or MailLabel.objects.create(**box, name=name, colour=colour, auto=kind))
+             or MailLabel.objects.filter(**box, name__iexact=name).first())
+    if not label:
+        try:
+            with transaction.atomic():  # two members' first mails to the leader at once
+                label = MailLabel.objects.create(**box, name=name, colour=colour, auto=kind)
+        except IntegrityError:
+            label = MailLabel.objects.get(**box, name=name)
     if label.auto != kind:
         MailLabel.objects.filter(pk=label.pk).update(auto=kind)
     ThreadLabel.objects.get_or_create(label=label, thread=mail.thread)
@@ -794,7 +799,7 @@ def _label_name(v, name, exclude=None):
 def labels_save(request, v):
     """Create (op=create, optionally applied to threads), rename, recolour or delete a label."""
     P, op = request.POST, request.POST.get("op")
-    label = None if op == "create" else get_object_or_404(v.labels(), pk=int(P.get("id") or 0))
+    label = None if op == "create" else get_object_or_404(v.labels(), pk=_id(P.get("id")))
     try:
         if op == "create":
             label = MailLabel.objects.create(**v.box, name=_label_name(v, P.get("name")))

@@ -267,3 +267,30 @@ def test_seed_profiles_from_the_injects(excon, fake):
     text = json.dumps(fake.calls[-1]["messages"])
     assert "three hospitals are full" in text and "[SENT]" in text and "PLANNED, NOT SEEN" in text
     assert not npc.seedable()
+
+
+def test_npc_answer_not_delivered_is_failed_and_retry_sends(excon, fake):
+    """An answer the mail provider refused is shown failed (not "sent"), and trying again delivers it."""
+    from django.conf import settings
+    from ops import inbound, mailer
+    from ops.models import Message, NpcReply, Response
+    from ops.tests.test_ops import participant
+
+    class Failing(mailer.LogMailer):
+        def send(self, payload, key):
+            raise mailer.SendError("Resend 422: bad", retryable=False)
+
+    make_npc("instant")
+    pa = participant("test", "Jo")
+    r = inbound._new_email("re_1", {"from": f"Jo <{pa.person.email}>", "to": [f"gov-plaida@{settings.MAIL_DOMAIN}"],
+                                    "subject": "Roads", "created_at": timezone.now().isoformat()})
+    Response.objects.filter(pk=r.pk).update(fetched=True, text="Which roads?")
+    due_now()
+    mailer.set_mailer(Failing())
+    npc.tick()
+    job = NpcReply.objects.get()
+    assert job.status == "failed" and "422" in job.error
+    mailer.set_mailer(mailer.LogMailer())
+    npc.send(job)
+    assert job.status == "sent"
+    assert list(Message.objects.filter(npc=True).values_list("status", flat=True).order_by("id")) == ["failed", "sent"]

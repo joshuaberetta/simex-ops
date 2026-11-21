@@ -48,6 +48,8 @@ AI analysis (`ops/ai.py`, Dashboard tab, manual 5.7): `AI_PROVIDER` = `anthropic
 
 `../.do/app.yaml` (app `simex-ops`, components `web` and `scheduler`, both built from this directory). A push to `main` deploys, so run the tests first. Secrets are not in the spec: `.venv/bin/python .do/render_spec.py <app-id>` (from the repo root) renders a copy with them for `doctl apps update <app-id> --spec .do/app.rendered.yaml`; delete it afterwards. The database is its own database and user on an existing cluster, with the app in the cluster's trusted sources.
 
+Before a live exercise: `python manage.py preflight` (on the web component's console) is a read-only check of settings, teams and logins, the scheduler and every unsent inject, as OK / CHECK / ERROR lines.
+
 ## Layout
 
 `simex/` settings and URLs · `ops/models.py` · `ops/conf.py` settings kept in the database · `ops/importer.py`, `render.py`, `mailer.py` (ported) · `ops/documents.py` zip of inject documents · `ops/legacy_import.py` backup from the first app · `ops/delivery.py` scheduler and delivery for both channels · `ops/inbound.py` email webhook, in-app responses, engagement · `ops/views_excon.py` ExCon tabs · `ops/views_inbox.py` the participant mail client (also mounted read-only at `/inbox/as/<team>/`) · `ops/views_leader.py` team leaders' views · `ops/signin.py` QR sign-in · `ops/push.py` Web Push · `ops/ai.py`, `views_ai.py`, `checks.py` Claude analysis, drafts and inject checks · `ops/npc.py`, `views_npc.py` AI personas · `ops/report.py`, `views_report.py` reports · `ops/notices.py` ExCon notifications · `ops/templates/ops/mail/` participant templates, `ops/static/ops/mail.{css,js}` · `ops/tests/`.

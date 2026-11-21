@@ -313,7 +313,7 @@ class Mail(models.Model):
     thread = models.CharField(max_length=40, default="")
     from_name = models.CharField(max_length=200, default="")
     from_addr = models.CharField(max_length=320, default="")
-    to_label = models.CharField(max_length=500, default="")  # shown in the To line
+    to_label = models.TextField(default="")  # shown in the To line (every recipient)
     to_person = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     persona = models.CharField(max_length=120, blank=True, default="")  # the persona on the other side
     to_team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")  # team-to-team
@@ -332,7 +332,7 @@ class Mail(models.Model):
     starred = models.BooleanField(default=False)
     archived = models.BooleanField(default=False)
     trashed_at = models.DateTimeField(null=True, blank=True)
-    cc_label = models.CharField(max_length=500, blank=True, default="")
+    cc_label = models.TextField(blank=True, default="")
     # Address-book keys chosen in compose ({"to": ["p:cnn", "t:3"], "cc": [...], "bcc": [...]}),
     # kept on drafts and sent items.
     recipients = models.JSONField(default=dict, blank=True)

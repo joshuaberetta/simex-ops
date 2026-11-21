@@ -7,6 +7,7 @@ from functools import wraps
 
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
+from django.http import JsonResponse
 
 
 def is_excon(user):
@@ -59,6 +60,8 @@ def login_required_any(view):
     @wraps(view)
     def wrapper(request, *args, **kwargs):
         if not request.user.is_authenticated:
+            if request.headers.get("x-requested-with") == "fetch":  # the page's script says so, keeping the text
+                return JsonResponse({"error": "You are signed out: sign in again."}, status=401)
             return redirect_to_login(request.get_full_path())
         return view(request, *args, **kwargs)
     return wrapper
