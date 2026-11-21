@@ -33,7 +33,7 @@ from django.conf import settings
 from django.db.models import F, Max, Sum
 from django.utils import timezone
 
-from . import checks, conf, inbound
+from . import checks, conf, inbound, notices
 from .render import fill
 from .models import (DELIVERY_MODES, AiCall, AiGrade, AiReport, Inject, InjectDraft, InjectReview, ReplyAnalysis, Response,
                      RubricCriterion, Sender, Team)
@@ -383,6 +383,7 @@ def analyse_reply(r):
     a.language = (out.get("language") or "")[:20]
     a.words, a.wpm = words, wpm
     a.save()
+    notices.flag(a)
     return a
 
 
@@ -828,6 +829,7 @@ def run_summary(report_id):
     if not text:
         rep.status, rep.error = "failed", "No replies yet."
         rep.save()
+        notices.summary_done(rep)
         return rep
     teams = ", ".join(Team.objects.filter(active=True, is_test=(rep.kind == "test")).values_list("name", flat=True))
     try:
@@ -841,6 +843,7 @@ def run_summary(report_id):
         log.exception("summary failed")
         rep.status, rep.error = "failed", f"{type(e).__name__}: {e}"
     rep.save()
+    notices.summary_done(rep)
     return rep
 
 
@@ -1076,6 +1079,7 @@ def run_draft(draft_id):
         log.exception("draft failed")
         d.status, d.error = "failed", f"{type(e).__name__}: {e}"
     d.save()
+    notices.draft_done(d)
     return d
 
 

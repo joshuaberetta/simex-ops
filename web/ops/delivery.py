@@ -19,7 +19,7 @@ from django.db import IntegrityError, connection, transaction
 from django.db.models import F
 from django.utils import timezone
 
-from . import conf, mailer, push, render
+from . import conf, mailer, notices, push, render
 from .models import (Attachment, Inject, Mail, MailAttachment, Message, MessageAttachment, Person, Team, TestRun,
                      TestRunItem, audit)
 
@@ -261,6 +261,7 @@ def process_live(inject_id):
         inj.status, inj.last_error = "failed", "; ".join(warnings) or "Nothing to send."
         inj.save(update_fields=["status", "last_error"])
         audit("live_failed", f"{inj.mel_id}: {inj.last_error}")
+        notices.inject(inj, "failed", inj.last_error)
         return
     deliver(msgs)
     status, err = _outcome(msgs)
@@ -268,6 +269,8 @@ def process_live(inject_id):
         Inject.objects.filter(pk=inj.pk, status="sending").update(status=status, last_error=err, sent_at=timezone.now())
         audit(f"live_{status}", f"{inj.mel_id}: {sum(m.status == 'sent' for m in msgs)}/{len(msgs)} deliveries"
               + (f"; {err}" if err else ""))
+        if status in ("failed", "partial"):
+            notices.inject(inj, status, err)
 
 
 def start_live(inj, retry_failed=False, user=""):
@@ -537,6 +540,7 @@ def tick():
     for inj in Inject.objects.filter(status="scheduled", send_at__isnull=False, send_at__lt=now - grace):
         if Inject.objects.filter(pk=inj.pk, status="scheduled").update(status="overdue"):
             audit("overdue", f"{inj.mel_id} (due {timezone.localtime(inj.send_at):%Y-%m-%d %H:%M})")
+            notices.inject(inj, "overdue")
     # Messages a crashed process left mid-claim go back to pending (email: Resend's
     # idempotency key prevents a duplicate).
     Message.objects.filter(status="sending", claimed_at__lt=now - STALE_SENDING).update(status="pending")
@@ -582,6 +586,7 @@ def _guarded(fn, arg):
                 Inject.objects.filter(pk=inj.pk).update(last_error=err)
             elif Inject.objects.filter(pk=inj.pk, status="sending").update(status="failed", last_error=err):
                 audit("live_failed", f"{inj.mel_id}: {err}")
+                notices.inject(inj, "failed", err)
         elif fn is process_test_item:
             TestRunItem.objects.filter(pk=arg, status="sending").update(status="failed", error=err)
 

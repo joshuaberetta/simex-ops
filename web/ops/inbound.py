@@ -16,7 +16,7 @@ from django.db import connection
 from django.db.models import Q
 from django.utils import timezone
 
-from . import mailer, render
+from . import mailer, notices, render
 from .models import Event, Message, Person, Response, ResponseAttachment, audit
 
 log = logging.getLogger("simex.inbound")
@@ -140,6 +140,7 @@ def from_mail(mail, personas):
         guess(r)
     r.save()
     audit("inapp_response", f"{mail.team.name} -> {', '.join(personas)}: {mail.subject[:80]}")
+    notices.reply(r)
     return r
 
 
@@ -233,6 +234,7 @@ def _new_email(rid, data):
     match_email(r)
     r.save()
     audit("inbound", f"{addr} -> {persona or '?'}: {r.subject[:80]}")
+    notices.reply(r)
     return r
 
 
@@ -257,6 +259,8 @@ def fetch(response_id):
         log.exception("fetch of received email failed")
         r.error = f"{type(e).__name__}: {e}"
     r.save()
+    if r.fetched:
+        notices.reply(r)  # now with its opening words
 
 
 def fetch_async(response_id):

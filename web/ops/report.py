@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from django.db.models import Q
 from django.utils import timezone
 
-from . import ai, inbound, render
+from . import ai, inbound, notices, render
 from .models import (AiCall, Event, ExerciseReport, Grade, Inject, InjectDraft, Mail, MailAction, MailLabel, Message,
                      Person, PushSubscription, Report, Response,
                      RubricCriterion, Team)
@@ -767,6 +767,7 @@ def _write_all(ex_id):
             list(pool.map(lambda rid: _thread(write, rid), team_ids))
     for rid in Report.objects.filter(exercise_id=ex_id, team=None).values_list("id", flat=True):
         write(rid)
+    notices.reports_done(ExerciseReport.objects.get(pk=ex_id))
 
 
 def team_request(rep):

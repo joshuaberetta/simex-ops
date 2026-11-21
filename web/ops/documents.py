@@ -12,6 +12,7 @@ import threading
 import zipfile
 from pathlib import PurePosixPath
 
+from . import notices
 from .importer import LOCKED
 from .models import Attachment, AttachmentImport, Inject, audit
 
@@ -103,11 +104,13 @@ def run(job_id, path):
             job.status = "done"
             job.save()
         audit("attachments_zip", f"{job.filename}: {job.attached} attached", job.user)
+        notices.attachments_done(job)
     except Exception as e:
         log.exception("zip import %s failed", job_id)
         job.status, job.error = "failed", str(e)[:1000]
         job.save()
         audit("attachments_zip_failed", f"{job.filename}: {e}", job.user)
+        notices.attachments_done(job)
     finally:
         try:
             os.unlink(path)

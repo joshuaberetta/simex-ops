@@ -70,13 +70,22 @@ if (fill) {
   });
 }
 
-// ExCon alerts without reloading: new replies, AI flags that need attention, failed and overdue
-// injects. A toast on the page, a chime, a desktop notification and the tab title / icon.
-if (window.simexNotify && document.getElementById("toasts")) {
+// ExCon's Notifications panel, kept up to date without reloading: new replies, AI flags that
+// need attention, failed and overdue injects, finished background jobs. Read and dismissed on
+// the server, per ExCon user. Something new also gets a short toast (panel closed), a chime,
+// a desktop notification and the tab title / icon.
+const panel = document.getElementById("notices");
+if (window.simexNotify && panel) {
   const N = window.simexNotify;
   const box = document.getElementById("toasts");
   const btn = document.querySelector("[data-alerts]");
+  const toggle = document.querySelector("[data-nt-toggle]");
+  const list = panel.querySelector("[data-nt-list]"), empty = panel.querySelector("[data-nt-empty]");
+  const pin = panel.querySelector("[data-nt-pin]");
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const csrf = () => (document.querySelector('[name="csrfmiddlewaretoken"]') || {}).value || "";
+  const post = (url, data) => fetch(url, { method: "POST", body: new URLSearchParams(data || {}), credentials: "same-origin",
+                                           headers: { "X-CSRFToken": csrf() } });
   const paint = () => {
     if (!btn) return;
     const on = N.enabled(), denied = N.permission() === "denied";
@@ -93,58 +102,127 @@ if (window.simexNotify && document.getElementById("toasts")) {
   };
   paint();
 
-  function toast(html, cls, url) {
-    const el = document.createElement("div");
-    el.className = "toast " + (cls || "");
-    el.innerHTML = html + '<button type="button" class="x" aria-label="Dismiss">✕</button>';
-    el.querySelector(".x").onclick = (e) => { e.stopPropagation(); el.remove(); };
-    if (url) { el.style.cursor = "pointer"; el.onclick = () => { location.href = url; }; }
-    box.prepend(el);
-    while (box.children.length > 5) box.lastChild.remove();
-    setTimeout(() => el.classList.add("old"), 60000);
+  // --- the panel ---
+  const ICON = { reply: "✉", flag: "⚑", delivery: "⚠", system: "⚙" };
+  let items = [], version = "", kind = localStorage.getItem("excon-notices-kind") || "";
+  const pinned = () => document.body.classList.contains("nt-pinned");
+  const isOpen = () => !panel.hidden;
+  function show(on) {
+    panel.hidden = !on;
+    toggle.setAttribute("aria-expanded", String(on));
+    toggle.classList.toggle("on", on);
+    if (on) box.replaceChildren();
+  }
+  function setPinned(on) {
+    document.body.classList.toggle("nt-pinned", on);
+    localStorage.setItem("excon-notices-pinned", on ? "1" : "0");
+    pin.setAttribute("aria-pressed", String(on));
+    pin.title = on ? "Unpin (close it when you click elsewhere)" : "Keep open beside the page";
+    if (on) show(true);
+  }
+  const ago = (iso) => {
+    const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
+    if (s < 60) return "just now";
+    if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+    return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+  };
+  function render() {
+    const shown = items.filter((n) => !kind || n.kind === kind);
+    panel.querySelectorAll("[data-nt-kind]").forEach((b) => b.classList.toggle("on", b.dataset.ntKind === kind));
+    list.innerHTML = shown.map((n) => `
+      <li class="nt-item ${n.kind}${n.read ? "" : " unread"}" data-id="${n.id}">
+        <a href="${esc(n.url || "#")}" title="${new Date(n.at).toLocaleString("en-GB")}">
+          <span class="nt-ic" aria-hidden="true">${ICON[n.kind] || "•"}</span>
+          <span class="nt-text"><span class="nt-title">${esc(n.title)}</span>
+            ${n.body ? `<span class="nt-body">${esc(n.body)}</span>` : ""}
+            ${n.note ? `<span class="nt-note">${esc(n.note)}</span>` : ""}
+            <span class="nt-time">${ago(n.at)}</span></span>
+        </a>
+        <button type="button" class="x" data-nt-dismiss="${n.id}" aria-label="Dismiss" title="Dismiss">✕</button>
+      </li>`).join("");
+    empty.hidden = shown.length > 0;
+  }
+  function count(n) {
+    const b = toggle.querySelector("[data-nt-count]");
+    b.textContent = n > 99 ? "99+" : n;
+    b.hidden = !n;
   }
 
-  // Seen markers are shared by every ExCon tab (localStorage), so moving between pages
-  // neither repeats nor misses an alert.
-  const get = (k) => Number(localStorage.getItem(k)) || 0;
-  let last = null;
+  toggle.onclick = (e) => { e.stopPropagation(); show(!isOpen()); };
+  pin.onclick = () => setPinned(!pinned());
+  panel.querySelector("[data-nt-close]").onclick = () => { if (pinned()) setPinned(false); show(false); };
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && isOpen() && !pinned()) show(false); });
+  document.addEventListener("click", (e) => {
+    // (a dismissed row is already gone from the page when this runs)
+    if (isOpen() && !pinned() && e.target.isConnected && !panel.contains(e.target) && !e.target.closest("#toasts")) show(false);
+  });
+  panel.querySelectorAll("[data-nt-kind]").forEach((b) => b.onclick = () => {
+    kind = b.dataset.ntKind;
+    localStorage.setItem("excon-notices-kind", kind);
+    render();
+  });
+  list.addEventListener("click", async (e) => {
+    const x = e.target.closest("[data-nt-dismiss]");
+    if (x) {
+      e.preventDefault();
+      items = items.filter((n) => String(n.id) !== x.dataset.ntDismiss);
+      render();
+      await post(`/excon/notices/${x.dataset.ntDismiss}/dismiss/`);
+      poll();
+      return;
+    }
+    const a = e.target.closest("a");
+    if (a && a.getAttribute("href") === "#") e.preventDefault();
+  });
+  const all = (url, label) => async () => {
+    const what = kind ? panel.querySelector(`[data-nt-kind="${kind}"]`).textContent.toLowerCase() : "notifications";
+    if (label && !confirm(`${label} ${what}?`)) return;
+    await post(url, { kind });
+    poll();
+  };
+  panel.querySelector("[data-nt-readall]").onclick = all("/excon/notices/read-all/");
+  panel.querySelector("[data-nt-clear]").onclick = all("/excon/notices/clear/", "Clear all");
+  if (pinned()) setPinned(true);
+  setInterval(render, 30000);  // "3 min ago"
+
+  function toast(n) {
+    if (isOpen()) return;
+    const el = document.createElement(n.url ? "a" : "div");
+    el.className = "toast " + n.kind;
+    if (n.url) el.href = n.url;
+    el.innerHTML = `<b>${esc(n.title)}</b>${n.body ? `<div>${esc(n.body)}</div>` : ""}${n.note ? `<div class="muted">${esc(n.note)}</div>` : ""}`
+      + '<button type="button" class="x" aria-label="Close">✕</button>';
+    el.querySelector(".x").onclick = (e) => { e.preventDefault(); e.stopPropagation(); el.remove(); };
+    box.prepend(el);
+    while (box.children.length > 3) box.lastChild.remove();
+    setTimeout(() => el.remove(), 6000);
+  }
+
+  // Which notices this browser has already alerted about, shared by every ExCon tab
+  // (localStorage), so moving between pages neither repeats nor misses an alert.
+  const SEEN = "excon-notice-seen";
+  function alertNew() {
+    const max = Math.max(0, ...items.map((n) => n.id));
+    const seen = localStorage.getItem(SEEN);
+    if (seen === null || max < Number(seen)) { localStorage.setItem(SEEN, max); return; }  // first visit, or data restored
+    const fresh = items.filter((n) => n.id > Number(seen) && !n.read);
+    if (max > Number(seen)) localStorage.setItem(SEEN, max);
+    if (!fresh.length) return;
+    fresh.slice(0, 3).reverse().forEach(toast);
+    const loud = fresh.filter((n) => n.kind !== "system" || n.title.startsWith("The scheduler"));
+    const first = ["flag", "delivery", "reply", "system"].map((k) => loud.find((n) => n.kind === k)).find(Boolean);
+    if (first) N.alert({ title: first.title + (loud.length > 1 ? ` (+${loud.length - 1})` : ""), body: first.body,
+                         url: first.url ? location.origin + first.url : "", tag: `notice-${first.id}`, flashText: first.title });
+  }
+
   async function poll() {
     try {
-      // First visit: no markers yet, so take the current state as seen.
-      const first = localStorage.getItem("excon-since") === null || localStorage.getItem("excon-ai") === null;
-      const r = await fetch(first ? "/excon/poll/" : `/excon/poll/?since=${get("excon-since")}&ai=${get("excon-ai")}`,
-                            { credentials: "same-origin" });
+      const r = await fetch(`/excon/poll/?v=${encodeURIComponent(version)}`, { credentials: "same-origin" });
       if (!r.ok) return;
       const j = await r.json();
-      if (first || j.max < get("excon-since") || j.ai_max < get("excon-ai")) {  // first visit, or the data was restored
-        localStorage.setItem("excon-since", j.max); localStorage.setItem("excon-ai", j.ai_max);
-      }
-      const fresh = j.items.filter((x) => x.id > get("excon-since"));
-      const flags = j.flags.filter((x) => x.id > get("excon-ai"));
-      if (fresh.length) localStorage.setItem("excon-since", Math.max(...fresh.map((x) => x.id)));
-      if (j.max > get("excon-since") && !fresh.length) localStorage.setItem("excon-since", j.max);
-      if (flags.length) localStorage.setItem("excon-ai", Math.max(...flags.map((x) => x.id)));
-      if (j.ai_max > get("excon-ai")) localStorage.setItem("excon-ai", j.ai_max);
-      for (const x of fresh) {
-        toast(`<b>${esc(x.team)}${x.kind === "test" ? " (test)" : ""}</b> → ${esc(x.persona)}<div>${esc(x.subject)}</div><div class="muted">${esc(x.preview)}</div>`,
-              "reply", `/replies/${x.id}/`);
-      }
-      for (const f of flags) {
-        toast(`<b>⚑ ${esc(f.team)}: ${f.flags.includes("safety") ? "safety concern" : "needs ExCon attention"}</b><div>${esc(f.summary)}</div>`,
-              "flag", `/replies/${f.response}/`);
-      }
-      if (fresh.length || flags.length) {
-        const x = fresh[0], f = flags[0];
-        N.alert(f ? { title: `⚑ ${f.team}: needs attention`, body: f.summary, url: `${location.origin}/replies/${f.response}/`, tag: `flag-${f.id}` }
-                  : { title: `${x.team} → ${x.persona}${fresh.length > 1 ? ` (+${fresh.length - 1})` : ""}`, body: x.subject,
-                      url: `${location.origin}/replies/${x.id}/`, tag: `reply-${x.id}`, flashText: `New reply from ${x.team}` });
-      }
-      if (last && (j.failed > last.failed || j.overdue > last.overdue)) {
-        const what = j.failed > last.failed ? "An inject failed to deliver" : "An inject is overdue";
-        toast(`<b>${what}</b><div>Check the Injects tab.</div>`, "flag", `/injects/?status=${j.failed > last.failed ? "failed" : "overdue"}`);
-        N.alert({ title: what, body: "Check the Injects tab.", url: `${location.origin}/injects/`, tag: `inj-${j.failed}-${j.overdue}` });
-      }
-      last = j;
+      if (j.notices) { items = j.notices; version = j.v; render(); alertNew(); }
+      count(j.unread);
       // the Replies tab badge and the tab title / icon
       const tab = document.querySelector('.tabs a[href="/replies/"]');
       if (tab) {
@@ -152,8 +230,8 @@ if (window.simexNotify && document.getElementById("toasts")) {
         if (j.new && !b) { b = document.createElement("span"); b.className = "badge"; tab.append(" ", b); }
         if (b) { b.textContent = j.new; b.hidden = !j.new; }
       }
-      N.title(j.new);
-      N.favicon(j.new, "#17202c");
+      N.title(j.unread);
+      N.favicon(j.unread, "#17202c");
     } catch (e) { /* offline: next time */ }
   }
   poll();

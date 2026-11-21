@@ -20,12 +20,12 @@ from django.utils import timezone
 from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_POST
 
-from . import (ai, legacy_import, backup, checks, conf, delivery, documents, importer, inbound, mailer, render as rnd,
-               signin)
+from . import (ai, legacy_import, backup, checks, conf, delivery, documents, importer, inbound, mailer, notices,
+               render as rnd, signin)
 from .access import excon_required
 from .models import (CHANNELS, DELIVERY_MODES, ROLES, STATUSES, AiGrade, Attachment, AttachmentImport, Audit, Grade,
                      ImportBatch, Inject, InjectDraft, InjectReview, Mail, MailAttachment, MailLabel, Message,
-                     MessageAttachment, Person, PushSubscription, ReplyAnalysis, Response,
+                     MessageAttachment, Notice, Person, PushSubscription, ReplyAnalysis, Response,
                      ResponseAttachment, RubricCriterion, Sender, Team, TeamRole, TestRun, TestRunItem, audit)
 
 MAX_ATTACHMENT = documents.MAX_ATTACHMENT
@@ -889,39 +889,37 @@ def inboxes(request):
 
 @excon_required
 def excon_poll(request):
-    """ExCon pages poll this for alerts without reloading: new replies since `since` (a
-    Response id), AI flags that need attention since `ai` (a ReplyAnalysis id), and the
-    counts in the status bar."""
-    from .models import ReplyAnalysis
-    def num(k):
-        try:
-            return int(request.GET.get(k) or 0)
-        except ValueError:
-            return 0
-    since, ai_since = num("since"), num("ai")
-    live = Response.objects.exclude(status="ignored")
-    items = []
-    if "since" in request.GET:
-        for r in live.filter(id__gt=since).select_related("team", "person").order_by("id")[:10]:
-            items.append({"id": r.id, "team": r.team.name if r.team else "Unknown team", "kind": r.kind,
-                          "who": r.person.name if r.person else (r.from_name or r.from_addr), "persona": r.persona or "",
-                          "subject": r.subject, "preview": inbound.split_quoted(r.text or "")[0][:160]})
-    flags = []
-    if "ai" in request.GET:
-        for a in (ReplyAnalysis.objects.filter(id__gt=ai_since, status="done").select_related("response__team")
-                  .order_by("id")[:20]):
-            urgent = [f for f in a.flags if f in ("escalate", "safety")]
-            if urgent:
-                flags.append({"id": a.id, "response": a.response_id, "flags": urgent, "summary": a.summary,
-                              "team": a.response.team.name if a.response.team else "Unknown team"})
+    """ExCon pages poll this without reloading: the Notifications panel (only when it changed
+    since the page's `v`) and the counts in the status bar."""
+    tick = conf.get("scheduler_tick")
+    try:
+        notices.scheduler_check(datetime.fromisoformat(tick) if tick else None)
+    except ValueError:
+        pass
     counts = dict(Inject.objects.values_list("status").annotate(n=Count("id")).values_list("status", "n"))
-    return JsonResponse({
-        "max": Response.objects.order_by("-id").values_list("id", flat=True).first() or 0,
-        "ai_max": ReplyAnalysis.objects.order_by("-id").values_list("id", flat=True).first() or 0,
-        "items": items, "flags": flags,
-        "new": Response.objects.filter(status="new", kind="live").count(),
-        "overdue": counts.get("overdue", 0), "failed": counts.get("failed", 0) + counts.get("partial", 0),
-        "paused": conf.flag("paused")})
+    out = {"new": Response.objects.filter(status="new", kind="live").count(),
+           "overdue": counts.get("overdue", 0), "failed": counts.get("failed", 0) + counts.get("partial", 0),
+           "paused": conf.flag("paused"), "v": notices.version(request.user), "unread": notices.unread(request.user)}
+    if request.GET.get("v") != out["v"]:
+        out["notices"] = notices.listing(request.user)
+    return JsonResponse(out)
+
+
+@excon_required
+def notice_open(request, nid):
+    """A notice clicked in the panel: read, then where it points."""
+    n = get_object_or_404(Notice, pk=nid)
+    notices.mark_read(request.user, Notice.objects.filter(pk=n.pk))
+    return redirect(n.url if n.url.startswith("/") and not n.url.startswith("//") else "/injects/")
+
+
+@excon_required
+@require_POST
+def notice_action(request, nid=None, action=""):
+    """Dismiss one notice; or mark read / clear every notice of the panel's filter."""
+    qs = (Notice.objects.filter(pk=nid) if nid else notices.of_kind(request.user, request.POST.get("kind", "")))
+    (notices.mark_read if action == "read" else notices.dismiss)(request.user, qs)
+    return JsonResponse({"ok": True, "unread": notices.unread(request.user)})
 
 
 @excon_required

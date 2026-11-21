@@ -8,6 +8,7 @@
 {% block head %}{% endblock %}
 </head>
 <body class="{% if participant %}participant{% endif %}">
+{% if excon %}<script>if (localStorage.getItem("excon-notices-pinned") === "1") document.body.classList.add("nt-pinned");</script>{% endif %}
 <header class="top">
   {% if excon %}
   <div class="brand">SIMEX <span>ops</span></div>
@@ -32,7 +33,7 @@
   </nav>
   {% else %}<div class="brand">SIMEX</div>{% endif %}
   {% if user.is_authenticated %}
-  <form method="post" action="/logout/" class="logout">{% csrf_token %}{% if excon %}<a href="/help/" class="help{% if tab == 'help' %} on{% endif %}">Help</a>{% endif %}<span class="who">{% if participant %}{{ participant.name }}{% else %}{{ user.get_username }}{% endif %}</span> <button class="link">Log out</button></form>
+  <form method="post" action="/logout/" class="logout">{% csrf_token %}{% if excon %}<button type="button" class="nt-toggle" data-nt-toggle aria-controls="notices" aria-expanded="false" title="Notifications">Notifications <span class="badge" data-nt-count hidden></span></button><a href="/help/" class="help{% if tab == 'help' %} on{% endif %}">Help</a>{% endif %}<span class="who">{% if participant %}{{ participant.name }}{% else %}{{ user.get_username }}{% endif %}</span> <button class="link">Log out</button></form>
   {% endif %}
 </header>
 {% if excon %}
@@ -60,7 +61,22 @@
   {% for m in messages %}<div class="flash {% if m.tags == 'success' %}ok{% elif m.tags == 'warning' %}warn{% elif m.tags == 'error' %}error{% else %}ok{% endif %}">{{ m }}</div>{% endfor %}
   {% block body %}{% endblock %}
 </main>
-{% if excon %}<div class="toasts" id="toasts" aria-live="polite"></div>
+{% if excon %}<aside class="notices" id="notices" aria-label="Notifications" hidden>
+  <div class="nt-head">
+    <b>Notifications</b>
+    <button type="button" class="nt-icon" data-nt-pin title="Keep open beside the page" aria-pressed="false">📌</button>
+    <button type="button" class="nt-icon" data-nt-close title="Close (Esc)" aria-label="Close">✕</button>
+  </div>
+  <div class="nt-bar">
+    <div class="nt-filters" role="group" aria-label="Show">
+      <button type="button" data-nt-kind="" class="on">All</button><button type="button" data-nt-kind="reply">Replies</button><button type="button" data-nt-kind="flag">Flags</button><button type="button" data-nt-kind="delivery">Delivery</button><button type="button" data-nt-kind="system">System</button>
+    </div>
+    <div class="nt-actions"><button type="button" class="link" data-nt-readall>Mark all read</button> · <button type="button" class="link" data-nt-clear>Clear all</button></div>
+  </div>
+  <ol class="nt-list" data-nt-list></ol>
+  <p class="nt-empty muted" data-nt-empty>Nothing here. New replies, AI flags, delivery problems and finished jobs appear here as they happen.</p>
+</aside>
+<div class="toasts" id="toasts" aria-live="polite"></div>
 <script src="{% static 'ops/notify.js' %}"></script>{% endif %}
 <script src="{% static 'ops/app.js' %}"></script>
 </body>

@@ -677,3 +677,37 @@ class AttachmentImport(models.Model):
     @property
     def active(self):
         return self.status == "running" and not self.interrupted
+
+
+class Notice(models.Model):
+    """An update in ExCon's Notifications panel (ops/notices.py): a reply, an AI flag, an inject
+    that failed or went overdue, a background job that finished, the scheduler stopping. One per
+    event (key); read and dismissed by each ExCon user on their own (NoticeState)."""
+    key = models.CharField(max_length=120, unique=True)  # e.g. reply:12, overdue:4:<send_at>
+    kind = models.CharField(max_length=10)  # reply | flag | delivery | system
+    title = models.CharField(max_length=300)
+    body = models.TextField(blank=True, default="")
+    note = models.TextField(blank=True, default="")  # a muted line: a reply's opening words
+    url = models.CharField(max_length=300, blank=True, default="")
+    test = models.BooleanField(default=False)  # about the Test team
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    # gone with what it is about (a cleared inbox, a deleted inject)
+    response = models.ForeignKey(Response, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    inject = models.ForeignKey(Inject, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-id"]
+
+
+class NoticeState(models.Model):
+    """What one ExCon user has done with a Notice."""
+    notice = models.ForeignKey(Notice, on_delete=models.CASCADE, related_name="states")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    read_at = models.DateTimeField(null=True, blank=True)
+    dismissed_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["notice", "user"], name="notice_state_once")]

@@ -760,11 +760,12 @@ def test_polls_for_alerts(excon):
     assert pa.get(f"/inbox/poll/?since={mail.id}").json()["new"] == []
     assert mail.id not in [m["id"] for m in participant("b", "Bob").get("/inbox/poll/?since=0").json()["new"]]
     start = excon.get("/excon/poll/").json()
-    assert start["items"] == [] and start["new"] == 0
+    assert start["notices"] == [] and start["new"] == 0 and start["unread"] == 0
+    assert "notices" not in excon.get(f"/excon/poll/?v={start['v']}").json()  # unchanged: no list
     pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: Update", "body": "On it", "in_reply_to": mail.id})
-    j = excon.get(f"/excon/poll/?since={start["max"]}&ai=0").json()
-    assert [(x["team"], x["persona"], x["preview"]) for x in j["items"]] == [("Team A", "undac-a-tl", "On it")]
-    assert j["new"] == 1 and j["max"] > start["max"]
+    j = excon.get(f"/excon/poll/?v={start['v']}").json()
+    assert [(x["title"], x["body"], x["note"]) for x in j["notices"]] == [("Team A → undac-a-tl", "Re: Update", "On it")]
+    assert j["new"] == 1 and j["unread"] == 1 and j["v"] != start["v"]
     assert pa.get("/excon/poll/").status_code == 403
 
 

@@ -8,7 +8,7 @@ import pytest
 from django.utils import timezone
 
 from ops import ai, conf, render
-from ops.models import AiCall, AiGrade, AiReport, Grade, Inject, ReplyAnalysis, Response, RubricCriterion, Team
+from ops.models import AiCall, AiGrade, AiReport, Grade, Inject, Notice, ReplyAnalysis, Response, RubricCriterion, Team
 from ops.tests.test_ops import SAMPLE, _rubric, arm, deliver_now, do_import, participant
 
 REPLY_OUT = {"summary": "Team A commits to a plan by 15:00.", "sentiment": 5, "tone": "calm", "clarity": 4,
@@ -83,6 +83,7 @@ def test_reply_analysis_is_stored_and_clamped(excon, fake):
     a = ReplyAnalysis.objects.get(response=r)
     assert a.status == "done" and a.sentiment == 2 and a.completeness == 5 and a.flags == ["escalate"]
     assert a.ai_written == 85 and a.words == 3
+    assert Notice.objects.get(kind="flag", response=r).title == "⚑ Team A: needs ExCon attention"
     call = fake.calls[0]
     assert call["model"] == "claude-haiku-5-5" and call["output_config"]["effort"] == "medium"
     assert "Plan by 15:00" in json.dumps(call["messages"]) and "Hello Team A" in json.dumps(call["messages"])
