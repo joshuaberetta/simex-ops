@@ -2,12 +2,16 @@
 
 SIMEX Mail is your team's mailbox for the exercise. Everything here is **exercise material**, not a real emergency. Messages from the scenario's organisations (government, OCHA, media, partners…) arrive here, and you answer them here.
 
+## Signing in
+- **Scan the QR code on your login slip** with your phone's camera: you are signed in, and SIMEX Mail shows the one step left to get alerts on that phone. On a laptop, open the address on the slip and sign in with your username and password.
+- Keep your slip: it is your login. Don't share it with other teams.
+
 ## Your mailbox
 - **One mailbox per team.** Everyone in your team sees the same mail. What you send appears in everyone's **Sent**, with your name on it.
 - Keep the page open during the exercise. New mail appears on its own; the tab title shows the number of unread conversations, e.g. **Inbox (3)**.
 - **Alerts for new mail:** when a message arrives you hear a chime and see a blue bar at the bottom of the page (click **Open**), the tab shows the number of unread conversations and a red badge, and its title blinks while you are in another tab. On your first visit, click **Turn on alerts** in the blue banner so your browser can also show a notification on your screen when this tab is in the background. Keep the SIMEX Mail tab open all day. The **bell** at the top right mutes or unmutes alerts. If your browser has blocked notifications, allow them for this site in its address-bar settings.
 - **Notifications with SIMEX Mail closed:** once you have turned on alerts, new mail is announced on your computer or phone even when SIMEX Mail isn't open (Chrome, Edge, Firefox, Android).
-- **On an iPhone or iPad,** notifications only work from the home screen: in Safari tap **Share** (the square with an arrow), then **Add to Home Screen**, then **Add**. Open **SIMEX Mail** from your home screen, sign in, and tap **Turn on alerts**, then **Allow**. You then get a notification for every new message, like a mail app. Focus / Do Not Disturb can hide them.
+- **On an iPhone or iPad,** notifications only work from the home screen: in Safari tap **Share** (the square with an arrow), then **Add to Home Screen**, then **Add**. Open **SIMEX Mail** from your home screen (if you scanned your slip, you're signed in already; otherwise sign in), and tap **Turn on alerts**, then **Allow**. You then get a notification for every new message, like a mail app. Focus / Do Not Disturb can hide them.
 
 ## Reading
 - **Inbox** lists conversations, newest first. **Bold** = unread. A number after the sender = messages in the conversation. A paperclip = attachments.

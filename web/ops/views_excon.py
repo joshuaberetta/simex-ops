@@ -20,7 +20,8 @@ from django.utils import timezone
 from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_POST
 
-from . import ai, legacy_import, backup, checks, conf, delivery, documents, importer, inbound, mailer, render as rnd
+from . import (ai, legacy_import, backup, checks, conf, delivery, documents, importer, inbound, mailer, render as rnd,
+               signin)
 from .access import excon_required
 from .models import (CHANNELS, DELIVERY_MODES, ROLES, STATUSES, AiGrade, Attachment, AttachmentImport, Audit, Grade,
                      ImportBatch, Inject, InjectDraft, InjectReview, Mail, MailAttachment, MailLabel, Message,
@@ -603,6 +604,7 @@ def people_page(request):
         t.n_members = sum(p.role == "member" for p in mine)
     return render(request, "ops/people.html", {"tab": "people", "teams": teams, "people": people, "ROLES": ROLES,
                                                "has_placeholders": has_placeholders, "creds": creds,
+                                               "SIGNIN_DAYS": signin.TOKEN_DAYS,
                                                "creds_json": json.dumps(creds or [])})
 
 
@@ -778,12 +780,39 @@ def people_bulk(request):
     return redirect("/people/")
 
 
+def _slips(request, rows):
+    """Login slips ([name, team, username, password], password "" if not shown again), each
+    with the QR code that signs that login in (signin.py)."""
+    users = {u.username: u for u in User.objects.filter(username__in=[r[2] for r in rows])}
+    slips = []
+    for name, team, username, password in rows:
+        u = users.get(username)
+        link = signin.url(u) if signin.can_use(u) else ""
+        slips.append({"name": name, "team": team, "username": username, "password": password,
+                      "qr": signin.qr_svg(link) if link else ""})
+    return render(request, "ops/credentials.html", {"rows": slips, "url": settings.MAIL_URL or settings.PUBLIC_URL,
+                                                    "expires": signin.expires()})
+
+
 @excon_required
 @require_POST
 def credentials_sheet(request):
     """Printable sheet of the credentials just shown (posted back from the page; not stored)."""
-    rows = json.loads(request.POST.get("rows") or "[]")
-    return render(request, "ops/credentials.html", {"rows": rows, "url": settings.MAIL_URL or settings.PUBLIC_URL})
+    return _slips(request, json.loads(request.POST.get("rows") or "[]"))
+
+
+@excon_required
+def signin_slips(request):
+    """Printable sign-in slips (QR code and username, no password) for everyone with a login,
+    a team (?team=) or one person (?person=). The passwords stay as they are."""
+    people = Person.objects.filter(active=True, user__is_active=True, team__isnull=False).select_related("team", "user")
+    if request.GET.get("team"):
+        people = people.filter(team_id=_int(request.GET["team"]))
+    if request.GET.get("person"):
+        people = people.filter(pk=_int(request.GET["person"]))
+    rows = [[p.name, p.team.name + (" · team leader" if p.role == "tl" else ""), p.user.username, ""] for p in people]
+    audit("signin_slips", f"{len(rows)} slip(s)", _u(request))
+    return _slips(request, rows)
 
 
 # --- inbox monitor (ExCon view of any team's inbox) ---------------------------------------------------

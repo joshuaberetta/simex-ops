@@ -19,8 +19,8 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import logout
-from django.contrib.auth.views import LoginView
+from django.contrib.auth import login, logout
+from django.contrib.auth.views import LoginView, LogoutView
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
@@ -32,7 +32,7 @@ from django.utils.http import content_disposition_header
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import conf, inbound, push, render as rnd
+from . import conf, inbound, push, render as rnd, signin
 from .access import is_excon, leader_of, login_required_any, participant_of
 from .models import (Mail, MailAction, MailAttachment, MailLabel, MessageAttachment, PushSubscription, Response, Sender,
                      Team, ThreadLabel, audit)
@@ -78,6 +78,47 @@ class ThrottledLogin(LoginView):
         for key in self._keys():
             cache.set(key, cache.get(key, 0) + 1, 600)
         return super().form_invalid(form)
+
+    def form_valid(self, form):
+        resp = super().form_valid(form)
+        resp.delete_cookie(SIGNED_OUT, domain=settings.SESSION_COOKIE_DOMAIN)
+        return resp
+
+
+# Set on sign-out: on this device the home-screen app (which starts at a sign-in link) no longer
+# signs back in by itself, so a shared phone doesn't open the last person's mail.
+SIGNED_OUT = "simex_signed_out"
+
+
+class SignOut(LogoutView):
+    next_page = "/login/"
+
+    def post(self, request, *args, **kwargs):
+        resp = super().post(request, *args, **kwargs)
+        resp.set_cookie(SIGNED_OUT, "1", max_age=365 * 24 * 3600, domain=settings.SESSION_COOKIE_DOMAIN,
+                        secure=settings.SESSION_COOKIE_SECURE, httponly=True, samesite="Lax")
+        return resp
+
+
+def signin_link(request, token):
+    """The QR code on a login slip: sign in on this device and set it up (alerts, home screen).
+    ?app=1 is the home-screen app starting: already signed in, or signed out on purpose here,
+    it just opens the mailbox."""
+    user = signin.user_for(token)
+    app = request.GET.get("app") == "1"
+    if app and (request.user == user or request.COOKIES.get(SIGNED_OUT)):
+        user = None
+    if not user:
+        if not app and not request.user.is_authenticated:
+            messages.error(request, "This sign-in code no longer works. Sign in with the username and password "
+                                    "on your slip, or ask ExCon for a new slip.")
+        return redirect("/inbox/")
+    if request.user != user:
+        login(request, user, backend=settings.AUTHENTICATION_BACKENDS[0])
+        audit("signin_qr", user.username, user.username)
+    resp = redirect("/inbox/setup/")
+    resp.delete_cookie(SIGNED_OUT, domain=settings.SESSION_COOKIE_DOMAIN)
+    return resp
 
 
 def home(request):
@@ -530,6 +571,13 @@ def _key_for_sender(mail):
 
 
 @mailbox_view
+def setup(request, v):
+    """After a QR sign-in: turn on alerts here (on an iPhone, first add SIMEX Mail to the home
+    screen: the app then starts at this person's sign-in link, as it doesn't share Safari's)."""
+    return render(request, "ops/mail/setup.html", _ctx(v, folder="", app_url=signin.path(request.user) + "?app=1"))
+
+
+@mailbox_view
 def guide(request, v):
     from . import docs
     name = "LEADER_GUIDE.md" if v.leader or v.leader_box else "PARTICIPANT_GUIDE.md"
@@ -921,9 +969,13 @@ def manifest(request):
     icons = [{"src": static(f"ops/icon-{n}.png"), "sizes": f"{n}x{n}", "type": "image/png", "purpose": "any"}
              for n in (192, 512)]
     icons.append({"src": static("ops/icon-512.png"), "sizes": "512x512", "type": "image/png", "purpose": "maskable"})
-    return JsonResponse({"name": "SIMEX Mail", "short_name": "SIMEX Mail", "id": "/inbox/", "start_url": "/inbox/",
+    # Signed in: the home-screen app starts at their sign-in link (an iPhone's app has its own cookies).
+    start = signin.path(request.user) + "?app=1" if signin.can_use(request.user) else "/inbox/"
+    resp = JsonResponse({"name": "SIMEX Mail", "short_name": "SIMEX Mail", "id": "/inbox/", "start_url": start,
                          "scope": "/", "display": "standalone", "background_color": "#f6f8fc",
                          "theme_color": "#f6f8fc", "icons": icons}, content_type="application/manifest+json")
+    resp["Cache-Control"] = "private, no-cache"
+    return resp
 
 
 @login_required_any

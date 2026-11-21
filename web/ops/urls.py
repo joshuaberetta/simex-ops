@@ -1,4 +1,3 @@
-from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
 from . import views_ai as a
@@ -38,10 +37,12 @@ urlpatterns = [
     path("", p.home),
     path("healthz", p.healthz),
     path("login/", p.ThrottledLogin.as_view()),
-    path("logout/", auth_views.LogoutView.as_view(next_page="/login/")),
+    path("logout/", p.SignOut.as_view()),
     path("webhooks/resend", p.resend_webhook),
     path("inbox/sw.js", p.service_worker),
     path("inbox/manifest.webmanifest", p.manifest),
+    path("inbox/go/<str:token>/", p.signin_link),
+    path("inbox/setup/", p.setup),
     path("inbox/as/<int:as_team>/leader/", include(mail_patterns), {"box": "leader"}),
     path("inbox/as/<int:as_team>/", include(mail_patterns)),
     path("inbox/team/", include(team_patterns), {"box": "team"}),
@@ -78,6 +79,7 @@ urlpatterns = [
     path("people/bulk/", x.people_bulk),
     path("people/save/", x.person_save),
     path("people/credentials/", x.credentials_sheet),
+    path("people/slips/", x.signin_slips),
     path("people/<int:pid>/delete/", x.person_delete),
     path("people/<int:pid>/account/", x.person_account),
     path("teams/save/", x.team_save),

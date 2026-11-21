@@ -25,7 +25,7 @@ You only ever see your own team's inbox. The other teams are independent of your
 Messages written, injects answered, median time to the first reply, late or missing replies, delivered → read → answered, who in the team is writing, replies per hour, and Claude's reading: tone, quality, possibly AI-written replies with the reasons, flags, what the team asks for and what it commits to. Click a time to open the conversation in the Team inbox. The page refreshes every two minutes.
 
 ## Alerts
-As in the team's SIMEX Mail: a chime and a blue bar for new mail in **My mail**, and, once you click **Turn on alerts**, notifications on your computer or phone (on an iPhone, from the home-screen app: **Share → Add to Home Screen**).
+Scan the QR code on your login slip with your phone: it signs you in and shows how to turn alerts on. As in the team's SIMEX Mail: a chime and a blue bar for new mail in **My mail**, and, once you click **Turn on alerts**, notifications on your computer or phone (on an iPhone, from the home-screen app: **Share → Add to Home Screen**).
 
 ## After the exercise
 ExCon compiles a debrief report for your team from its mail, the grades and Claude's reading of it: timeliness, missed replies, what the team asked for, critical points missed, writing style and points for the debrief. Before it goes to the team, ExCon will ask you to read it: say what is wrong or missing, as you know what happened in the team.

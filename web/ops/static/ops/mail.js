@@ -598,6 +598,26 @@
     paintBanner();
   }
 
+  // The device setup page after a QR sign-in: the one step this device still needs.
+  const setup = $("[data-setup]");
+  if (setup) {
+    [banner, install].forEach((el) => { if (el) el.hidden = true; });  // this page says it instead
+    const paintSetup = () => {
+      const p = N.permission();
+      const step = ios && !standalone ? "install" : p === "unsupported" ? "nonotify" : p === "denied" ? "blocked"
+        : p === "granted" && N.enabled() ? "done" : "alerts";
+      $$("[data-step]", setup).forEach((el) => { el.hidden = el.dataset.step !== step; });
+      // The home-screen app starts at the page it was added from (or the manifest's start): make
+      // that this person's sign-in link, as an iPhone's app doesn't share Safari's sign-in.
+      if (step === "install") history.replaceState(null, "", setup.dataset.appUrl);
+    };
+    $("[data-setup-alerts]", setup).onclick = async () => {
+      N.setEnabled(true); paintSound();
+      await N.ask(); N.beep(); localStorage.setItem("simex-alerts-asked", "1"); pushOn(); paintSetup();
+    };
+    paintSetup();
+  }
+
   const seenKey = `simex-latest:${BASE}`;
   let latest = localStorage.getItem(seenKey) === null ? null : Number(localStorage.getItem(seenKey));
   async function poll() {

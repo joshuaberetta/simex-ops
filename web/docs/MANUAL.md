@@ -68,7 +68,9 @@ Only participant-facing fields are imported. Expected outcomes, story, theme, ke
    Jane Doe,jane@example.org,a,tl
    John Roe,,a
    ```
-2. The page then shows **New logins: shown once**: username and password for each new person. Click **Printable sheet** and print it (one slip per person, with the SIMEX Mail address https://mail.simex.kobolabs.dev), or copy it somewhere safe. Passwords are not stored readable; if one is lost, use **reset password** on that person.
+2. The page then shows **New logins: shown once**: username and password for each new person. Click **Printable sheet** and print it (one slip per person, with the SIMEX Mail address https://mail.simex.kobolabs.dev and a **QR code**), or copy it somewhere safe. Passwords are not stored readable; if one is lost, use **reset password** on that person.
+   - **QR sign-in.** Scanning a slip's QR code with a phone's camera signs that person in on the phone and opens **Set up this device**: one button to turn on alerts (on an iPhone, first **Add to Home Screen**; the home-screen app is then signed in already). A code works on any number of devices for 14 days from printing, or until that person's password is reset or their login disabled; it never signs in an ExCon login. Treat a slip like the password: hand it to its person.
+   - **Sign-in slips** prints slips again (QR code and username, passwords unchanged): for everyone (link above the People table), a team (**sign-in slips** on its row) or one person (**slip** next to their username). Use it the day before, so the codes are fresh.
 3. Each team shares **one mailbox**: everyone in Team A sees Team A's mail, and what one member sends appears in everyone's *Sent*, with the sender's name.
 4. **Team leaders** sign in at the same SIMEX Mail address and get four tabs: **My mail** (their own mailbox, as the team leader persona), the **team inbox** read-only (with Claude's reading of each reply from the team: who wrote it, tone, quality, flags, possibly AI-written), **Team leaders** (the other team leaders' mailboxes, read-only, one per team in the side bar; never the other teams' inboxes) and the team's **Dashboard**. They only ever see their own team's inbox, write only to their own team, and never see injects, rubrics or grades. Their guide is under **?** in SIMEX Mail. Changing someone's role takes effect on their next page; their devices then turn alerts on again.
 5. Give yourself a login in the **Test team** (Add person → team "Test team" → create login) to try SIMEX Mail as a participant.
@@ -123,7 +125,7 @@ Even if you plan to use email, make SIMEX Mail ready so you can switch in a minu
 1. **People & logins:** check every participant is in the right team and create their logins (one by one or by pasting the roster). Passwords are shown once: print the **credentials sheet** and keep it with ExCon.
 2. Sign in once as a test participant (or use **Team inboxes → View as team**) to see what teams would see.
 3. Note the address to give teams: **https://mail.simex.kobolabs.dev** (they land in their mailbox after signing in).
-4. Tell teams with iPhones to add SIMEX Mail to their home screen (Safari → **Share** → **Add to Home Screen**), open it from there and tap **Turn on alerts**: only then do they get notifications with SIMEX Mail closed. SIMEX Mail shows iPhone users this hint itself. Other phones and computers get them once alerts are on.
+4. Hand out the slips and have everyone **scan the QR code** with their phone: it signs them in and walks them through alerts, including, on an iPhone, adding SIMEX Mail to the home screen (only then do iPhones get notifications with SIMEX Mail closed). On a laptop they sign in with the username and password and click **Turn on alerts**.
 
 ### 3.7 Rehearse (at least once) — section 4.
 End the rehearsal as you will end the exercise: grade the Test team's replies, then compile its report (**Dashboard → End-of-exercise reports → Test team**, 6.1) to check the figures and see what the write-up looks like. Clear the Test team's mailbox afterwards (6.2).
@@ -265,7 +267,7 @@ After testing: **Team inboxes → Clear a team's mailbox**, pick the team, type 
 |---|---|
 | "Scheduler: … is the worker running?" | The scheduler worker is down. Check the *scheduler* component in DigitalOcean; meanwhile send urgent injects by hand (in-app sends deliver immediately). |
 | "Too many attempts" at sign-in | 10 wrong passwords for one login lock that login for 10 minutes on that network; other logins (and ExCon) still work. Reset the password if they have lost it. |
-| A participant can't sign in | People & logins → **reset password**, give them the new one. Check the login isn't disabled and the person has a team. |
+| A participant can't sign in | People & logins → **reset password**, give them the new one (and its slip, with a new QR code: the old one stops working). "This sign-in code no longer works": the slip is older than 14 days or the password was reset; print a new **slip**. Check the login isn't disabled and the person has a team. |
 | A team says nothing arrived | Team inboxes → View as team. If it's there, they may be looking at another folder or another team's login. |
 | Inject **overdue** | Send now, or move its time and Schedule. |
 | An inject went out with a missing attachment, link or a mistake | Open it → **Send a follow-up** (5.3): add the file, explain, send it in the same conversation. |

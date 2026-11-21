@@ -32,6 +32,7 @@ The <b>Test team</b> receives test runs and test sends; give yourself a login in
     <label class="chk"><input type="checkbox" name="active" value="1" {% if t.active %}checked{% endif %}></label>
     <span class="muted small">{{ t.n_members }} member{{ t.n_members|pluralize }} · {% if t.n_leaders %}leader{% else %}<span class="warn">no leader</span>{% endif %}{% if t.is_test %} · test team{% endif %}{% if t.active and not t.n_members and not t.is_test %} · <span class="warn">no members</span>{% endif %}</span>
     <a class="small" href="/inboxes/?team={{ t.id }}">inbox</a>
+    <a class="small" href="/people/slips/?team={{ t.id }}" target="_blank">sign-in slips</a>
     <button class="btn small">Save</button>
   </form>
   {% if not t.is_test %}<form method="post" action="/teams/{{ t.id }}/delete/" class="inline">{% csrf_token %}<button class="link" data-confirm="Delete {{ t.name }} and its inbox? Its people stay, without a team.">delete</button></form>{% endif %}</td></tr>
@@ -42,6 +43,7 @@ The <b>Test team</b> receives test runs and test sends; give yourself a login in
   <button class="btn small primary">Add team</button></form>
 
 <h2>People</h2>
+<p class="muted small">Every login slip has a QR code: scanning it with a phone's camera signs that person in and walks them through alerts (and, on an iPhone, adding SIMEX Mail to the home screen). <a href="/people/slips/" target="_blank">Sign-in slips for everyone</a> (QR code and username, passwords unchanged); a team's or one person's from their row. A code works on any number of devices for {{ SIGNIN_DAYS }} days, or until that password is reset.</p>
 <table class="list">
   <thead><tr><th colspan="7">Name · email · team · role (team member: participant; team leader: ExCon, one per team) · active · login</th></tr></thead>
   {% for p in people %}
@@ -56,6 +58,7 @@ The <b>Test team</b> receives test runs and test sends; give yourself a login in
   </form>
   <form method="post" action="/people/{{ p.id }}/account/" class="inline">{% csrf_token %}
     {% if p.user %}<code class="small">{{ p.user.username }}</code>{% if not p.user.is_active %} <span class="warn small">disabled</span>{% endif %}
+      {% if p.user.is_active and p.team_id %}<a class="small" href="/people/slips/?person={{ p.id }}" target="_blank">slip</a>{% endif %}
       <button class="link" name="action" value="reset" data-confirm="Issue a new password for {{ p.name }}?">reset password</button>
       {% if p.user.is_active %}<button class="link" name="action" value="deactivate">disable</button>{% else %}<button class="link" name="action" value="activate">enable</button>{% endif %}
     {% else %}<button class="link" name="action" value="create">create login</button>{% endif %}
