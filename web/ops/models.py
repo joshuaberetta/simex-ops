@@ -24,7 +24,11 @@ CHANNELS = {"inapp": "In-app inbox", "email": "Email (Resend)"}
 # Fields an import may update; their last imported values are kept in Inject.imported so
 # a re-import can tell local edits apart from MEL changes.
 IMPORT_FIELDS = ["seq", "method", "mailbox", "scenario_dt", "send_at", "sender_local", "recipients_label",
-                 "delivery", "subject", "body", "supporting_documents"]
+                 "delivery", "to_leaders", "subject", "body", "supporting_documents"]
+# A team member is a participant: one of the few people sharing the team's SIMEX Mail inbox.
+# The team leader is the ExCon person who monitors the team (one per team): never a
+# participant, with their own mailbox, a read-only view of the team's and the team Dashboard.
+ROLES = {"member": "Team member", "tl": "Team leader (ExCon)"}
 
 
 class Team(models.Model):
@@ -41,19 +45,37 @@ class Team(models.Model):
     def __str__(self):
         return self.name
 
+    def leader(self):
+        """The team's active leader (a Person, role tl), or None."""
+        return self.people.filter(role="tl", active=True).first()
+
+
+class PersonQuerySet(models.QuerySet):
+    def participants(self):
+        """Team members only: the leaders are ExCon and never get a participant's copy."""
+        return self.filter(role="member")
+
 
 class Person(models.Model):
-    """A participant. Has a login (user) for the in-app inbox, an email for the email channel."""
+    """A team member (participant) or the team's leader (ExCon), see ROLES. Has a login (user)
+    for SIMEX Mail, an email for the email channel."""
     name = models.CharField(max_length=200)
     email = models.CharField(max_length=320, blank=True, default="")
     team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.SET_NULL, related_name="people")
-    role = models.CharField(max_length=20, default="member")  # member | tl
+    role = models.CharField(max_length=20, default="member")  # member | tl (see ROLES)
     active = models.BooleanField(default=True)
     user = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
                                 related_name="person")
+    lead_seen = models.IntegerField(default=0)  # leader: the last team-inbox Mail id they looked at
+
+    objects = PersonQuerySet.as_manager()
 
     class Meta:
         ordering = ["team__sort", "-role", "name"]
+
+    @property
+    def is_leader(self):
+        return self.role == "tl"
 
     def __str__(self):
         return self.name
@@ -74,6 +96,9 @@ class Sender(models.Model):
     inapp_local = models.CharField(max_length=120, blank=True, default="")  # empty = local_part
     domain = models.CharField(max_length=200, blank=True, default="")  # empty = MAIL_DOMAIN
     active = models.BooleanField(default=True)
+    # The team leader persona (e.g. undac-{team}-tl): played by each team's leader in SIMEX Mail.
+    # What is sent as it shows in the leader's Sent; what members write to it, in their Inbox.
+    team_leader = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["local_part"]
@@ -115,6 +140,7 @@ class Inject(models.Model):
     last_error = models.TextField(blank=True, null=True)
     sent_at = models.DateTimeField(null=True, blank=True)
     expects_reply = models.BooleanField(default=False)
+    to_leaders = models.BooleanField(default=False)  # also a copy to each team's leader
     reply_due_minutes = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -179,7 +205,7 @@ class Message(models.Model):
     """One delivery: an email handed to Resend, or a Mail put in an in-app inbox."""
     inject = models.ForeignKey(Inject, null=True, blank=True, on_delete=models.SET_NULL)
     run = models.ForeignKey(TestRun, null=True, blank=True, on_delete=models.SET_NULL)
-    kind = models.CharField(max_length=10)  # live | test | oneoff | reply | followup
+    kind = models.CharField(max_length=10)  # live | test | oneoff | reply | followup | leader
     channel = models.CharField(max_length=10, default="inapp")
     target = models.CharField(max_length=200, blank=True, default="")
     idem_key = models.CharField(max_length=200, unique=True)
@@ -215,6 +241,8 @@ class Message(models.Model):
                                  related_name="answers")  # ExCon reply: the response it answers
     # In-app: which team inbox it goes to and the thread it continues.
     inbox_team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    inbox_owner = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")  # a leader's box
+    author = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")  # the leader who wrote it
     thread = models.CharField(max_length=40, blank=True, default="")
     banner = models.TextField(blank=True, default="")
     body = models.TextField(blank=True, default="")  # in-app: text without footer/banner
@@ -253,8 +281,11 @@ class Event(models.Model):
 
 
 class Mail(models.Model):
-    """An item in a team's simulated inbox (folder inbox) or sent folder (folder sent)."""
+    """An item in a mailbox (folder inbox, sent, drafts). A mailbox is (team, owner): owner None
+    is the team's shared inbox, owner set is that team leader's own mailbox. A conversation
+    between a team and its leader has the same thread id in both."""
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="mails")
+    owner = models.ForeignKey(Person, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
     folder = models.CharField(max_length=10, default="inbox")  # inbox | sent
     thread = models.CharField(max_length=40, default="")
     from_name = models.CharField(max_length=200, default="")
@@ -295,23 +326,24 @@ class Mail(models.Model):
 
 
 class MailLabel(models.Model):
-    """A team's own label in SIMEX Mail (Gmail's "folders"): applied to whole conversations, which
+    """A mailbox's own label in SIMEX Mail (Gmail's "folders"): applied to whole conversations, which
     may carry several. "Move to" a label = label it and take it out of the Inbox."""
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="mail_labels")
+    owner = models.ForeignKey(Person, null=True, blank=True, on_delete=models.CASCADE, related_name="+")  # as Mail.owner
     name = models.CharField(max_length=60)
     colour = models.CharField(max_length=7, blank=True, default="")  # one of views_inbox.LABEL_COLOURS
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         ordering = ["name", "id"]
-        constraints = [models.UniqueConstraint(fields=["team", "name"], name="mail_label_unique_name")]
+        constraints = [models.UniqueConstraint(fields=["team", "owner", "name"], name="mail_label_unique_name")]
 
     def __str__(self):
         return self.name
 
 
 class ThreadLabel(models.Model):
-    """A label on a conversation (Mail.thread) of the label's team."""
+    """A label on a conversation (Mail.thread) of the label's mailbox."""
     label = models.ForeignKey(MailLabel, on_delete=models.CASCADE, related_name="threads")
     thread = models.CharField(max_length=40, db_index=True)
     created_at = models.DateTimeField(default=timezone.now)
@@ -321,7 +353,7 @@ class ThreadLabel(models.Model):
 
 
 class PushSubscription(models.Model):
-    """A participant's device that gets a push notification for new mail (Web Push: a phone's
+    """A participant's (or leader's) device that gets a push notification for new mail (Web Push: a phone's
     home-screen app or a browser). Not in backups: devices subscribe again on their next visit."""
     person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="push_subscriptions")
     endpoint = models.URLField(max_length=1000, unique=True)
@@ -368,7 +400,7 @@ class Response(models.Model):
     inject = models.ForeignKey(Inject, null=True, blank=True, on_delete=models.SET_NULL, related_name="responses")
     team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.SET_NULL)
     person = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL)
-    match = models.CharField(max_length=10, default="none")  # exact | token | guess | manual | none
+    match = models.CharField(max_length=10, default="none")  # exact | token | guess | manual | leader | none
     kind = models.CharField(max_length=10, default="live")  # live | test
     status = models.CharField(max_length=10, default="new")  # new | reviewed | ignored
     fetched = models.BooleanField(default=False)

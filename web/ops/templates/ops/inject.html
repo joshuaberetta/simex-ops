@@ -71,6 +71,7 @@
     <fieldset class="teams"><legend>Teams</legend>
       {% for t in teams %}{% if t.active %}<label class="chk"><input type="checkbox" name="team_ids" value="{{ t.id }}" {% if t.id in selected_teams %}checked{% endif %}> {{ t.name }}</label>{% endif %}{% endfor %}
     </fieldset>
+    <label class="chk" title="A copy in each team leader's own mailbox (not when the sender is the team leader persona: the leader has it in Sent)"><input type="checkbox" name="to_leaders" value="1" {% if inj.to_leaders %}checked{% endif %}> also to team leaders</label>
   </div>
   <details class="emailonly" {% if inj.effective_channel == 'email' %}open{% endif %}><summary class="small">Email options (reply-to, extra recipients)</summary>
   <div class="row">

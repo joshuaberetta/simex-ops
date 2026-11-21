@@ -53,7 +53,8 @@ def import_backup(data):
         team = team_map.get(row.get("team_id"))
         existing = m.Person.objects.filter(email__iexact=row["email"]).first() if row.get("email") else None
         p = existing or m.Person(email=row["email"])
-        p.name, p.team, p.role, p.active = row["name"], team, row.get("role") or "member", row.get("active", True)
+        # The first app's "tl" was a participant leading their team: here a team member.
+        p.name, p.team, p.role, p.active = row["name"], team, "member", row.get("active", True)
         p.save()
     counts["people"] = len(people)
     inj_map = {}

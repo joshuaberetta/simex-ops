@@ -1,0 +1,76 @@
+{% extends "ops/mail/base.html" %}{% load ops %}
+{% block title %}Dashboard{% endblock %}
+{% block search %}<div class="gm-search-space">{{ team.name }} · Dashboard</div>{% endblock %}
+{% block head %}<meta http-equiv="refresh" content="120">{% endblock %}
+{% block side %}{% endblock %}
+{% block main %}
+<div class="gm-dash">
+  <h2>{{ team.name }}: replies</h2>
+  {% if tile %}
+  <div class="gm-cards">
+    <div class="gm-card"><div class="n">{{ tile.replies }}</div><div class="lab">messages written</div></div>
+    <div class="gm-card"><div class="n">{{ tile.answered }}<span> / {{ tile.expected }}</span></div><div class="lab">injects answered (of those expecting a reply)</div></div>
+    <div class="gm-card"><div class="n">{% if tile.median is not None %}{{ tile.median }}<span> min</span>{% else %}—{% endif %}</div><div class="lab">median time to first reply</div></div>
+    <div class="gm-card"><div class="n">{{ tile.late }}</div><div class="lab">late or still missing</div></div>
+  </div>
+  <div class="gm-cols">
+    <section>
+      <h2>From delivery to answer</h2>
+      <table class="gm-dtable gm-funnel">
+        {% for label, n, pct in tile.funnel %}<tr><td>{{ label }}</td><td class="bar"><span style="width:{{ pct }}%"></span></td><td>{{ n }}</td></tr>{% endfor %}
+      </table>
+      <p class="small muted">In injects: delivered to the team, read in SIMEX Mail, answered.</p>
+    </section>
+    <section>
+      <h2>Who is writing</h2>
+      <table class="gm-dtable">{% for name, n in members %}<tr><td>{{ name }}</td><td>{{ n }}</td></tr>{% empty %}<tr><td class="muted">No replies yet.</td></tr>{% endfor %}</table>
+    </section>
+  </div>
+  {% if hours %}
+  <h2>Replies per hour</h2>
+  <div class="gm-bars" role="img" aria-label="Replies per hour">{% for h in hours %}<span style="height:{{ h.pct }}%" title="{{ h.at|date:'D H:i' }}: {{ h.n }}"></span>{% endfor %}</div>
+  <div class="small muted" style="display:flex;justify-content:space-between"><span>{{ hours.0.at|date:"D H:i" }}</span><span>now</span></div>
+  {% endif %}
+
+  <h2>Claude's reading of the replies</h2>
+  {% if not ai_enabled %}<p class="small muted">AI analysis is off: ExCon turns it on in Settings.</p>{% endif %}
+  <div class="gm-cards">
+    <div class="gm-card"><div class="n">{{ analysed }}<span> / {{ reps|length }}</span></div><div class="lab">replies analysed</div></div>
+    <div class="gm-card"><div class="n">{{ tile.quality|default:"—" }}{% if tile.quality %}<span> / 5</span>{% endif %}</div><div class="lab">mean quality (clarity, completeness, actionability)</div></div>
+    <div class="gm-card"><div class="n" style="font-size:18px">{% for tone, n in tile.tones %}{{ tone }} <span>{{ n }}</span>{% if not forloop.last %} · {% endif %}{% empty %}—{% endfor %}</div><div class="lab">tone{% if tile.sentiment_now %} · latest: {{ tile.sentiment_now }}{% endif %}</div></div>
+    <div class="gm-card"><div class="n">{{ likely }}<span> likely · {{ possibly }} possibly</span></div><div class="lab">AI-assisted{% if mean_wpm %} · {{ mean_wpm }} words/min on average{% endif %}</div></div>
+  </div>
+
+  <h2>Possibly AI-written</h2>
+  <table class="gm-dtable">
+    {% for r in ai_list %}<tr><td class="nowrap">{% if r.thread %}<a href="/inbox/team/t/{{ r.thread }}/?folder=replies">{{ r.received_at|date:"D H:i" }}</a>{% else %}{{ r.received_at|date:"D H:i" }}{% endif %}</td>
+      <td class="nowrap">{{ r.person.name|default:r.from_name }}<div class="muted">{{ r.band }}</div></td>
+      <td>{{ r.ai.ai_signals }}<div class="muted">{{ r.ai.words }} words{% if r.ai.wpm %} · {{ r.ai.wpm|floatformat:0 }}/min{% endif %}</div>
+        {% if not r.thread %}<details><summary>The reply</summary><p>{{ r.text|linebreaksbr }}</p></details>{% endif %}</td></tr>
+    {% empty %}<tr><td class="muted">None so far.</td></tr>{% endfor %}
+  </table>
+  <p class="small muted">Claude's estimate from the text and the time taken to write it. Short messages and non-native English make it unreliable: a hint to look closer, never proof. Participants never see it.</p>
+
+  <h2>Flags</h2>
+  <table class="gm-dtable">
+    {% for r in flagged %}<tr><td class="nowrap">{% if r.thread %}<a href="/inbox/team/t/{{ r.thread }}/?folder=replies">{{ r.received_at|date:"D H:i" }}</a>{% else %}{{ r.received_at|date:"D H:i" }}{% endif %}</td>
+      <td>{% for f in r.flag_labels %}<span class="gm-flag">{{ f }}</span> {% endfor %}<div>{{ r.ai.summary }}</div></td></tr>
+    {% empty %}<tr><td class="muted">No flags.</td></tr>{% endfor %}
+  </table>
+
+  <div class="gm-cols">
+    <section>
+      <h2>What the team is asking for</h2>
+      <table class="gm-dtable">{% for r, x in asks %}<tr><td class="nowrap">{{ r.received_at|date:"D H:i" }}</td><td>{{ x }}{% if r.persona %} <span class="muted">→ {{ r.persona }}</span>{% endif %}</td></tr>
+        {% empty %}<tr><td class="muted">Nothing yet.</td></tr>{% endfor %}</table>
+    </section>
+    <section>
+      <h2>Decisions and commitments</h2>
+      <table class="gm-dtable">{% for r, x in commitments %}<tr><td class="nowrap">{{ r.received_at|date:"D H:i" }}</td><td>{{ x }}</td></tr>
+        {% empty %}<tr><td class="muted">Nothing yet.</td></tr>{% endfor %}</table>
+    </section>
+  </div>
+  {% else %}<p class="muted">This team isn't active.</p>{% endif %}
+  <p class="small muted">The page refreshes every two minutes.</p>
+</div>
+{% endblock %}

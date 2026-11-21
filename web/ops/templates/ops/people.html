@@ -18,7 +18,7 @@
 <div class="cols">
 <section class="col-main">
 <h2>Teams</h2>
-<p class="muted small">Each team has one shared inbox. The code fills <code>{team}</code> (e.g. in <code>undac-{team}-tl</code>), the name fills <code>{team_name}</code>.
+<p class="muted small">Each team has one shared inbox, used by its <b>team members</b> (the participants), and one <b>team leader</b>: the ExCon person who monitors the team, with their own mailbox, a read-only view of the team's and the team's Dashboard. The code fills <code>{team}</code> (e.g. in <code>undac-{team}-tl</code>), the name fills <code>{team_name}</code>.
 The <b>Test team</b> receives test runs and test sends; give yourself a login in it to try the participant view.</p>
 <table class="list">
   <thead><tr><th colspan="6">Order · code · name · email inbox (email channel, optional) · active</th></tr></thead>
@@ -30,7 +30,7 @@ The <b>Test team</b> receives test runs and test sends; give yourself a login in
     <input name="name" value="{{ t.name }}" required>
     <input name="email" value="{{ t.email }}" placeholder="optional">
     <label class="chk"><input type="checkbox" name="active" value="1" {% if t.active %}checked{% endif %}></label>
-    <span class="muted small">{{ t.people.count }} people{% if t.is_test %} · test team{% endif %}</span>
+    <span class="muted small">{{ t.n_members }} member{{ t.n_members|pluralize }} · {% if t.n_leaders %}leader{% else %}<span class="warn">no leader</span>{% endif %}{% if t.is_test %} · test team{% endif %}{% if t.active and not t.n_members and not t.is_test %} · <span class="warn">no members</span>{% endif %}</span>
     <a class="small" href="/inboxes/?team={{ t.id }}">inbox</a>
     <button class="btn small">Save</button>
   </form>
@@ -43,14 +43,14 @@ The <b>Test team</b> receives test runs and test sends; give yourself a login in
 
 <h2>People</h2>
 <table class="list">
-  <thead><tr><th colspan="7">Name · email · team · role · active · login</th></tr></thead>
+  <thead><tr><th colspan="7">Name · email · team · role (team member: participant; team leader: ExCon, one per team) · active · login</th></tr></thead>
   {% for p in people %}
   <tr><td colspan="7"><form method="post" action="/people/save/" class="rowform">{% csrf_token %}
     <input type="hidden" name="id" value="{{ p.id }}">
     <input name="name" value="{{ p.name }}" required>
     <input name="email" value="{{ p.email }}" placeholder="email (optional)" class="{% if 'placeholder.invalid' in p.email %}placeholder{% endif %}">
     <select name="team_id"><option value="">— no team —</option>{% for t in teams %}<option value="{{ t.id }}" {% if t.id == p.team_id %}selected{% endif %}>{{ t.name }}</option>{% endfor %}</select>
-    <select name="role"><option value="member">member</option><option value="tl" {% if p.role == 'tl' %}selected{% endif %}>team leader</option></select>
+    <select name="role">{% for k, label in ROLES.items %}<option value="{{ k }}" {% if p.role == k %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
     <label class="chk"><input type="checkbox" name="active" value="1" {% if p.active %}checked{% endif %}></label>
     <button class="btn small">Save</button>
   </form>
@@ -66,21 +66,22 @@ The <b>Test team</b> receives test runs and test sends; give yourself a login in
 <form method="post" action="/people/save/" class="card rowform">{% csrf_token %}<b>Add person</b>
   <input name="name" placeholder="Name" required><input name="email" placeholder="email (optional)">
   <select name="team_id"><option value="">— no team —</option>{% for t in teams %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}</select>
-  <select name="role"><option value="member">member</option><option value="tl">team leader</option></select>
+  <select name="role">{% for k, label in ROLES.items %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select>
   <label class="chk"><input type="checkbox" name="account" value="1" checked> create login</label>
   <button class="btn small primary">Add</button></form>
 </section>
 <section class="col-side">
 <form method="post" action="/people/bulk/" class="card form">{% csrf_token %}
   <h3>Paste a roster</h3>
-  <p class="small">CSV lines: <code>name,email,team code,role</code> (email optional, role <code>tl</code> or empty). Unknown team codes create a team. Existing people (same email) are updated.</p>
+  <p class="small">CSV lines: <code>name,email,team code,role</code> (email optional; role <code>tl</code> for the team's leader, from ExCon, one per team; empty for team members). Unknown team codes create a team. Existing people (same email) are updated.</p>
   <textarea name="csv" rows="10" placeholder="Jane Doe,jane@example.org,a,tl&#10;John Roe,,a"></textarea>
   <label class="chk"><input type="checkbox" name="accounts" value="1" checked> create logins for people without one</label>
   <label class="chk"><input type="checkbox" name="replace_placeholders" value="1" checked> remove the placeholder people</label>
   <button class="btn primary">Add people</button>
 </form>
 <div class="card small"><h3>Who sees what</h3>
-<p>Participant logins see only their own team's inbox in SIMEX Mail at <code>{{ MAIL_URL }}</code>: messages delivered to the team, what the team sent, and the persona address book. They never see injects, schedules, rubrics, grades or other teams.</p>
+<p>Team members see only their own team's inbox in SIMEX Mail at <code>{{ MAIL_URL }}</code>: messages delivered to the team, what the team sent, and the persona address book. They never see injects, schedules, rubrics, grades or other teams.</p>
+<p>Team leaders sign in at the same address. They play the team leader persona (Senders tab): they have their own mailbox (what is sent as that persona is in their Sent, the team's mail to it in their Inbox, and injects marked "also to team leaders"), they write only to their own team, read the team's inbox read-only with Claude's reading of each reply, and see their team's Dashboard. Never other teams, injects, rubrics or grades.</p>
 <p>ExCon logins are Django staff users (or members of the <code>excon</code> group); create more in <a href="/admin/auth/user/">Django admin</a>.</p></div>
 </section>
 </div>

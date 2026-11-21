@@ -143,10 +143,10 @@ def test_inapp_live_delivery_needs_arming_and_is_idempotent(excon):
     inj = deliver_now("1-15")
     assert inj.status == "sent"
     assert Mail.objects.filter(folder="inbox").count() == 4
-    a = Mail.objects.get(team__code="a")
+    a = Mail.objects.get(owner=None, team__code="a")
     assert a.subject == "Update for Team A" and a.from_addr == "undac-a-tl@simex.kobolabs.dev" and a.persona == "undac-a-tl"
     delivery.tick()
-    assert Mail.objects.count() == 4  # never twice
+    assert Mail.objects.filter(owner=None).count() == 4  # never twice (+ 4 in the leaders' Sent)
     assert Message.objects.filter(kind="live", channel="inapp", status="sent").count() == 4
 
 
@@ -164,7 +164,7 @@ def test_participant_sees_only_own_team(excon):
     pa, pb = participant("a"), participant("b")
     page = pa.get("/inbox/").content.decode()
     assert "Update for Team A" in page and "Update for Team B" not in page
-    b_mail = Mail.objects.get(team__code="b")
+    b_mail = Mail.objects.get(owner=None, team__code="b")
     assert pa.get(f"/inbox/t/{b_mail.thread}/").status_code == 404
     assert pb.get(f"/inbox/t/{b_mail.thread}/").status_code == 200
     Mail.objects.filter(pk=b_mail.pk)  # attachments of another team are not downloadable
@@ -209,7 +209,7 @@ def test_view_as_team_is_read_only(excon):
     team = Team.objects.get(code="a")
     r = excon.get(f"/inbox/as/{team.id}/")
     assert r.status_code == 200 and b"Viewing as Team A" in r.content
-    mail = Mail.objects.get(team=team)
+    mail = Mail.objects.get(owner=None, team=team)
     excon.get(f"/inbox/as/{team.id}/t/{mail.thread}/")
     assert Mail.objects.get(pk=mail.pk).read_at is None  # viewing as the team does not mark read
     assert excon.post(f"/inbox/as/{team.id}/send/", {"to": "p:cnn", "body": "x"}).status_code == 403
@@ -228,21 +228,21 @@ def test_inapp_reply_exact_match_and_answer_in_thread(excon):
     arm()
     deliver_now("1-15")
     pa = participant("a", "Jane")
-    mail = Mail.objects.get(team__code="a")
+    mail = Mail.objects.get(owner=None, team__code="a")
     r = pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: Update", "body": "Plan by 15:00",
                                  "in_reply_to": mail.id})
     assert r.status_code == 302
     resp = Response.objects.get()
     assert (resp.match, resp.channel, resp.persona) == ("exact", "inapp", "undac-a-tl")
     assert resp.inject.mel_id == "1-15" and resp.team.code == "a" and resp.person.name == "Jane"
-    sent = Mail.objects.get(team__code="a", folder="sent")
+    sent = Mail.objects.get(owner=None, team__code="a", folder="sent")
     assert sent.thread == mail.thread and sent.author.name == "Jane"
     # ExCon answers in character: lands in Team A's inbox, same conversation
     r = excon.post(f"/replies/{resp.id}/answer/", {"body": "Thanks, noted."})
     assert r.status_code == 302
-    ans = Mail.objects.filter(team__code="a", folder="inbox").order_by("-id").first()
+    ans = Mail.objects.filter(owner=None, team__code="a", folder="inbox").order_by("-id").first()
     assert ans.body == "Thanks, noted." and ans.thread == mail.thread and ans.from_addr == "undac-a-tl@simex.kobolabs.dev"
-    assert not Mail.objects.filter(team__code="b", body="Thanks, noted.").exists()
+    assert not Mail.objects.filter(owner=None, team__code="b", body="Thanks, noted.").exists()
     # a reply to the answer is still matched to the inject
     pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: Re: Update", "body": "ok", "in_reply_to": ans.id})
     assert Response.objects.order_by("-id").first().inject.mel_id == "1-15"
@@ -278,7 +278,7 @@ def test_test_run_inapp_goes_to_test_team(excon):
     TestRunItem.objects.update(due_at=timezone.now() - timedelta(seconds=1))
     delivery.tick()
     assert set(Mail.objects.values_list("team__code", flat=True)) == {"test"}
-    m = Mail.objects.filter(subject__contains="Update for Team B").first()
+    m = Mail.objects.filter(owner=None, subject__contains="Update for Team B").first()
     assert m.subject.startswith("[TEST R1]") and "Team B" in m.banner
     assert Inject.objects.get(mel_id="1-15").status == "scheduled"
     assert set(TestRunItem.objects.values_list("status", flat=True)) == {"sent"}
@@ -316,7 +316,7 @@ def test_drafts_star_archive_trash(excon):
     assert b"Draft subj" in pa.get("/inbox/?folder=drafts").content
     pa.post("/inbox/send/", {"draft_id": did, "to": "p:undac-a-tl", "subject": "Draft subj", "body": "done"})
     assert not Mail.objects.filter(folder="drafts").exists()
-    mail = Mail.objects.get(team__code="a", folder="inbox")
+    mail = Mail.objects.get(owner=None, team__code="a", folder="inbox")
     pa.post("/inbox/action/", {"threads": mail.thread, "action": "star"})
     assert b"Update for Team A" in pa.get("/inbox/?folder=starred").content
     pa.post("/inbox/action/", {"threads": mail.thread, "action": "archive"})
@@ -333,7 +333,7 @@ def test_team_to_team_setting():
     pa, pb = participant("a"), participant("b")
     tb = Team.objects.get(code="b")
     pa.post("/inbox/send/", {"to": f"t:{tb.id}", "subject": "Hi B", "body": "x"})
-    assert not Mail.objects.filter(team=tb).exists()  # off by default: unknown recipient
+    assert not Mail.objects.filter(owner=None, team=tb).exists()  # off by default: unknown recipient
     conf.put("team_to_team", "1")
     pa.post("/inbox/send/", {"to": f"t:{tb.id}", "subject": "Hi B", "body": "x"})
     assert b"Hi B" in pb.get("/inbox/").content
@@ -387,7 +387,7 @@ def test_labels_like_gmail(excon):
     deliver_now("3-13")
     pa, pb = participant("a"), participant("b")
     team = Team.objects.get(code="a")
-    update, news = Mail.objects.get(team=team, subject="Update for Team A"), Mail.objects.get(team=team, subject="News")
+    update, news = Mail.objects.get(owner=None, team=team, subject="Update for Team A"), Mail.objects.get(owner=None, team=team, subject="News")
     # create, with validation
     assert pa.post("/inbox/labels/", {"op": "create", "name": "Trash"}).status_code == 400
     lid = pa.post("/inbox/labels/", {"op": "create", "name": "  Logistics  "}).json()["id"]
@@ -415,9 +415,9 @@ def test_labels_like_gmail(excon):
     assert pb.post("/inbox/labels/", {"op": "rename", "id": lid, "name": "x"}).status_code == 404
     b_lid = pb.post("/inbox/labels/", {"op": "create", "name": "B"}).json()["id"]
     pb.post("/inbox/action/", {"action": "label_add", "threads": update.thread, "label": b_lid})
-    pb.post("/inbox/action/", {"action": "move", "threads": Mail.objects.get(team__code="b", subject="News").thread, "to": lid})
+    pb.post("/inbox/action/", {"action": "move", "threads": Mail.objects.get(owner=None, team__code="b", subject="News").thread, "to": lid})
     assert not ThreadLabel.objects.filter(label_id=b_lid).exists()
-    assert not Mail.objects.filter(team__code="b", archived=True).exists()
+    assert not Mail.objects.filter(owner=None, team__code="b", archived=True).exists()
     # read-only view as team shows labels but can't change them
     assert "Logistics" in excon.get(f"/inbox/as/{team.id}/").content.decode()
     assert excon.post(f"/inbox/as/{team.id}/labels/", {"op": "create", "name": "x"}).status_code == 403
@@ -459,7 +459,7 @@ def test_push_subscribe_and_new_mail_is_pushed_to_the_team(excon, settings, djan
         with django_capture_on_commit_callbacks(execute=True):
             deliver_now("1-15")
         mine = [d for e, d in sent if e == APPLE]
-        mail = Mail.objects.get(team=team)
+        mail = Mail.objects.get(owner=None, team=team)
         assert mine == [{"title": mail.from_name, "body": "Update for Team A", "url": f"/inbox/t/{mail.thread}/",
                          "tag": f"mail-{mail.id}"}]
         assert PushSubscription.objects.get(endpoint=APPLE).last_ok_at
@@ -515,7 +515,7 @@ def test_inapp_read_tracking(excon):
     arm()
     deliver_now("1-15")
     pa = participant("a")
-    mail = Mail.objects.get(team__code="a")
+    mail = Mail.objects.get(owner=None, team__code="a")
     from ops.models import MailAttachment
     f = MailAttachment.objects.create(mail=mail, filename="plan.pdf", data=b"x", size=1)
     pa.get(f"/inbox/t/{mail.thread}/")
@@ -558,7 +558,7 @@ def test_every_page_renders_with_data(excon):
     _rubric(inj)
     excon.post("/tests/", {"name": "R", "scope": "ids", "ids": "3-13", "timing": "interval", "interval": "5"})
     pa = participant("a")
-    mail = Mail.objects.get(team__code="a")
+    mail = Mail.objects.get(owner=None, team__code="a")
     pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re", "body": "x", "in_reply_to": mail.id})
     pa.post("/inbox/draft/", {"to": "p:undac-a-tl", "subject": "d", "body": "y"})
     r, m, team = Response.objects.get(), Message.objects.first(), Team.objects.get(code="a")
@@ -585,7 +585,7 @@ def test_backup_roundtrip(excon):
     arm()
     deliver_now("1-15")
     pa = participant("a")
-    pa.get(f"/inbox/t/{Mail.objects.get(team__code='a').thread}/")  # a read event
+    pa.get(f"/inbox/t/{Mail.objects.get(owner=None, team__code='a').thread}/")  # a read event
     from ops.models import Event
     assert Event.objects.filter(type="read").count() == 1
     data = excon.get("/settings/backup/").json()
@@ -593,7 +593,7 @@ def test_backup_roundtrip(excon):
     from django.core.files.uploadedfile import SimpleUploadedFile
     r = excon.post("/settings/restore/", {"confirm": "RESTORE",
                                           "file": SimpleUploadedFile("b.json", json.dumps(data).encode())}, follow=True)
-    assert Mail.objects.count() == 4
+    assert Mail.objects.count() == 8  # 4 team inboxes + the 4 leaders' Sent
     assert Event.objects.filter(type="read").count() == 1  # read receipts survive a restore
     assert conf.get("live_armed") == "0"
     assert get_user_model().objects.filter(username="a.p").exists()
@@ -688,15 +688,15 @@ def test_conversations_group_back_and_forth_and_clear_mailbox(excon):
     arm()
     deliver_now("1-15")
     pa = participant("a", "Jane")
-    mail = Mail.objects.get(team__code="a")
+    mail = Mail.objects.get(owner=None, team__code="a")
     pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: Update", "body": "First", "in_reply_to": mail.id})
     first = Response.objects.get()
     excon.post(f"/replies/{first.id}/answer/", {"body": "Persona answer"})
-    ans = Mail.objects.filter(team__code="a", folder="inbox").order_by("-id").first()
+    ans = Mail.objects.filter(owner=None, team__code="a", folder="inbox").order_by("-id").first()
     pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: Re: Update", "body": "Second", "in_reply_to": ans.id})
     pb = participant("b", "Bob")
     pb.post("/inbox/send/", {"to": "p:undac-b-tl", "subject": "Re: Update", "body": "B reply",
-                             "in_reply_to": Mail.objects.get(team__code="b", folder="inbox").id})
+                             "in_reply_to": Mail.objects.get(owner=None, team__code="b", folder="inbox").id})
     page = excon.get("/replies/").content.decode()
     assert "2 from team · 1 answered" in page and "awaiting answer" in page
     assert page.count('class="status pending">awaiting answer') == 2  # A wrote last, and B
@@ -709,7 +709,7 @@ def test_conversations_group_back_and_forth_and_clear_mailbox(excon):
     assert excon.post("/inboxes/clear/", {"team": first.team_id, "confirm": "nope"}).status_code == 302
     assert Response.objects.filter(team__code="a").count() == 2
     excon.post("/inboxes/clear/", {"team": first.team_id, "confirm": "CLEAR"})
-    assert not Response.objects.filter(team__code="a").exists() and not Mail.objects.filter(team__code="a").exists()
+    assert not Response.objects.filter(team__code="a").exists() and not Mail.objects.filter(owner=None, team__code="a").exists()
     assert not Message.objects.filter(kind="reply").exists()
     assert Message.objects.filter(kind="live", team__code="a").exists()  # deliveries stay in the Log
     assert Response.objects.filter(team__code="b").count() == 1
@@ -720,7 +720,7 @@ def test_polls_for_alerts(excon):
     arm()
     deliver_now("1-15")
     pa = participant("a", "Jane")
-    mail = Mail.objects.get(team__code="a")
+    mail = Mail.objects.get(owner=None, team__code="a")
     j = pa.get(f"/inbox/poll/?since={mail.id - 1}").json()
     assert j["new"][0]["id"] == mail.id and j["new"][0]["subject"] == mail.subject and j["unread"] == 1
     assert pa.get(f"/inbox/poll/?since={mail.id}").json()["new"] == []
@@ -810,12 +810,12 @@ def test_followup_inapp_lands_in_the_same_conversation(excon):
     post["confirm"] = "1-15"
     post["files"] = _upload(b"%PDF", "Annex.pdf")
     excon.post(f"/injects/{inj.id}/followup/", post)
-    orig = Mail.objects.get(team__code="a", inject=inj, message=a)
-    fu = Mail.objects.filter(team__code="a").exclude(pk=orig.pk).get()
+    orig = Mail.objects.get(owner=None, team__code="a", inject=inj, message=a)
+    fu = Mail.objects.filter(owner=None, team__code="a").exclude(pk=orig.pk).get()
     assert fu.thread == orig.thread and fu.subject == "Re: Update for Team A" and fu.body == "Annex for Team A attached."
     assert [f.filename for f in fu.files.all()] == ["Annex.pdf"] and fu.inject_id == inj.id
     assert Attachment.objects.filter(inject=inj, filename="Annex.pdf").exists()
-    assert not Mail.objects.filter(team__code="b").exclude(message__kind="live").exists()
+    assert not Mail.objects.filter(owner=None, team__code="b").exclude(message__kind="live").exists()
     # A reply to the follow-up counts for the inject, and the conversation shows both.
     pa = participant("a", "Jane")
     pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: x", "body": "Got it", "in_reply_to": fu.id})
@@ -885,7 +885,7 @@ def test_inapp_personas_can_have_any_domain(excon):
     assert Sender.objects.get(pk=s.id).domain == "epeigonia.org"
     arm()
     deliver_now("1-15")
-    mail = Mail.objects.get(team__code="a")
+    mail = Mail.objects.get(owner=None, team__code="a")
     assert mail.from_addr == "undac-a-tl@epeigonia.org" and mail.persona == "undac-a-tl"
     pa = participant("a", "Jane")
     book = pa.get("/inbox/").content.decode()
@@ -895,7 +895,7 @@ def test_inapp_personas_can_have_any_domain(excon):
     assert resp.to == ["undac-a-tl@epeigonia.org"] and resp.inject.mel_id == "1-15"
     assert "&lt;undac-a-tl@epeigonia.org&gt;" in excon.get(f"/replies/{resp.id}/").content.decode()
     excon.post(f"/replies/{resp.id}/answer/", {"body": "Noted."})
-    assert Mail.objects.filter(team__code="a", body="Noted.").get().from_addr == "undac-a-tl@epeigonia.org"
+    assert Mail.objects.filter(owner=None, team__code="a", body="Noted.").get().from_addr == "undac-a-tl@epeigonia.org"
     # By email the persona still sends from our domain.
     inj = Inject.objects.get(mel_id="1-15")
     inj.channel = "email"
@@ -924,8 +924,8 @@ def test_same_username_on_two_domains_is_two_personas(excon):
     arm()
     deliver_now("2-01")
     deliver_now("2-02")
-    cnn = Mail.objects.get(team__code="a", subject="CNN story")
-    reu = Mail.objects.get(team__code="a", subject="Reuters story")
+    cnn = Mail.objects.get(owner=None, team__code="a", subject="CNN story")
+    reu = Mail.objects.get(owner=None, team__code="a", subject="Reuters story")
     assert (cnn.from_addr, cnn.persona, reu.from_addr, reu.persona) == (
         "news@cnn.com", "cnn-news", "news@reuters.com", "reuters-news")
     pa = participant("a", "Jane")
@@ -935,7 +935,7 @@ def test_same_username_on_two_domains_is_two_personas(excon):
     resp = Response.objects.get()
     assert (resp.persona, resp.to, resp.inject.mel_id) == ("reuters-news", ["news@reuters.com"], "2-02")
     excon.post(f"/replies/{resp.id}/answer/", {"body": "A."})
-    ans = Mail.objects.get(team__code="a", body="A.")
+    ans = Mail.objects.get(owner=None, team__code="a", body="A.")
     assert ans.from_addr == "news@reuters.com" and ans.thread == reu.thread and ans.persona == "reuters-news"
     # Two personas can't show the same SIMEX Mail address.
     cnn_s = Sender.objects.get(local_part="cnn-news")
@@ -1022,7 +1022,7 @@ def test_stale_pending_answer_is_delivered_by_the_scheduler(excon):
     arm()
     deliver_now("1-15")
     pa = participant("a", "Jane")
-    mail = Mail.objects.get(team__code="a")
+    mail = Mail.objects.get(owner=None, team__code="a")
     pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: Update", "body": "x", "in_reply_to": mail.id})
     resp = Response.objects.get()
     conf.put("paused", "1")
@@ -1032,7 +1032,7 @@ def test_stale_pending_answer_is_delivered_by_the_scheduler(excon):
     conf.put("paused", "0")
     delivery.tick()
     m.refresh_from_db()
-    assert m.status == "sent" and Mail.objects.filter(body="Noted.").exists()
+    assert m.status == "sent" and Mail.objects.filter(owner=None, body="Noted.").exists()
 
 
 def test_inbound_catch_up_only_recent_and_only_with_resend():
@@ -1139,12 +1139,12 @@ def test_team_to_team_reply_stays_between_the_two_teams():
     # every team has a persona thread with the same subject
     persona_b = Mail.objects.create(team=tb, folder="inbox", subject="Situation update", thread="persona-b")
     pa.post("/inbox/send/", {"to": f"t:{tb.id}", "subject": "Situation update", "body": "from A"})
-    b_copy = Mail.objects.filter(team=tb, body="from A").get()
+    b_copy = Mail.objects.filter(owner=None, team=tb, body="from A").get()
     assert b_copy.thread != persona_b.thread
     pb.post("/inbox/send/", {"to": f"t:{ta.id}", "subject": "Re: Situation update", "body": "from B",
                              "in_reply_to": b_copy.id})
-    a_sent = Mail.objects.get(team=ta, folder="sent", body="from A")
-    a_copy = Mail.objects.get(team=ta, folder="inbox", body="from B")
+    a_sent = Mail.objects.get(owner=None, team=ta, folder="sent", body="from A")
+    a_copy = Mail.objects.get(owner=None, team=ta, folder="inbox", body="from B")
     assert a_copy.thread == a_sent.thread
 
 
@@ -1198,7 +1198,7 @@ def test_reply_files_in_the_conversation_and_answer_with_files(excon):
                                     data=b"%PDF")
     arm()
     deliver_now("1-15")
-    mail = Mail.objects.get(team__code="a")
+    mail = Mail.objects.get(owner=None, team__code="a")
     pa = participant("a", "Jane")
     pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: Update", "body": "See attached.",
                              "in_reply_to": mail.id,
@@ -1220,7 +1220,7 @@ def test_reply_files_in_the_conversation_and_answer_with_files(excon):
     r = excon.post(f"/replies/{resp.id}/answer/", {"body": "Here you go.", "att": [str(doc.id)],
                                                     "files": [SimpleUploadedFile("C:\\tmp\\reply.png", PNG, "image/png")]})
     assert r.status_code == 302
-    ans = Mail.objects.get(team__code="a", folder="inbox", body="Here you go.")
+    ans = Mail.objects.get(owner=None, team__code="a", folder="inbox", body="Here you go.")
     assert ans.thread == mail.thread
     assert sorted((f.filename, f.content()) for f in ans.files.all()) == [("1-15 Plan.pdf", b"%PDF"), ("reply.png", PNG)]
     m = Message.objects.get(kind="reply")

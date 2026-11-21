@@ -11,6 +11,7 @@
     {% if r.cc %}<dt>Cc</dt><dd>{{ r.cc|joinlist }}</dd>{% endif %}
     <dt>Via</dt><dd>{% if r.channel == 'inapp' %}in-app{% if r.team %} · <a href="/inbox/as/{{ r.team_id }}/t/{{ r.mail.thread }}/?folder=sent">view in the team's mailbox</a>{% endif %}{% else %}email{% endif %}</dd>
     <dt>Received</dt><dd>{{ r.received_at|date:"D d M H:i:s" }}{% if minutes is not None %} · <b>{{ minutes }} min</b> after the message it answers{% endif %}</dd>
+    {% if r.match == 'leader' %}<dt>Team leader</dt><dd class="warn">From the team leader, answering their copy: kept here, never counted as the team's reply.</dd>{% endif %}
     <dt>Inject</dt><dd>{% if r.inject %}<a href="/injects/{{ r.inject.id }}/">{{ r.inject.mel_id }}</a> {{ r.inject.subject|default:'' }} <span class="muted">({{ r.match }})</span>{% else %}<span class="warn">not matched</span>{% endif %}</dd>
     {% if r.error %}<dt>Error</dt><dd class="err">{{ r.error }}</dd>{% endif %}
   </dl>
@@ -56,7 +57,7 @@
   </fieldset>{% endif %}
   <p class="hint">Up to {{ max_mb }} MB of files in all.</p>
   <button class="btn">Send reply</button>
-  {% for m in answers %}<p class="small">Answered {{ m.created_at|date:"D H:i" }}: <a href="/log/{{ m.id }}/">{{ m.status }}</a></p>{% endfor %}
+  {% for m in answers %}<p class="small">Answered {{ m.created_at|date:"D H:i" }}{% if m.author %} <b>by the team leader, {{ m.author.name }}</b>, in SIMEX Mail{% endif %}: <a href="/log/{{ m.id }}/">{{ m.status }}</a></p>{% endfor %}
 </form>
 {% endif %}
 

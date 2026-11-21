@@ -67,23 +67,25 @@ def payload(mail):
 
 
 def notify_mail(mail):
-    """Push a Mail that just landed in a team's inbox (call inside or outside a transaction)."""
+    """Push a Mail that just landed in a mailbox (call inside or outside a transaction): the
+    team's members' devices for the team inbox, the leader's for a team leader's own mailbox."""
     if not (enabled() or _sender) or mail.folder != "inbox":
         return
-    transaction.on_commit(lambda: _start(mail.team_id, payload(mail), mail.author_id))
+    transaction.on_commit(lambda: _start(mail.team_id, payload(mail), mail.author_id, mail.owner_id))
 
 
-def _start(team_id, data, author_id):
+def _start(team_id, data, author_id, owner_id=None):
     if RUN_INLINE:
-        return send_team(team_id, data, author_id)
-    threading.Thread(target=send_team, args=(team_id, data, author_id), daemon=True).start()
+        return send_team(team_id, data, author_id, owner_id)
+    threading.Thread(target=send_team, args=(team_id, data, author_id, owner_id), daemon=True).start()
 
 
-def send_team(team_id, data, author_id=None):
+def send_team(team_id, data, author_id=None, owner_id=None):
     from django.db import connection
     from .models import PushSubscription
     try:
-        subs = list(PushSubscription.objects.filter(person__team_id=team_id, person__active=True,
+        who = {"person_id": owner_id} if owner_id else {"person__team_id": team_id, "person__role": "member"}
+        subs = list(PushSubscription.objects.filter(**who, person__active=True,
                                                     person__user__is_active=True).exclude(person_id=author_id))
         body = json.dumps(data)
         for s in subs:

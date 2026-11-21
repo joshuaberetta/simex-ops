@@ -22,9 +22,9 @@ from django.views.decorators.http import require_POST
 
 from . import ai, legacy_import, backup, checks, conf, delivery, documents, importer, inbound, mailer, render as rnd
 from .access import excon_required
-from .models import (CHANNELS, DELIVERY_MODES, STATUSES, AiGrade, Attachment, AttachmentImport, Audit, Grade,
+from .models import (CHANNELS, DELIVERY_MODES, ROLES, STATUSES, AiGrade, Attachment, AttachmentImport, Audit, Grade,
                      ImportBatch, Inject, InjectDraft, InjectReview, Mail, MailAttachment, MailLabel, Message,
-                     MessageAttachment, Person, ReplyAnalysis, Response,
+                     MessageAttachment, Person, PushSubscription, ReplyAnalysis, Response,
                      ResponseAttachment, RubricCriterion, Sender, Team, TestRun, TestRunItem, audit)
 
 MAX_ATTACHMENT = documents.MAX_ATTACHMENT
@@ -232,6 +232,7 @@ def _inject_save(request, inj):
         inj.channel = P.get("channel")
     if P.get("footer_mode") in ("default", "custom", "none"):
         inj.footer_mode = P.get("footer_mode")
+    inj.to_leaders = P.get("to_leaders") == "1"
     team_ids = [int(x) for x in P.getlist("team_ids")]
     all_ids = list(Team.objects.filter(active=True, is_test=False).values_list("id", flat=True))
     inj.team_ids = None if not team_ids or set(all_ids) <= set(team_ids) else team_ids
@@ -525,7 +526,10 @@ def senders_page(request):
             messages.error(request, f"{x.inapp_address} is already the SIMEX Mail address of {clash.local_part}.")
             return redirect("/senders/")
         x.active = P.get("active") == "1" or not sid
+        x.team_leader = P.get("team_leader") == "1"
         x.save()
+        if x.team_leader:  # one team leader persona: each team's leader plays it
+            Sender.objects.exclude(pk=x.pk).filter(team_leader=True).update(team_leader=False)
         renamed = 0
         if old and old != local and P.get("rename_injects") == "1":
             renamed = Inject.objects.filter(sender_local=old).update(sender_local=local)
@@ -592,7 +596,11 @@ def people_page(request):
     people = list(Person.objects.select_related("team", "user"))
     has_placeholders = any(rnd.PLACEHOLDER_DOMAIN.search(p.email or "") for p in people)
     creds = request.session.pop("new_credentials", None)
-    return render(request, "ops/people.html", {"tab": "people", "teams": teams, "people": people,
+    for t in teams:  # one team leader (ExCon) and one or more members sharing the inbox
+        mine = [p for p in people if p.team_id == t.id and p.active]
+        t.n_leaders = sum(p.role == "tl" for p in mine)
+        t.n_members = sum(p.role == "member" for p in mine)
+    return render(request, "ops/people.html", {"tab": "people", "teams": teams, "people": people, "ROLES": ROLES,
                                                "has_placeholders": has_placeholders, "creds": creds,
                                                "creds_json": json.dumps(creds or [])})
 
@@ -640,6 +648,16 @@ def _store_creds(request, rows):
     request.session["new_credentials"] = rows
 
 
+def _leader_problem(p):
+    """Why p can't be a team leader (one active leader per team, who needs a team), or None."""
+    if p.role != "tl" or not p.active:
+        return None
+    if not p.team_id:
+        return f"{p.name}: a team leader needs a team."
+    other = Person.objects.filter(team_id=p.team_id, role="tl", active=True).exclude(pk=p.pk).first()
+    return f"{p.team.name} already has a team leader ({other.name}): one per team." if other else None
+
+
 @excon_required
 @require_POST
 def person_save(request):
@@ -650,11 +668,18 @@ def person_save(request):
         messages.error(request, "A person needs a name (and, if given, a valid email).")
         return redirect("/people/")
     p = get_object_or_404(Person, pk=_int(pid)) if pid else Person()
+    old_role = p.role if pid else None
     p.name, p.email = name, email
     p.team_id = _int(P.get("team_id"))
     p.role = "tl" if P.get("role") == "tl" else "member"
     p.active = P.get("active") == "1" or not pid
+    problem = _leader_problem(p)
+    if problem:
+        messages.error(request, problem)
+        return redirect("/people/")
     p.save()
+    if old_role and old_role != p.role:  # a different mailbox from now on: its devices subscribe again
+        PushSubscription.objects.filter(person=p).delete()
     if p.user:
         p.user.is_active = p.active
         p.user.email, p.user.first_name = p.email, p.name[:150]
@@ -728,9 +753,16 @@ def people_bulk(request):
         existing = Person.objects.filter(email__iexact=email).first() if email else \
             Person.objects.filter(name=name, team=teams.get(code)).first()
         p = existing or Person()
+        old_role = p.role if p.pk else None
         p.name, p.email, p.role, p.active = name, email, role, True
         p.team = teams[code] if code else None
+        problem = _leader_problem(p)
+        if problem:
+            errors.append(f"line {n}: {problem}")
+            continue
         p.save()
+        if old_role and old_role != p.role:
+            PushSubscription.objects.filter(person=p).delete()
         if request.POST.get("accounts") == "1":
             pw = ensure_account(p)
             if pw:
@@ -768,9 +800,10 @@ def inboxes(request):
         t.n_sent = mails.filter(folder="sent").count()
         t.last_in = mails.filter(folder="inbox").order_by("-created_at").values_list("created_at", flat=True).first()
         t.last_out = mails.filter(folder="sent").order_by("-created_at").values_list("created_at", flat=True).first()
-        t.logins = t.people.exclude(user=None).count()
-        t.last_login = (User.objects.filter(person__team=t).exclude(last_login=None).order_by("-last_login")
-                        .values_list("last_login", flat=True).first())
+        t.logins = t.people.participants().exclude(user=None).count()
+        t.last_login = (User.objects.filter(person__team=t, person__role="member").exclude(last_login=None)
+                        .order_by("-last_login").values_list("last_login", flat=True).first())
+        t.lead = t.leader()
     return render(request, "ops/inboxes.html", {"tab": "inboxes", "teams": teams})
 
 
@@ -960,7 +993,7 @@ def conversations(reps):
 def reply_grid(kind):
     """Teams, every Response of this kind, the inject x team matrix and per-team totals
     (Replies tab and Dashboard)."""
-    kinds = ["live", "reply", "followup"] if kind == "live" else ["test", "oneoff"]
+    kinds = ["live", "reply", "followup", "leader"] if kind == "live" else ["test", "oneoff"]
     teams = list(Team.objects.filter(active=True, is_test=(kind != "live")) if kind != "live"
                  else Team.objects.filter(active=True, is_test=False))
     all_in = list(Response.objects.filter(kind=kind).select_related("inject", "team", "person", "mail")
@@ -1033,11 +1066,12 @@ def replies_page(request):
     kind = request.GET.get("kind", "live")
     team_f, inject_f = _int(request.GET.get("team")) or 0, _int(request.GET.get("inject")) or 0
     status_f, matched_f = request.GET.get("status", ""), request.GET.get("matched", "")
-    kinds = ["live", "reply", "followup"] if kind == "live" else ["test", "oneoff"]
+    kinds = ["live", "reply", "followup", "leader"] if kind == "live" else ["test", "oneoff"]
     teams, all_in, matrix, team_sum = reply_grid(kind)
     # Read / opens & clicks: per inject x team, from the delivering Messages.
     eng_msgs = list(Message.objects.filter(kind__in=["live"] if kind == "live" else ["test", "oneoff"],
-                                           status="sent").exclude(inject=None).select_related("inject"))
+                                           status="sent").exclude(inject=None).exclude(person__role="tl")
+                    .select_related("inject"))
     if kind != "live":  # test deliveries all go to the Test team: group them under it
         tt = delivery.test_team()
         for m in eng_msgs:
@@ -1151,7 +1185,7 @@ def reply_page(request, rid):
     new_part, quoted = inbound.split_quoted(r.text or "")
     return render(request, "ops/reply.html", {
         "tab": "replies", "r": r, "minutes": inbound.response_minutes(r), "conv": conv, "latest": latest,
-        "answers": r.answers.order_by("id"), "teams": Team.objects.all(), "people": Person.objects.order_by("name"),
+        "answers": r.answers.order_by("id"), "teams": Team.objects.all(), "people": Person.objects.participants().order_by("name"),
         "injects_all": Inject.objects.order_by("seq"), "new_part": new_part, "quoted": quoted,
         "sender": rnd.sender_by_local(r.persona)[0] if r.persona else None,
         "persona_addr": rnd.persona_addr(r.persona, r.channel) if r.persona else "",
@@ -1296,7 +1330,7 @@ def grade_page(request, iid, tid):
         return redirect(f"/grades/{iid}/{nxt}/" if nxt else "/replies/")
     reps = list(Response.objects.filter(inject=inj, team=team).exclude(status="ignored")
                 .select_related("person", "mail").order_by("received_at"))
-    sent = inbound.first_sent(["live", "reply", "followup", "test", "oneoff"] if team.is_test else ["live", "reply", "followup"])
+    sent = inbound.first_sent(["live", "reply", "followup", "leader", "test", "oneoff"] if team.is_test else ["live", "reply", "followup", "leader"])
     sent_at = sent.get((iid, tid)) or sent.get((iid, None))
     tags = {a.response_id: a for a in ReplyAnalysis.objects.filter(response__in=reps, status="done")}
     for r in reps:

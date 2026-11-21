@@ -61,14 +61,17 @@ Only participant-facing fields are imported. Expected outcomes, story, theme, ke
 ### 3.2 Teams, participants and logins
 **People & logins.** A new app has placeholder teams A–D (with placeholder people, no logins) and the **Test team**.
 
-1. Paste the roster into **Paste a roster**, one line per person: `name,email,team code,role` (email optional for in-app; role `tl` for team leaders). Keep **create logins** and **remove the placeholder people** ticked.
+**Team members and team leaders.** Each team has **team members**, the participants (its focal point, or a few people sharing the team's one mailbox), and **one team leader**: an ExCon person who monitors the team, is not part of it, and plays the team leader persona (3.3). A team can't have two leaders, and a leader needs a team.
+
+1. Paste the roster into **Paste a roster**, one line per person: `name,email,team code,role` (email optional for in-app; role `tl` for the team's leader, empty for members). Keep **create logins** and **remove the placeholder people** ticked.
    ```
    Jane Doe,jane@example.org,a,tl
    John Roe,,a
    ```
 2. The page then shows **New logins: shown once**: username and password for each new person. Click **Printable sheet** and print it (one slip per person, with the SIMEX Mail address https://mail.simex.kobolabs.dev), or copy it somewhere safe. Passwords are not stored readable; if one is lost, use **reset password** on that person.
 3. Each team shares **one mailbox**: everyone in Team A sees Team A's mail, and what one member sends appears in everyone's *Sent*, with the sender's name.
-4. Give yourself a login in the **Test team** (Add person → team "Test team" → create login) to try SIMEX Mail as a participant.
+4. **Team leaders** sign in at the same SIMEX Mail address and get three tabs: **My mail** (their own mailbox, as the team leader persona), the **team inbox** read-only (with Claude's reading of each reply from the team: who wrote it, tone, quality, flags, possibly AI-written) and the team's **Dashboard**. They only ever see their own team, write only to their own team, and never see injects, rubrics or grades. Their guide is under **?** in SIMEX Mail. Changing someone's role takes effect on their next page; their devices then turn alerts on again.
+5. Give yourself a login in the **Test team** (Add person → team "Test team" → create login) to try SIMEX Mail as a participant.
 
 - **Team code** fills `{team}` in addresses (`undac-{team}-tl` → `undac-a-tl@…`); **team name** fills `{team_name}`.
 - **Disable** blocks a login without deleting the person; **delete** removes both.
@@ -78,6 +81,11 @@ Only participant-facing fields are imported. Expected outcomes, story, theme, ke
 One row per persona, created from the MEL's sender aliases. Fix display names (e.g. `CCDPR` → "CCDPR Deputy Director"); **rename in injects** keeps injects in step when a username changes. Add personas the MEL lacks (e.g. `cnn` / "CNN Breaking News").
 
 Active senders are the participants' **address book**: they can write to any of them. Untick **active** to hide one.
+
+**The team leader persona.** Tick **team leader** on the persona each team's leader plays (`undac-{team}-tl`; the import ticks it for you). Then, for each team:
+- what is sent as it (injects, follow-ups, your **Answer as** on the Replies tab, and what the leader writes) lands in the team's inbox as usual **and** in the leader's **Sent**, in the same conversation;
+- what the team writes to it (or copies it on) is a reply as for any persona (Replies tab, AI analysis, grading) **and** arrives in the leader's **Inbox**;
+- the leader's own answers to the team show on the reply's page as *answered by the team leader*, so check there before answering as the leader yourself.
 
 **Address in SIMEX Mail.** Each persona has a **username** (what injects use, and its email address: `username@simex.kobolabs.dev`) and, for SIMEX Mail, any address you like: the username and domain after it on its row, e.g. `news` @ `cnn.com`. Empty parts default to the username and simex.kobolabs.dev. Participants see that address on messages and in their address book. Two personas can show the same name on different domains: `news@cnn.com` (username `cnn-news`) and `news@reuters.com` (username `reuters-news`); only the full SIMEX Mail address has to be unique.
 By email every persona sends from **its username @simex.kobolabs.dev**, the only domain Resend can send from, so switching to email (5.6) changes the addresses teams see.
@@ -103,7 +111,7 @@ The inject page lists the same points under **Before sending**. If an AI point i
 Then open each one:
 - **Send at:** the real (Nairobi) time; the MEL's scenario time is separate.
 - **Channel:** set for all injects by Settings → Delivery channel; the inject page shows which one applies. Only in *Per inject* mode can you choose here.
-- **Sender username / name**, **Recipients** (*one per team*, *one per participant* — lands in that person's team mailbox addressed to them —, *everyone*), teams to leave out.
+- **Sender username / name**, **Recipients** (*one per team*, *one per participant* — lands in that person's team mailbox addressed to them —, *everyone*), teams to leave out, and **also to team leaders**: a copy in each team leader's **My mail** (by email: a copy to the leader's address). The import ticks it when the MEL's recipients name the TL ("Team members & TL"); the Injects list shows *+ team leaders*. An inject from the team leader persona is in the leader's Sent anyway. A follow-up reaches the leaders' copies too. A leader who answers their email copy is kept on the Replies tab as *from the team leader* and never counts as the team's reply.
 - **Subject and body:** plain text; `{team}`, `{team_name}`, `{name}`, `{first_name}` are filled per message.
 - **Preview** (right): exactly what each team gets. **Clear every orange warning.**
 - **Replies & rubric:** tick "teams are expected to reply", set "within (minutes)", add criteria with max points (or copy another inject's rubric).
@@ -135,7 +143,7 @@ On an inject, **Test → Send test**. In-app injects land in the **Test team** m
 To rehearse the whole loop, sign in as your Test team login (another browser or a private window), open the test messages, reply, and watch them appear under **Replies → Test team**.
 
 ### 4.3 View as team
-**Team inboxes → View as team** opens SIMEX Mail exactly as that team sees it, **read-only**: nothing is marked read, nothing can be sent, and your session stays ExCon. Use it to check what a team has received, or to look over their shoulder during the debrief. You also see the labels the team has made to organise its mail (Gmail-style folders); they're the team's own and change nothing on the ExCon side.
+**Team inboxes → View as team** opens SIMEX Mail exactly as that team sees it (**Team leader** next to it: that team's leader's mailbox), **read-only**: nothing is marked read, nothing can be sent, and your session stays ExCon. Use it to check what a team has received, or to look over their shoulder during the debrief. You also see the labels the team has made to organise its mail (Gmail-style folders); they're the team's own and change nothing on the ExCon side.
 
 ---
 
@@ -193,6 +201,7 @@ Replies to emails sent earlier keep arriving on the Replies tab. To go back to e
 When **Settings → AI analysis** is on, Claude reads what teams send. It is for ExCon only: participants never see any of it, and it never changes a grade.
 - **Each reply** (Claude Haiku, within a minute of arriving): a one-line summary, tone and sentiment, clarity / completeness / actionability (1–5), what the team asks for and commits to, the figures it states, flags (*misreads the inject*, *needs ExCon attention*, *safety or duty-of-care issue*, *sent to the wrong persona*, *steps out of the exercise*, *no action or decision*), and how likely the text is **AI-written** (0–100 %). It shows on the reply's page under **AI analysis**, with **Re-run**.
 - **Each team's thread on an inject with a rubric** (Claude Sonnet, once the thread has been quiet for 3 minutes, and again if the team writes more): suggested points per criterion with a reason and a quote from the reply. On the grade page each criterion shows **AI n** with the reason; **Fill in the AI suggestions** copies them into the form, and nothing is saved until you click **Save**. The grid on the Replies tab shows *AI n / max* under the grade.
+- **Team leaders** see Claude's reading of their own team's replies (not the grade suggestions, not other teams): in the team inbox under each message and on their Dashboard tab in SIMEX Mail.
 - **"AI-written"** is a hint to look closer, never proof: it is judged from the style of the text and how fast it was written after the team opened the inject. Short messages and non-native English make it unreliable. Don't confront a participant on this alone.
 - **Dashboard tab:** a tile per team (expected injects answered, median first reply, graded score, AI-suggested score, sentiment of each reply over the exercise, tone mix, a delivered → read → answered → graded funnel), the **rubric results** heatmap (switch between *Graded* and *AI suggested*), **where the AI and the graders disagree** (a quarter of the points or more: check the rubric or the reply), **Flags**, **Possibly AI-written** (60 % and above), **What teams are asking for** and **Decisions and commitments**. **Write the summary** produces a situation summary across teams (themes, each team's strengths and concerns, what ExCon may want to act on now, points for the hotwash) in about a minute.
 - **Each unsent inject** (Claude Haiku, before the exercise and again whenever the inject changes): reads it as ExCon wrote it, with the list of all injects for context, and reports only concrete problems: attachments it mentions but doesn't have, unfilled placeholders, notes for ExCon left in, dates, times or names that contradict each other or the scenario, a greeting that doesn't fit the recipients, a persona that doesn't fit the content. They show as purple **AI: …** tags on the Injects list and under **Before sending** on the inject page, with **Check again with AI** and **Dismiss**. On the Injects tab, **Check unchecked with AI** reads only the unsent injects that have no review of them as they are now (new, changed since, or failed), **Check all** re-reads every unsent inject (the count next to them says how many have been read as they are now), and **Check with AI** in the bar above the list reads just the ones you tick. A full pass over 100 injects costs about five cents.

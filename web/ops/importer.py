@@ -165,6 +165,14 @@ def delivery_for(label):
     return "each_team"
 
 
+TO_LEADERS = re.compile(r"\b(tls?|team ?lead(er)?s?)\b", re.I)
+
+
+def to_leaders_for(label):
+    """The MEL's recipients name the team leaders too (e.g. "Team members & TL")."""
+    return bool(TO_LEADERS.search(label or ""))
+
+
 def is_email(raw):
     return bool(raw.get("sender")) or "mail" in (raw.get("method") or "").lower()
 
@@ -194,6 +202,7 @@ def normalise(raw_items):
             "sender_domain": _cut(sender_domain(raw.get("sender")), 200),
             "recipients_label": _cut(raw.get("recipients"), 200),
             "delivery": delivery_for(raw.get("recipients")),
+            "to_leaders": to_leaders_for(raw.get("recipients")),
             "subject": raw.get("subject"),
             "body": raw.get("content"),
             "supporting_documents": "\n".join(docs) or None,
@@ -380,13 +389,18 @@ def ensure_senders(records, use_domains=False):
     MEL's (SIMEX Mail shows it); a domain set on the Senders tab is never changed."""
     domains = sender_domains(records) if use_domains else {}
     have = {x.local_part: x for x in Sender.objects.all()}
+    leader_set = any(x.team_leader for x in have.values())
     for r in records:
         lp = r.get("sender_local")
         if lp and lp not in have:
             # "undac-{team}-tl" -> "UNDAC {team_name} TL"; edit names on the Senders tab.
             name = " ".join("{team_name}" if "{" in p else p.upper() for p in lp.split("-"))
             shown, domain = domains.get(lp, ("", ""))
-            have[lp] = Sender.objects.create(local_part=lp, display_name=name, inapp_local=shown, domain=domain)
+            # The first "...-{team}-tl" is the team leader persona (each team's leader plays it).
+            is_leader = not leader_set and "{team}" in lp and lp.endswith("-tl")
+            leader_set = leader_set or is_leader
+            have[lp] = Sender.objects.create(local_part=lp, display_name=name, inapp_local=shown, domain=domain,
+                                             team_leader=is_leader)
         elif lp in domains and not have[lp].domain:
             have[lp].inapp_local, have[lp].domain = domains[lp]
             have[lp].save(update_fields=["inapp_local", "domain"])

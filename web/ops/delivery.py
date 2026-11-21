@@ -57,8 +57,8 @@ def new_message(inj, d, kind, idem_key, run=None):
                    to=d.to if d.channel == "email" else [d.to_label], cc=d.cc, bcc=d.bcc, original_to=d.original_to,
                    subject=d.subject, text=d.text, html=d.html, attachment_ids=d.attachment_ids,
                    team_id=d.team_id, person_id=d.person_id, reply_token=token if email_reply else None,
-                   inbox_team_id=d.inbox_team_id, banner=d.banner or "", body=d.body, footer=d.footer,
-                   persona=d.reply_local or "")
+                   inbox_team_id=d.inbox_team_id, inbox_owner_id=d.inbox_owner_id, banner=d.banner or "",
+                   body=d.body, footer=d.footer, persona=d.reply_local or "")
 
 
 def _put_mail(m):
@@ -66,18 +66,41 @@ def _put_mail(m):
     name, addr = email.utils.parseaddr(m.from_addr)
     parent = m.response.mail if m.response_id and m.response and m.response.mail_id else None
     mail = Mail.objects.create(
-        team_id=m.inbox_team_id, folder="inbox", thread=m.thread or (parent.thread if parent else ""),
-        from_name=name, from_addr=addr, to_label=(m.to or [""])[0], to_person_id=m.person_id,
+        team_id=m.inbox_team_id, owner_id=m.inbox_owner_id, folder="inbox",
+        thread=m.thread or (parent.thread if parent else ""),
+        from_name=name, from_addr=addr, to_label=(m.to or [""])[0],
+        to_person_id=None if m.inbox_owner_id else m.person_id,
         persona=m.persona or addr.split("@")[0], subject=m.subject, body=m.body, footer=m.footer, banner=m.banner,
         message=m, inject_id=m.inject_id, in_reply_to=parent, is_test=m.kind in ("test", "oneoff"))
+    _attach(mail, m)
+    push.notify_mail(mail)
+    lead = _leader_sent(m, mail)
+    if lead:  # sent as the team leader persona: the leader has it in Sent, in the same conversation
+        sent = Mail.objects.create(
+            team_id=m.inbox_team_id, owner=lead, folder="sent", thread=mail.thread, from_name=name, from_addr=addr,
+            to_label=mail.to_label or mail.team.name, persona="", subject=m.subject, body=m.body, footer=m.footer,
+            banner=m.banner, message=m, inject_id=m.inject_id, is_test=mail.is_test, read_at=timezone.now(),
+            author_id=m.author_id)
+        _attach(sent, m)
+    return mail
+
+
+def _attach(mail, m):
     for a in Attachment.objects.filter(id__in=m.attachment_ids or []):
         MailAttachment.objects.create(mail=mail, attachment=a, filename=a.filename, content_type=a.content_type,
                                       size=a.size)
     for f in m.files.all():  # files ExCon uploaded to an answer: the Mail gets its own copy
         MailAttachment.objects.create(mail=mail, filename=f.filename, content_type=f.content_type, size=f.size,
                                       data=f.data)
-    push.notify_mail(mail)
-    return mail
+
+
+def _leader_sent(m, mail):
+    """The team leader who has this delivery to the team inbox in Sent (it comes from the team
+    leader persona of that team), or None."""
+    if m.inbox_owner_id or not m.persona:
+        return None
+    lp = render.leader_persona(mail.team)
+    return mail.team.leader() if lp and lp["local"] == m.persona else None
 
 
 def deliver(msgs, dry_run=False, respect_pause=True):
@@ -419,7 +442,8 @@ def send_followup(inj, parents, subject, body, attachment_ids, user=""):
                           reply_local=local)
             if p.channel == "inapp":
                 d = render.Draft(**common, reply_to=None, to=[], cc=[], bcc=[], body=text, channel="inapp",
-                                 inbox_team_id=p.inbox_team_id, to_label=(p.to or [""])[0])
+                                 inbox_team_id=p.inbox_team_id, inbox_owner_id=p.inbox_owner_id,
+                                 to_label=(p.to or [""])[0])
             else:
                 quoted = "\n".join("> " + line for line in (p.body or "").splitlines()[:60])
                 when = timezone.localtime(p.sent_at or p.created_at).strftime("%a %d %b %H:%M")
@@ -505,4 +529,4 @@ def _guarded(fn, arg):
 
 
 def people_of(team):
-    return Person.objects.filter(team=team, active=True)
+    return Person.objects.participants().filter(team=team, active=True)
