@@ -126,6 +126,7 @@ Even if you plan to use email, make SIMEX Mail ready so you can switch in a minu
 4. Tell teams with iPhones to add SIMEX Mail to their home screen (Safari → **Share** → **Add to Home Screen**), open it from there and tap **Turn on alerts**: only then do they get notifications with SIMEX Mail closed. SIMEX Mail shows iPhone users this hint itself. Other phones and computers get them once alerts are on.
 
 ### 3.7 Rehearse (at least once) — section 4.
+End the rehearsal as you will end the exercise: grade the Test team's replies, then compile its report (**Dashboard → End-of-exercise reports → Test team**, 6.1) to check the figures and see what the write-up looks like. Clear the Test team's mailbox afterwards (6.2).
 
 ### 3.8 Take a backup
 **Settings → Download backup.** One file with everything: injects, attachments, mailboxes, logins, grades.
@@ -177,13 +178,14 @@ To rehearse the whole loop, sign in as your Test team login (another browser or 
 - **Files** show under the message they came with (the team's, the inject's or a persona answer's): click the name to download. Photos and screenshots (PNG, JPEG, GIF, WebP) are previewed in the page; click one to open it full size. A file too large to keep shows as *too large, not stored*.
 - On that page you can also read it, **view in the team's mailbox**, correct the **Match**, set **Status** (ignored replies don't count), and **Answer as <persona>**: the answer lands in the team's mailbox in the same conversation (or goes by email for email threads), and their next reply is tracked too. **Attach files** adds files from your computer, and **Attach documents of <inject>** any of the matched inject's documents (up to 28 MB in all). An answer can be just files.
 - **Grading:** from a grid cell or **Grade …**: all of the team's replies to that inject together; a score per criterion, comment, name; **Save and next team**. Non-responses can be graded too. **Export grades (CSV)** for the debrief.
+- **Grade as you go, with the reports in mind:** the team's end-of-exercise report is written from your grades and comments, so write a comment as you would say it to the team. Answer teams from the reply page (or an AI draft) rather than outside the app: the reports count what teams asked for and how fast it was answered.
 
 Write rubrics as observable behaviour ("acknowledged within 30 min", "named the cluster lead"), 2–4 points each. Nothing is copied from the MEL's expected outcomes.
 
 **Alerts without refreshing.** Every ExCon page checks for news every 10 seconds. A new reply, an AI flag (*needs ExCon attention*, *safety*), or an inject that fails or goes overdue shows a toast at the bottom right (click it to open the reply), plays a chime, updates the **Replies** badge and the tab title and icon, and shows a desktop notification while the tab is in the background. **🔔 Alerts** in the status bar turns this on or off; click it once on each computer to allow desktop notifications. Open tabs share what has been seen, so an alert comes once however many ExCon pages are open. Participants get the same kind of alerts in SIMEX Mail (a chime, a blue bar, the tab badge and a desktop notification once they click **Turn on alerts**). Their notifications are also *pushed*: a device that turned on alerts is told about each new message even with SIMEX Mail closed (on an iPhone, only from the home-screen app). They show the sender and subject, nothing more. **Sign out** stops them on that device (so a shared phone or laptop never shows the last team's mail); signing in again turns them back on. Pushes need the `VAPID_PRIVATE_KEY` secret; without it, alerts only work while SIMEX Mail is open.
 
 ### 5.5 End of each day
-**Settings → Disarm** (unless injects run overnight), **Download backup**, deal with overdue or failed injects.
+**Settings → Disarm** (unless injects run overnight), **Download backup**, deal with overdue or failed injects, and grade the day's replies while they are fresh (the reports use the grades, 6.1).
 
 ---
 
@@ -224,7 +226,12 @@ Claude (Sonnet) can draft a message for you to edit and send. It never sends any
 - The app records which injects, follow-ups and answers were sent from an AI draft, and whether you changed the text first. The end-of-exercise reports count them (6.1).
 
 ## 6. After the exercise
-Export grades and a final backup, disarm, and disable the participant logins (People & logins) once the debrief no longer needs them.
+In this order:
+1. **Disarm** and wait for the last answers; **Download backup**.
+2. **Finish grading** every team on every inject with a rubric (the Replies grid has no empty cells left for injects you mean to grade). Check *guess* and *unmatched* replies: a reply on the wrong inject counts as a miss in the reports.
+3. **Compile the reports** (6.1). Read and edit each team's report; ask the team's leader to read it too (they know the team best). Then **Write it again** on the ExCon report so it reads your edited text.
+4. **Print** each team's report to PDF and hand it to that team at the debrief; the ExCon report goes to ExCon and the exercise director.
+5. **Export grades (CSV)** and a final backup, then disable the participant logins (People & logins) once the debrief no longer needs them.
 
 ### 6.1 End-of-exercise reports
 **Dashboard → End-of-exercise reports** (Exercise or Test team). **Compile** makes a report for each team, written for the team to read at the debrief, and one for ExCon comparing the teams. Each compile is a new version; older ones stay listed. Finish grading first: the reports use the grades as they are when you compile.
@@ -235,7 +242,8 @@ Export grades and a final backup, disarm, and disable the participant logins (Pe
 - **Check and edit:** open each report. Every section has **Edit** (Markdown: `**bold**`, `- ` list items, `> ` quotes) and **Reset to Claude's**; edited sections are marked. **Write it again** redoes one report from the same figures and replaces your edits to it (write ExCon's again after editing the team reports, so it reads your text). If a write-up fails, the figures are still there.
 - **Print:** **Print** on a report, or on the compile **Print the team reports** / **Print all**, opens a printable page: use the browser's Print → Save as PDF. Each report starts on a new page. Give each team only its own report; the ExCon report is not for participants.
 
-**Clearing a team's mailbox after testing:** **Team inboxes → Clear a team's mailbox**, pick the team, type `CLEAR`. It deletes everything in that team's mailbox (received, sent, drafts, and the team's labels), its replies on the Replies tab with their AI analysis, the persona answers to them and the team's grades. Deliveries stay in the Log. It can't be undone, so download a backup first.
+### 6.2 Clearing a team's mailbox
+After testing: **Team inboxes → Clear a team's mailbox**, pick the team, type `CLEAR`. It deletes everything in that team's mailbox (received, sent, drafts, and the team's labels), its replies on the Replies tab with their AI analysis, the persona answers to them and the team's grades. Deliveries stay in the Log. It can't be undone, so download a backup first.
 
 ---
 
@@ -275,4 +283,6 @@ Export grades and a final backup, disarm, and disable the participant logins (Pe
 3. Teams signed in. Arm live sending.
 4. Watch **Replies**, **Dashboard** and **Team inboxes**; answer in character; grade as answers arrive.
 5. Handle overdue or failed injects; pause if anything looks wrong.
-6. End of day: disarm, download a backup.
+6. End of day: disarm, download a backup, grade the day's replies.
+
+**End of the exercise:** disarm, backup, finish grading, compile the reports, edit them (with each team's leader), rewrite the ExCon report, print, debrief (section 6).
