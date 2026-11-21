@@ -114,6 +114,7 @@ urlpatterns = [
     path("settings/pause/", x.settings_pause),
     path("settings/channel/", x.settings_channel),
     path("settings/ai/", a.settings_ai),
+    path("settings/ai/prompts/", a.settings_ai_prompts),
     path("settings/domain/", x.settings_domain),
     path("settings/backup/", x.settings_backup),
     path("settings/restore/", x.settings_restore),

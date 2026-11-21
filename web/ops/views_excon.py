@@ -87,7 +87,7 @@ def injects(request):
         rows = [i for i in rows if ql in " ".join(filter(None, [i.mel_id, i.subject, i.body, i.sender_local])).lower()]
     senders = {x.local_part: x for x in Sender.objects.all()}
     files = checks.files_by_inject()
-    reviews = {rv.inject_id: rv for rv in InjectReview.objects.all()}
+    reviews, prompt = {rv.inject_id: rv for rv in InjectReview.objects.all()}, ai.system("inject")
     ai_stats = {"unsent": 0, "checked": 0, "queued": 0}
     for i in rows:
         fs = files.get(i.id, [])
@@ -95,7 +95,7 @@ def injects(request):
         if not checks.unsent(i):
             continue
         ai_stats["unsent"] += 1
-        rv = ai.current_review(i, fs, senders, reviews)
+        rv = ai.current_review(i, fs, senders, reviews, prompt)
         if rv:
             ai_stats["checked"] += 1
             if not rv.dismissed:

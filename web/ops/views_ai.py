@@ -219,8 +219,8 @@ def injects_ai_check(request):
         rows = [i for i in rows if i.id in ids]
     elif scope == "unchecked":
         files, senders = checks.files_by_inject(), {s.local_part: s for s in Sender.objects.all()}
-        reviews = {rv.inject_id: rv for rv in InjectReview.objects.all()}
-        rows = [i for i in rows if not ai.current_review(i, files.get(i.id, []), senders, reviews)
+        reviews, prompt = {rv.inject_id: rv for rv in InjectReview.objects.all()}, ai.system("inject")
+        rows = [i for i in rows if not ai.current_review(i, files.get(i.id, []), senders, reviews, prompt)
                 and not (reviews.get(i.id) and reviews[i.id].status == "queued")]
     else:
         scope = "all"
@@ -264,12 +264,52 @@ def settings_ai(request):
     return redirect("/settings/#ai")
 
 
+PROMPT_MAX = 30_000  # characters per set of instructions
+
+
+def ai_prompts():
+    from . import report  # noqa: F401  registers the report instructions
+    return [{"key": k, **v, "value": ai.instructions(k), "custom": bool((conf.get(f"ai_prompt_{k}") or "").strip())}
+            for k, v in ai.INSTRUCTIONS.items()]
+
+
+@excon_required
+@require_POST
+def settings_ai_prompts(request):
+    """Settings → AI instructions: save the edited ones, or put one back to the default. Text
+    equal to the default is stored as empty, so later changes to the default still apply."""
+    from . import report  # noqa: F401
+    P, changed = request.POST, []
+    reset = P.get("reset")
+    if reset in ai.INSTRUCTIONS:
+        conf.put(f"ai_prompt_{reset}", "")
+        changed = [reset]
+        messages.success(request, f"{ai.INSTRUCTIONS[reset]['label']}: back to the default instructions.")
+    else:
+        for k, v in ai.INSTRUCTIONS.items():
+            if f"prompt_{k}" not in P:
+                continue
+            text = P.get(f"prompt_{k}", "").replace("\r\n", "\n").strip()
+            if len(text) > PROMPT_MAX:
+                messages.error(request, f"{v['label']}: longer than {PROMPT_MAX:,} characters; not saved.")
+                continue
+            value = "" if not text or text == v["default"].strip() else text
+            if value != (conf.get(f"ai_prompt_{k}") or "").strip():
+                conf.put(f"ai_prompt_{k}", value)
+                changed.append(k)
+        messages.success(request, "AI instructions saved." if changed else "No changes to the AI instructions.")
+    if changed:
+        audit("settings_ai_prompts", ", ".join(changed), _u(request))
+    return redirect("/settings/#ai-prompts")
+
+
 def ai_settings_context():
     start = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
     calls = AiCall.objects.filter(at__gte=start)
     return {**ai_status(), "ai_calls_today": calls.count(), "ai_failed_today": calls.filter(ok=False).count(),
             "ai_model_fast": ai.model_id("fast"), "ai_model_deep": ai.model_id("deep"),
-            "ai_region": settings.AI_REGION, "ai_last_error": calls.filter(ok=False).order_by("-id").first()}
+            "ai_region": settings.AI_REGION, "ai_last_error": calls.filter(ok=False).order_by("-id").first(),
+            "ai_prompts": ai_prompts()}
 
 
 # --- Draft with AI -----------------------------------------------------------------------------

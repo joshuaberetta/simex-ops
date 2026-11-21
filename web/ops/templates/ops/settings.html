@@ -24,6 +24,20 @@
     <span class="hint">A scheduled inject found later than this (after an outage, or when its time passed while disarmed) is marked <i>overdue</i> instead of being sent.</span></label>
   <button class="btn primary">Save settings</button>
 </form>
+<form method="post" action="/settings/ai/prompts/" class="card form" id="ai-prompts">{% csrf_token %}
+  <h3>AI instructions</h3>
+  <p class="small">What Claude is told for each kind of reading. The exercise context opens every one of them. Edit the text to change what it
+  looks for or how it writes; what it is given and the fields it answers with stay the same. Changes apply to the next reading (use
+  <b>Re-run</b> to redo one); a change to the inject check re-checks every unsent inject. Empty, or <b>Reset to default</b>, uses the built-in text.</p>
+  {% for p in ai_prompts %}
+  <details {% if p.custom %}open{% endif %}><summary>{{ p.label }} {% if p.custom %}<span class="pill warn">edited</span>{% endif %}</summary>
+    <label><span class="hint">{{ p.help }}</span>
+      <textarea name="prompt_{{ p.key }}" rows="14" spellcheck="false">{{ p.value }}</textarea></label>
+    {% if p.custom %}<button class="btn small" name="reset" value="{{ p.key }}">Reset to default</button>{% endif %}
+  </details>
+  {% endfor %}
+  <button class="btn primary">Save instructions</button>
+</form>
 </section>
 <section class="col-side">
 <div class="card" id="channel">

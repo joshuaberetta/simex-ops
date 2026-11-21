@@ -211,6 +211,29 @@ def test_inject_review_flags_the_list_and_reruns_only_on_change(excon, fake):
     assert InjectReview.objects.get(inject=inj).status == "queued"
 
 
+def test_ai_instructions_in_settings(excon, fake):
+    from ops import report  # noqa: F401
+    assert "Never report a gap" in ai.INJECT_RULES
+    page = excon.get("/settings/").content.decode()
+    assert "AI instructions" in page and "Inject check" in page and "Team debrief report" in page
+    conf.put("ai_auto", "1")
+    inj = Inject.objects.create(mel_id="6-32", sender_local="donotreply", subject="Kits", body="Kits.",
+                                send_at=timezone.now() + timedelta(days=1), status="scheduled")
+    fake.answer = lambda kw: ({"issues": []}, "end_turn")
+    assert ai.tick() == 1 and fake.calls[-1]["system"] == ai.INJECT_SYSTEM
+    assert ai.tick() == 0
+    # an edit: used for the next reading, and every unsent inject is checked again
+    excon.post("/settings/ai/prompts/", {"prompt_inject": "Only check the greeting.", "prompt_exercise": ai.EXERCISE})
+    assert conf.get("ai_prompt_inject") == "Only check the greeting." and conf.get("ai_prompt_exercise") == ""
+    assert ai.current_review(inj, [], {}) is None
+    assert ai.tick() == 1 and fake.calls[-1]["system"] == ai.EXERCISE + "\n\nOnly check the greeting."
+    assert "edited" in excon.get("/settings/").content.decode()
+    excon.post("/settings/ai/prompts/", {"reset": "inject"})
+    assert conf.get("ai_prompt_inject") == "" and ai.system("inject") == ai.INJECT_SYSTEM
+    excon.post("/settings/ai/prompts/", {"prompt_report_team": "Write for the team."})
+    assert ai.system("report_team") == ai.EXERCISE + "\n\nWrite for the team."
+
+
 def test_inject_review_queue_unchecked_or_selected(excon, fake):
     from ops.models import InjectReview
     conf.put("ai_auto", "0")
