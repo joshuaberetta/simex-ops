@@ -62,13 +62,15 @@ def _webpush(info, data):
 
 
 def payload(mail):
+    # A member's own mailbox is at /inbox/me/; a leader's, like the team inbox, at /inbox/.
+    base = "/inbox/me" if mail.owner_id and not mail.owner.is_leader else "/inbox"
     return {"title": mail.from_name or mail.from_addr or "New message", "body": mail.subject or "(no subject)",
-            "url": f"/inbox/t/{mail.thread}/", "tag": f"mail-{mail.id}"}
+            "url": f"{base}/t/{mail.thread}/", "tag": f"mail-{mail.id}"}
 
 
 def notify_mail(mail):
     """Push a Mail that just landed in a mailbox (call inside or outside a transaction): the
-    team's members' devices for the team inbox, the leader's for a team leader's own mailbox."""
+    team's members' devices for the team inbox, the owner's for a leader's or member's own mailbox."""
     if not (enabled() or _sender) or mail.folder != "inbox":
         return
     transaction.on_commit(lambda: _start(mail.team_id, payload(mail), mail.author_id, mail.owner_id))

@@ -1,19 +1,23 @@
 """Participant views: the simulated mail client ("SIMEX Mail", laid out like a webmail
 client participants know). A mailbox is (team, owner): the team's shared inbox (owner None),
-used by its members, or the team leader's own mailbox (owner = the leader). Every query goes
-through the Viewer's box, so nobody sees another mailbox, let alone another team; nothing
-here reads control-side data.
+used by its members, a member's own mailbox at /inbox/me/ (owner = the member: a copy of the
+team's mail, and mail between the member, their teammates and their leader), or the team
+leader's own mailbox (owner = the leader). Every query goes through the Viewer's box, so
+nobody sees another mailbox, let alone another team; nothing here reads control-side data.
 
 A team leader also opens their team's inbox read-only at /inbox/team/ (with the AI reading
 of the team's replies, shown to leaders only) and the team Dashboard (views_leader.py).
 A team leader can also read the other team leaders' mailboxes, read-only, at
-/inbox/leaders/<team id>/ (never another team's inbox).
-ExCon can open any team's inbox read-only at /inbox/as/<team id>/ ("view as team") and its
-leader's at /inbox/as/<team id>/leader/: exactly what they see, without marking anything read.
+/inbox/leaders/<team id>/ (never another team's inbox), and their own members' mailboxes,
+read-only, at /inbox/members/<person id>/.
+ExCon can open any team's inbox read-only at /inbox/as/<team id>/ ("view as team"), its
+leader's at /inbox/as/<team id>/leader/ and a member's at /inbox/as/<team id>/member/<person id>/:
+exactly what they see, without marking anything read.
 """
 
 import json
 import re
+import unicodedata
 import uuid
 from datetime import timedelta
 
@@ -32,10 +36,10 @@ from django.utils.http import content_disposition_header
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import conf, inbound, push, render as rnd, signin
+from . import conf, delivery, inbound, push, render as rnd, signin
 from .access import is_excon, leader_of, login_required_any, participant_of
-from .models import (Mail, MailAction, MailAttachment, MailLabel, MessageAttachment, PushSubscription, Response, Sender,
-                     Team, ThreadLabel, audit)
+from .models import (Mail, MailAction, MailAttachment, MailLabel, MessageAttachment, Person, PushSubscription, Response,
+                     Sender, Team, ThreadLabel, audit)
 
 PAGE = 50
 FOLDERS = [("inbox", "Inbox"), ("starred", "Starred"), ("sent", "Sent"), ("drafts", "Drafts"), ("all", "All mail"),
@@ -141,15 +145,19 @@ def healthz(request):
 
 class Viewer:
     """The mailbox shown (box: team and owner), who is looking (person: the member or leader,
-    "me") and whether they may change it. box "team" = a leader's read-only view of their
-    team's inbox; box "peer" = a leader's read-only view of another team leader's mailbox
-(as_team: that team); box "leader" = ExCon viewing a team leader's mailbox."""
+    "me") and whether they may change it. box "me" = a member's own mailbox; "team" = a
+    leader's read-only view of their team's inbox; "peer" = a leader's read-only view of
+    another team leader's mailbox (as_team: that team); "member" = a leader's read-only view
+    of one of their members' mailboxes (pid), or ExCon's (as_team, pid); "leader" = ExCon
+    viewing a team leader's mailbox."""
 
-    def __init__(self, request, as_team=None, box=""):
+    def __init__(self, request, as_team=None, box="", pid=None):
         self.person = participant_of(request.user)
         self.leader = leader_of(request.user)
         self.owner, self.leader_mode = None, False  # leader_mode: a leader reading their team's inbox
         self.peer = box == "peer"
+        if box in ("me", "member") and not conf.flag("personal_mailboxes"):
+            raise Http404
         if self.peer:
             if not self.leader:
                 raise PermissionDenied("Team leaders only.")
@@ -168,20 +176,34 @@ class Viewer:
                 if not self.owner:
                     raise Http404
                 self.base += "/leader"
+            elif box == "member":
+                self.owner = get_object_or_404(team_members(self.team), pk=pid)
+                self.base += f"/member/{self.owner.id}"
+        elif box == "member":
+            if not self.leader:
+                raise PermissionDenied("Team leaders only.")
+            self.team, self.person = self.leader.team, self.leader
+            self.owner = get_object_or_404(team_members(self.team), pk=pid)
+            self.readonly, self.base = True, f"/inbox/members/{self.owner.id}"
         elif self.leader:
             self.team, self.person = self.leader.team, self.leader
             if box == "team":
                 self.readonly, self.leader_mode, self.base = True, True, "/inbox/team"
-            else:
+            elif not box:
                 self.owner, self.readonly, self.base = self.leader, False, "/inbox"
+            else:
+                raise Http404
         elif self.person and not box:
             self.team, self.readonly, self.base = self.person.team, False, "/inbox"
+        elif self.person and box == "me":
+            self.team, self.owner, self.readonly, self.base = self.person.team, self.person, False, "/inbox/me"
         elif self.person:
             raise PermissionDenied("Team leaders only.")
         else:
             raise Http404
         self.box = {"team": self.team, "owner": self.owner}
-        self.folders = TEAM_FOLDERS if self.leader_mode else PEER_FOLDERS if self.peer else FOLDERS
+        self.folders = TEAM_FOLDERS if self.leader_mode else PEER_FOLDERS if self.peer or box == "member" and self.leader \
+            else FOLDERS
 
     def mails(self):
         return Mail.objects.filter(**self.box)
@@ -191,8 +213,18 @@ class Viewer:
 
     @property
     def leader_box(self):
-        """A team leader's own mailbox (their own or, for ExCon, viewed)."""
-        return self.owner is not None
+        """A team leader's own mailbox (their own or, for ExCon or a peer, viewed)."""
+        return self.owner is not None and self.owner.is_leader
+
+    @property
+    def member_box(self):
+        """A team member's own mailbox (their own or, for their leader or ExCon, viewed)."""
+        return self.owner is not None and not self.owner.is_leader
+
+
+def team_members(team):
+    """A team's members who have a mailbox of their own (participants, active or not)."""
+    return Person.objects.participants().filter(team=team).select_related("team_role")
 
 
 def peer_teams(leader):
@@ -204,11 +236,13 @@ def peer_teams(leader):
 
 def mailbox_view(view):
     @login_required_any
-    def wrapper(request, *args, as_team=None, box="", **kwargs):
+    def wrapper(request, *args, as_team=None, box="", pid=None, **kwargs):
         if as_team is None and not participant_of(request.user) and not leader_of(request.user) \
                 and is_excon(request.user):
             return redirect("/inboxes/")  # ExCon: choose a team to view as
-        v = Viewer(request, as_team, box)
+        if box == "me" and not conf.flag("personal_mailboxes") and participant_of(request.user):
+            return redirect("/inbox/")
+        v = Viewer(request, as_team, box, pid)
         if request.method == "POST" and v.readonly:
             raise PermissionDenied("Read-only view.")
         return view(request, v, *args, **kwargs)
@@ -219,18 +253,27 @@ def mailbox_view(view):
 # --- address book ----------------------------------------------------------------------------------
 
 def address_book(v):
-    """Who the viewer can write to. In the team inbox: the personas ({team} filled with the
-    own team, so the team leader persona is their own leader) and, if allowed, the other
-    teams. In a team leader's mailbox: their own team only."""
+    """Who the viewer can write to. In the team inbox and a member's own mailbox: the personas
+    ({team} filled with the own team, so the team leader persona is their own leader), their
+    teammates (personal mailboxes), from their own mailbox the team itself and, if allowed,
+    the other teams. In a team leader's mailbox: their own team and its members only."""
     team = v.team
+    mates = []
+    if conf.flag("personal_mailboxes"):
+        locs = member_locals(team)
+        mates = [{"key": f"m:{p.id}", "name": p.name, "addr": member_address(p, locs), "kind": "member"}
+                 for p in team_members(team).filter(active=True) if p not in (v.owner, v.person)]
     if v.leader_box:
-        return [{"key": f"t:{team.id}", "name": team.name, "addr": team_address(team), "kind": "team"}]
+        return [{"key": f"t:{team.id}", "name": team.name, "addr": team_address(team), "kind": "team"}] + mates
     ctx = rnd.team_ctx(team)
     book = []
     for s in Sender.objects.filter(active=True):
         local = rnd.fill(s.local_part, ctx).lower()
         book.append({"key": f"p:{local}", "name": rnd.fill(s.display_name, ctx) or local,
                      "addr": rnd.persona_address(s, local, ctx), "kind": "leader" if s.team_leader else "persona"})
+    book += mates
+    if v.member_box:
+        book.append({"key": f"t:{team.id}", "name": team.name, "addr": team_address(team), "kind": "team"})
     if conf.flag("team_to_team"):
         for t in Team.objects.filter(active=True, is_test=False).exclude(pk=team.pk):
             book.append({"key": f"t:{t.id}", "name": t.name, "addr": team_address(t), "kind": "team"})
@@ -239,6 +282,39 @@ def address_book(v):
 
 def team_address(t):
     return f"{t.code}@teams.{settings.MAIL_DOMAIN}"
+
+
+def _slug(name):
+    ascii_name = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", ".", ascii_name).strip(".") or "member"
+
+
+def member_locals(team):
+    """{person id: the local part of their own address}: their name (jane.doe), with their id
+    after it when a teammate has the same name."""
+    out, taken = {}, set()
+    for p in sorted(team_members(team), key=lambda p: p.id):
+        local = _slug(p.name)
+        out[p.id] = f"{local}.{p.id}" if local in taken else local
+        taken.add(local)
+    return out
+
+
+def member_address(p, locs=None):
+    """A member's own address, e.g. jane.doe@a.teams.<MAIL_DOMAIN>."""
+    local = (locs or member_locals(p.team)).get(p.id) or f"member.{p.id}"
+    return f"{local}@{p.team.code}.teams.{settings.MAIL_DOMAIN}"
+
+
+def member_by_address(addr):
+    """The member whose own address this is, or None."""
+    local, _, domain = (addr or "").lower().partition("@")
+    suffix = f".teams.{settings.MAIL_DOMAIN}".lower()
+    team = Team.objects.filter(code=domain[:-len(suffix)]).first() if domain.endswith(suffix) else None
+    if not team:
+        return None
+    pid = next((pid for pid, lp in member_locals(team).items() if lp == local), None)
+    return team_members(team).filter(pk=pid).first() if pid else None
 
 
 # What participants do in their mailbox, kept with its time for the end-of-exercise reports
@@ -258,10 +334,12 @@ def track(v, action, threads=(), **detail):
 
 def my_identity(v):
     """(From name, address) of what the viewer sends: a member as themselves at the team's
-    address; a team leader as the team leader persona."""
+    address, or from their own mailbox at their own; a team leader as the team leader persona."""
     if v.leader_box:
         lp = rnd.leader_persona(v.team)
         return (lp["name"], lp["addr"]) if lp else (v.owner.name, team_address(v.team))
+    if v.member_box:
+        return v.owner.name, member_address(v.owner)
     return (f"{v.person.name} ({v.team.name})" if v.person else v.team.name), team_address(v.team)
 
 
@@ -412,14 +490,27 @@ def _counts(v):
             "drafts": _folder_qs(v, "drafts").count()}
 
 
+def _unread(team, owner):
+    return (Mail.objects.filter(team=team, owner=owner, folder="inbox", archived=False, read_at__isnull=True,
+                                trashed_at__isnull=True).values("thread").distinct().count())
+
+
 def leader_tabs(leader, current):
-    """The tab bar a team leader sees above SIMEX Mail: their mail, the team inbox, the other
-    team leaders' mailboxes, the Dashboard."""
+    """The tab bar a team leader sees above SIMEX Mail: their mail, the team inbox, their team's
+    members (with their team roles and, read-only, their own mailboxes), the other team
+    leaders' mailboxes, the Dashboard."""
     team = leader.team
-    mine = Mail.objects.filter(team=team, owner=leader, folder="inbox", archived=False, read_at__isnull=True,
-                               trashed_at__isnull=True)
-    return {"current": current, "team": team, "peers": list(peer_teams(leader)), "mail_unread": mine.values("thread").distinct().count(),
-            "team_new": Mail.objects.filter(team=team, owner=None, id__gt=leader.lead_seen).exclude(folder="drafts").count()}
+    return {"current": current, "team": team, "peers": list(peer_teams(leader)), "mail_unread": _unread(team, leader),
+            "team_new": Mail.objects.filter(team=team, owner=None, id__gt=leader.lead_seen).exclude(folder="drafts").count(),
+            "members": list(team_members(team).filter(active=True)), "personal": conf.flag("personal_mailboxes")}
+
+
+def member_tabs(person, current):
+    """A member's tab bar (with personal mailboxes on): the team inbox and their own mailbox."""
+    if not conf.flag("personal_mailboxes"):
+        return None
+    return {"current": current, "team": person.team, "team_unread": _unread(person.team, None),
+            "me_unread": _unread(person.team, person)}
 
 
 def _seen(v):
@@ -440,13 +531,16 @@ def _ctx(v, **extra):
     c["folder_name"] = dict(v.folders).get(folder) or next((lab["name"] for lab in c["labels"] if lab["key"] == folder), "")
     c["label_colours"] = LABEL_COLOURS
     if v.leader:
-        c["leader_tabs"] = leader_tabs(v.leader, "team" if v.leader_mode else "peer" if v.peer else "mail")
+        c["leader_tabs"] = leader_tabs(v.leader, "team" if v.leader_mode else "peer" if v.peer
+                                       else "members" if v.member_box else "mail")
+    elif v.person and not v.readonly:
+        c["member_tabs"] = member_tabs(v.person, "me" if v.member_box else "team")
     c["simex_js"] = {"base": v.base, "readonly": v.readonly, "book": address_book(v), "team": v.team.name,
                      "maxMb": int(conf.get("max_upload_mb") or 10), "folder": c.get("folder", ""),
                      "unread": c["inbox_unread"], "leader": bool(v.leader),
                      # A team leader's device subscribes for their own mailbox from any of their tabs.
                      "vapid": "" if v.readonly and not v.leader else push.public_key(),
-                     "pushBase": "/inbox" if v.leader else v.base,
+                     "pushBase": "/inbox" if v.leader or v.member_box else v.base,
                      "labels": [{"id": lab["id"], "name": lab["name"]} for lab in c["labels"]]}
     return c
 
@@ -541,8 +635,10 @@ def thread_view(request, v, thread):
         reply_to = [_key_for_sender(last_in)]
     elif last.recipients:
         reply_to = list(last.recipients.get("to", []))
-    reply_all = list(dict.fromkeys(reply_to + (last.recipients.get("to", []) + last.recipients.get("cc", [])
-                                               if last.folder == "sent" else [])))
+    # Reply all: also everyone else on the last message (one we received, as copied to us, too).
+    others = last.recipients.get("to", []) + last.recipients.get("cc", []) if last.recipients else []
+    mine = {f"m:{v.owner.id}"} if v.member_box else set()
+    reply_all = [k for k in dict.fromkeys(reply_to + others) if k not in mine]
     can_reply = True
     if v.leader_box:  # a team leader answers their team only; an inject from a persona can be forwarded
         own = {b["key"] for b in address_book(v)}
@@ -564,6 +660,9 @@ def thread_view(request, v, thread):
 
 
 def _key_for_sender(mail):
+    if mail.from_addr.endswith(f".teams.{settings.MAIL_DOMAIN}"):  # a member's own address
+        p = member_by_address(mail.from_addr)
+        return f"m:{p.id}" if p else ""
     if mail.from_addr.endswith(f"@teams.{settings.MAIL_DOMAIN}"):
         t = Team.objects.filter(code=mail.from_addr.split("@")[0]).first()
         return f"t:{t.id}" if t else ""
@@ -784,7 +883,7 @@ def send(request, v):
     try:
         with transaction.atomic():  # all or nothing: a failure must not leave a Sent copy to send again
             if v.leader_box:
-                sent = _send_as_leader(request, v, P, subject, body, files, parent, fwd)
+                sent = _send_as_leader(request, v, P, to, cc, bcc, subject, body, files, parent, fwd)
             else:
                 sent = _send(request, v, P, to, cc, bcc, subject, body, files, parent, fwd)
     except SendFailed as e:
@@ -805,11 +904,15 @@ class SendFailed(Exception):
 
 
 def _send(request, v, P, to, cc, bcc, subject, body, files, parent, fwd):
+    """A member's message, from the team inbox or their own mailbox. To personas it is a
+    Response, always on the team inbox's Sent copy (so the team, its leader and ExCon see every
+    answer); to teammates, a copy in their own mailbox; to the team (from their own mailbox),
+    the team inbox and every member's; to another team, that team's."""
     from_name, from_addr = my_identity(v)
     everyone = to + cc + bcc
     personas = [e["key"][2:] for e in everyone if e["kind"] in ("persona", "leader")]
     sent = Mail.objects.create(
-        team=v.team, folder="sent", thread=parent.thread if parent else "", from_name=from_name, from_addr=from_addr,
+        **v.box, folder="sent", thread=parent.thread if parent else "", from_name=from_name, from_addr=from_addr,
         to_label=_label(to), cc_label=_label(cc), recipients={"to": [e["key"] for e in to], "cc": [e["key"] for e in cc],
                                                              "bcc": [e["key"] for e in bcc]},
         persona=personas[0] if personas else "",
@@ -822,57 +925,72 @@ def _send(request, v, P, to, cc, bcc, subject, body, files, parent, fwd):
         for a in fwd.files.all():
             MailAttachment.objects.create(mail=sent, attachment=a.attachment, filename=a.filename, size=a.size,
                                           content_type=a.content_type, data=a.data)
+    # What the team sees: written from a member's own mailbox to a persona, the team inbox's Sent has it too.
+    team_copy = sent
+    if personas and v.member_box:
+        # It answers the team inbox's copy of what it replies to (the same delivery), if it has one.
+        twin = (Mail.objects.filter(team=v.team, owner=None, thread=parent.thread, message_id=parent.message_id,
+                                    folder="inbox").first() if parent and parent.message_id else None)
+        team_copy = delivery.copy_mail(sent, owner=None, folder="sent", read_at=sent.read_at, in_reply_to=twin or parent)
     if personas:
-        inbound.from_mail(sent, personas)
+        inbound.from_mail(team_copy, personas)
 
     # Written to the team leader persona: the team's leader has it in their Inbox, same conversation.
     lp = rnd.leader_persona(v.team) if personas else None
     lead = v.team.leader() if lp and lp["local"] in personas else None
     if lead:
-        copy = Mail.objects.create(team=v.team, owner=lead, folder="inbox", from_name=from_name, from_addr=from_addr,
-                                   to_label=_label(to), cc_label=_label(cc), subject=subject, body=body,
-                                   author=v.person, is_test=v.team.is_test, inject=sent.inject, thread=sent.thread)
-        for a in sent.files.all():
-            MailAttachment.objects.create(mail=copy, attachment=a.attachment, filename=a.filename, size=a.size,
-                                          content_type=a.content_type, data=a.data)
+        push.notify_mail(delivery.copy_mail(sent, owner=lead, folder="inbox", persona=""))
+    own_team = f"t:{v.team.id}" in {e["key"] for e in everyone}
+    if own_team and v.member_box:  # to the team: its inbox and every other member's own
+        copy = delivery.copy_mail(sent, owner=None, folder="inbox", persona="", to_team_id=v.team.id)
         push.notify_mail(copy)
+        delivery.to_members(copy, exclude=v.owner.id)
+    mates = {int(e["key"][2:]) for e in everyone if e["kind"] == "member"}
+    for p in team_members(v.team).filter(pk__in=mates, active=True).exclude(pk=v.person.id if v.person else None):
+        if not (own_team and v.member_box):  # else it has a copy already
+            push.notify_mail(delivery.copy_mail(sent, owner=p, folder="inbox", persona=""))
     for e in everyone:
-        if e["kind"] == "team":
+        if e["kind"] == "team" and e["key"] != f"t:{v.team.id}":
             t = Team.objects.filter(pk=int(e["key"][2:]), active=True).first()
             if not t or not conf.flag("team_to_team"):
                 continue
-            copy = Mail.objects.create(team=t, folder="inbox", from_name=from_name, from_addr=from_addr,
-                                       to_label=_label(to), cc_label=_label(cc), to_team=t, subject=subject,
-                                       body=body, author=v.person, is_test=v.team.is_test,
-                                       thread=_peer_thread(t, v.team, parent))
-            for a in sent.files.all():
-                MailAttachment.objects.create(mail=copy, attachment=a.attachment, filename=a.filename, size=a.size,
-                                              content_type=a.content_type, data=a.data)
+            copy = delivery.copy_mail(sent, team_id=t.id, owner=None, folder="inbox", persona="", to_team_id=t.id,
+                                      thread=_peer_thread(t, v.team, parent), recipients={})
             push.notify_mail(copy)
+            delivery.to_members(copy)
             audit("team_to_team", f"{v.team.name} -> {t.name}: {subject[:80]}", request.user.get_username())
     v.mails().filter(pk=_id(P.get("draft_id")), folder="drafts").delete()
     return sent
 
 
-def _send_as_leader(request, v, P, subject, body, files, parent, fwd):
-    """A team leader writes to their team, as the team leader persona: a Message delivered to
-    the team inbox at once, which also puts it in the leader's Sent (delivery._put_mail). In
-    reply to a member's message to the leader persona it is that Response's answer, as when
-    ExCon answers on the Replies tab."""
-    from . import delivery
+def _send_as_leader(request, v, P, to, cc, bcc, subject, body, files, parent, fwd):
+    """A team leader writes as the team leader persona: to their team, a Message delivered to
+    the team inbox (and so every member's own mailbox) at once, which also puts it in the
+    leader's Sent (delivery._put_mail); to some members only, a Message to those members' own
+    mailboxes (delivery.deliver_personal). In reply to a member's message to the leader persona
+    it is that Response's answer, as when ExCon answers on the Replies tab."""
     lp = rnd.leader_persona(v.team)
     if not lp:
         raise SendFailed("No persona is set as the team leader yet: ask ExCon (Senders tab).")
     team, thread = v.team, parent.thread if parent else ""
+    everyone = to + cc + bcc
+    to_team = f"t:{team.id}" in {e["key"] for e in everyone}
+    members = list(team_members(team).filter(pk__in=[int(e["key"][2:]) for e in everyone if e["kind"] == "member"],
+                                             active=True))
+    if not to_team and not members:
+        raise SendFailed(f"Write to {team.name} or its members.")
     answers = (Response.objects.filter(mail__team=team, mail__owner=None, mail__thread=thread, persona=lp["local"])
                .order_by("-id").first() if thread else None)
+    to_label = team.name if [e["key"] for e in to] == [f"t:{team.id}"] and not cc else _label(to)
     d = rnd.Draft(target=team.name, from_addr=f'"{lp["name"]}" <{lp["addr"]}>', reply_to=None, to=[], cc=[], bcc=[],
                   subject=subject, body=body, footer="",
                   attachment_ids=[a.attachment_id for a in fwd.files.all() if a.attachment_id] if fwd else [],
-                  team_id=team.id, reply_local=lp["local"], channel="inapp", inbox_team_id=team.id, to_label=team.name)
+                  team_id=team.id, reply_local=lp["local"], channel="inapp", inbox_team_id=team.id, to_label=to_label)
     inj = answers.inject if answers else (parent.inject if parent else (fwd.inject if fwd else None))
     m = delivery.new_message(inj, d, "reply" if answers else "leader", f"leader-{v.owner.id}-{uuid.uuid4().hex}")
     m.response, m.author, m.thread = answers, v.owner, thread
+    if not to_team:
+        m.target = ", ".join(p.name for p in members)[:200]
     m.save()
     for f in files:
         MessageAttachment.objects.create(message=m, filename=f.name[:300], size=f.size,
@@ -881,12 +999,17 @@ def _send_as_leader(request, v, P, subject, body, files, parent, fwd):
         if not a.attachment_id and a.data is not None:
             MessageAttachment.objects.create(message=m, filename=a.filename, size=a.size, content_type=a.content_type,
                                              data=a.data)
-    delivery.deliver([m], respect_pause=False)  # like any participant's mail, not held by Pause
-    sent = v.mails().filter(message=m, folder="sent").first()
-    if m.status != "sent" or not sent:
-        raise SendFailed(m.error or "The message could not be delivered. Try again.")
+    recipients = {"to": [e["key"] for e in to], "cc": [e["key"] for e in cc]}
+    if to_team:
+        delivery.deliver([m], respect_pause=False)  # like any participant's mail, not held by Pause
+        sent = v.mails().filter(message=m, folder="sent").first()
+        if m.status != "sent" or not sent:
+            raise SendFailed(m.error or "The message could not be delivered. Try again.")
+        Mail.objects.filter(message=m).update(cc_label=_label(cc), recipients=recipients)
+    else:
+        sent = delivery.deliver_personal(m, members, _label(to), _label(cc), recipients)
     v.mails().filter(pk=_id(P.get("draft_id")), folder="drafts").delete()
-    audit("leader_mail", f"{team.name}: {subject[:80]}", request.user.get_username())
+    audit("leader_mail", f"{m.target}: {subject[:80]}", request.user.get_username())
     return sent
 
 
@@ -907,9 +1030,9 @@ def _peer_thread(team, sender_team, parent):
 # --- polling & files ------------------------------------------------------------------------------
 
 @login_required_any
-def poll(request, as_team=None, box=""):
+def poll(request, as_team=None, box="", pid=None):
     try:
-        v = Viewer(request, as_team, box)
+        v = Viewer(request, as_team, box, pid)
     except Http404:
         return JsonResponse({"unread": 0, "latest": 0})
     qs = v.mails().filter(folder="inbox", trashed_at__isnull=True)
@@ -926,6 +1049,8 @@ def poll(request, as_team=None, box=""):
     if v.leader:  # the tab bar's badges
         tabs = leader_tabs(v.leader, "")
         out.update(mail_unread=tabs["mail_unread"], team_new=tabs["team_new"])
+    elif v.person and not v.readonly and conf.flag("personal_mailboxes"):
+        out.update(me_unread=_unread(v.team, v.person), team_unread=_unread(v.team, None))
     return JsonResponse(out)
 
 
@@ -979,13 +1104,14 @@ def manifest(request):
 
 
 @login_required_any
-def mail_file(request, fid, as_team=None, box=""):
-    a = get_object_or_404(MailAttachment.objects.select_related("mail", "attachment"), pk=fid)
+def mail_file(request, fid, as_team=None, box="", pid=None):
+    a = get_object_or_404(MailAttachment.objects.select_related("mail", "attachment", "mail__owner"), pk=fid)
     mail = a.mail
     person, leader = participant_of(request.user), leader_of(request.user)
-    mine = (person and mail.team_id == person.team_id and mail.owner_id is None) or \
+    mine = (person and mail.team_id == person.team_id and mail.owner_id in (None, person.id)) or \
         (leader and mail.team_id == leader.team_id and mail.owner_id == leader.id)
-    team_view = leader and mail.team_id == leader.team_id and mail.owner_id is None  # read-only
+    # Read-only: a leader's view of their team's inbox, or of one of their members' own mailboxes.
+    team_view = leader and mail.team_id == leader.team_id and (mail.owner_id is None or not mail.owner.is_leader)
     peer = leader and mail.owner_id and peer_teams(leader).filter(pk=mail.team_id).first()
     peer_view = peer and mail.owner_id == getattr(peer.leader(), "id", None)  # another leader's mailbox, read-only
     if not (mine or team_view or peer_view or is_excon(request.user)):

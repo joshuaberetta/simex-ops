@@ -254,14 +254,19 @@ def inbox_figures(team, kind, delivered, deliv, cells):
 
     # Who did the work.
     members = []
-    acted = Counter(MailAction.objects.filter(team=team, owner=None).values_list("person_id", flat=True))
+    # Members' own mailboxes (Settings → personal mailboxes) count too, never the leader's.
+    acted = Counter(MailAction.objects.filter(Q(owner=None) | Q(owner__role="member"), team=team)
+                    .values_list("person_id", flat=True))
+    within = Counter(Mail.objects.filter(team=team, owner__role="member", folder="sent", persona="")
+                     .values_list("owner_id", flat=True))
     for p in Person.objects.filter(team=team).participants().select_related("team_role"):
         reads = Event.objects.filter(person=p, type="read").values("message_id").distinct().count()
         downloads = Event.objects.filter(person=p, type="download").count()
         wrote = sum(1 for m in sent if m.author_id == p.id)
         if reads or downloads or wrote or (p.active and p.user_id):  # not placeholders without a login
             members.append({"name": p.name, "team_role": p.team_role.name if p.team_role else None,
-                            "read": reads, "wrote": wrote, "downloads": downloads, "inbox_actions": acted.get(p.id, 0),
+                            "read": reads, "wrote": wrote, "wrote_within_team": within.get(p.id, 0),
+                            "downloads": downloads, "inbox_actions": acted.get(p.id, 0),
                             "alerts_on": PushSubscription.objects.filter(person=p).exists()})
     members.sort(key=lambda m: (-m["wrote"], -m["read"]))
     total_wrote = sum(m["wrote"] for m in members)
@@ -321,6 +326,7 @@ def inbox_figures(team, kind, delivered, deliv, cells):
     return {
         "members": members,
         "by_team_role": by_team_role(members),
+        "messages_within_team": sum(within.values()),
         "writing_share_top_member_percent": round(100 * members[0]["wrote"] / total_wrote) if total_wrote else None,
         "documents": documents,
         "replied_before_opening_documents": [d["inject"] for d in documents if d["replied_before_opening"]],
@@ -357,6 +363,7 @@ def by_team_role(members):
                     "writing_share_percent": round(100 * wrote / total) if total else None,
                     "read_per_member": round(sum(m["read"] for m in ms) / n, 1),
                     "downloads": sum(m["downloads"] for m in ms),
+                    "wrote_within_team": sum(m.get("wrote_within_team", 0) for m in ms),
                     "inbox_actions": sum(m.get("inbox_actions", 0) for m in ms)})
     return sorted(out, key=lambda g: (g["team_role"] == "No team role", -g["wrote"]))
 
@@ -538,7 +545,8 @@ with deadlines, the right register for the recipient, brevity, structure, accura
 and weak_example are short verbatim quotes from the team's own messages, each with the inject id.
 - inbox_management: how the team handled its mail, from FIGURES.inbox, as observations tied to good UNDAC \
 information management, not as a score. Weigh most: opening the documents before answering, passing \
-information on (forwards, copies, the team leader), read mail left unanswered, and how the work was shared \
+information on (forwards, copies, the team leader, messages between members from their own mailboxes), read \
+mail left unanswered, and how the work was shared \
 among members; then how it kept track (stars, labels, archive, what was left unread). Members are numbered: \
 never guess who is who, and don't single anyone out. Where ExCon gave members team roles (e.g. Deputy Team \
 Leader), FIGURES.inbox.by_team_role shows how the work fell across them: comment on the roles, never on a \

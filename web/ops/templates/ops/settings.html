@@ -12,6 +12,7 @@
   <label class="chk"><input type="checkbox" name="subject_inject_code" value="1" {% if cfg.subject_inject_code == '1' %}checked{% endif %}> put the inject code in the subject, e.g. “[1-15] Request for assessment”</label>
   <h3>Participants' mail client</h3>
   <label class="chk"><input type="checkbox" name="team_to_team" value="1" {% if cfg.team_to_team == '1' %}checked{% endif %}> teams may write to other teams (otherwise only to personas)</label>
+  <label class="chk"><input type="checkbox" name="personal_mailboxes" value="1" {% if cfg.personal_mailboxes == '1' %}checked{% endif %}> each team member also has their own mailbox ("My mail", besides the team inbox): a copy of everything sent to the team, and personal mail between teammates and with their team leader, who can read it (read-only)</label>
   <label>Max attachments per message (MB) <input type="number" name="max_upload_mb" value="{{ cfg.max_upload_mb }}" min="1" class="narrow"></label>
   <h3>Email channel</h3>
   <label>Default reply-to <input name="default_reply_to" value="{{ cfg.default_reply_to }}" placeholder="leave empty">

@@ -14,6 +14,9 @@ DEFAULTS = {
     "live_armed": "0",
     "paused": "0",
     "team_to_team": "0",  # participants may write to other teams' inboxes
+    # Each team member also has their own mailbox (besides the team's shared inbox), which gets a
+    # copy of the team's mail, and members and their leader write to each other there.
+    "personal_mailboxes": "1",
     "max_upload_mb": "10",  # participants' attachments
     # How injects are delivered: "email" (Resend, the main flow), "inapp" (SIMEX Mail, the
     # backup if email has problems) or "per_inject" (each inject's own channel field).

@@ -7,7 +7,10 @@ SIMEX Mail is your team's mailbox for the exercise. Everything here is **exercis
 - Keep your slip: it is your login. Don't share it with other teams.
 
 ## Your mailbox
-- **One mailbox per team.** Everyone in your team sees the same mail. What you send appears in everyone's **Sent**, with your name on it.
+- **Two tabs at the top: your team's inbox, and My mail.**
+  - **Team inbox:** one mailbox per team. Everyone in your team sees the same mail. What you send from here appears in everyone's **Sent**, with your name on it.
+  - **My mail:** your own mailbox, at your own address (e.g. *jane.doe@a.teams…*). It gets a copy of everything sent to your team, plus what your teammates and your team leader write to you personally. Starring, labels or reading here don't change the team inbox, and the other way round. A red number on a tab is its unread mail.
+  - From **My mail** you can write to a teammate (pick their name), copy teammates in, or write to the whole team (pick your team: it lands in the team inbox and in everyone's My mail). When you answer an organisation (a persona) from My mail, the answer also appears in the team inbox's **Sent**, so your team and ExCon always see every answer; teammates you copy in get it in their My mail.
 - Keep the page open during the exercise. New mail appears on its own; the tab title shows the number of unread conversations, e.g. **Inbox (3)**.
 - **Alerts for new mail:** when a message arrives you hear a chime and see a blue bar at the bottom of the page (click **Open**), the tab shows the number of unread conversations and a red badge, and its title blinks while you are in another tab. On your first visit, click **Turn on alerts** in the blue banner so your browser can also show a notification on your screen when this tab is in the background. Keep the SIMEX Mail tab open all day. The **bell** at the top right mutes or unmutes alerts. If your browser has blocked notifications, allow them for this site in its address-bar settings.
 - **Notifications with SIMEX Mail closed:** once you have turned on alerts, new mail is announced on your computer or phone even when SIMEX Mail isn't open (Chrome, Edge, Firefox, Android).
@@ -43,7 +46,7 @@ SIMEX Mail is your team's mailbox for the exercise. Everything here is **exercis
 `c` compose · `/` search · `v` move to · `l` labels · `j` / `k` next / previous · `Enter` open · `r` reply · `a` reply all · `f` forward · `e` archive · `#` delete · `u` back to the list · `Esc` close the compose window.
 
 ## What ExCon sees
-SIMEX Mail records what your team does in it, for the debrief: who reads and writes what and when, which files you open, and how you organise the mailbox (stars, labels, archive, searches, drafts). Your team's debrief report describes how the team handled its mail, without naming anyone.
+Your team leader and ExCon can read your team inbox and your My mail (read-only: they never mark anything read for you). SIMEX Mail records what your team does in it, for the debrief: who reads and writes what and when, which files you open, and how you organise the mailbox (stars, labels, archive, searches, drafts). Your team's debrief report describes how the team handled its mail, without naming anyone.
 
 ## Problems
 Can't sign in, or something looks wrong? Ask ExCon. They can reset your password. Don't share your login with other teams.

@@ -134,7 +134,7 @@ def by_team_role(teams, reps, msg_kinds):
                     .values_list("person_id", "message_id").distinct())
     downloads = Counter(Event.objects.filter(person_id__in=ids, type="download", message__kind__in=msg_kinds)
                         .values_list("person_id", flat=True))
-    actions = dict(MailAction.objects.filter(person_id__in=ids, owner=None).values_list("person_id")
+    actions = dict(MailAction.objects.filter(person_id__in=ids).values_list("person_id")
                    .annotate(n=Count("id")).values_list("person_id", "n"))
     mine = {}
     for r in reps:

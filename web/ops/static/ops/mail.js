@@ -78,7 +78,7 @@
         items = BOOK.filter((b) => !this.keys[field].includes(b.key) && (!q || b.name.toLowerCase().includes(q) || b.addr.toLowerCase().includes(q))).slice(0, 8);
         if (!items.length || document.activeElement !== input) { box.hidden = true; return; }
         idx = Math.min(idx, items.length - 1);
-        box.innerHTML = items.map((b, i) => `<div data-i="${i}" class="${i === idx ? "on" : ""}"><span class="gm-avatar" style="background:${colour(b.name)}">${esc((b.name || "?")[0].toUpperCase())}</span><span>${esc(b.name)}<small>${esc(b.addr)}${b.kind === "team" ? " · team" : ""}</small></span></div>`).join("");
+        box.innerHTML = items.map((b, i) => `<div data-i="${i}" class="${i === idx ? "on" : ""}"><span class="gm-avatar" style="background:${colour(b.name)}">${esc((b.name || "?")[0].toUpperCase())}</span><span>${esc(b.name)}<small>${esc(b.addr)}${b.kind === "team" ? " · team" : b.kind === "member" ? " · team member" : ""}</small></span></div>`).join("");
         box.hidden = false;
       };
       input.addEventListener("input", () => { idx = 0; show(); });
@@ -628,7 +628,11 @@
       const n = j.unread;
       $$("[data-unread-count]").forEach((el) => el.textContent = n ? n : "");
       const inboxLink = $('[data-folder="inbox"]'); if (inboxLink) inboxLink.classList.toggle("bold", n > 0);
-      if (j.mail_unread !== undefined) {  // a team leader's tab bar
+      if (j.me_unread !== undefined) {  // a member's tab bar: the team inbox and their own mailbox
+        $$("[data-tab-me]").forEach((el) => el.textContent = j.me_unread && !BASE.endsWith("/me") ? j.me_unread : "");
+        $$("[data-tab-teambox]").forEach((el) => el.textContent = j.team_unread && BASE.endsWith("/me") ? j.team_unread : "");
+      }
+            if (j.mail_unread !== undefined) {  // a team leader's tab bar
         $$("[data-tab-mail]").forEach((el) => el.textContent = j.mail_unread ? j.mail_unread : "");
         $$("[data-tab-team]").forEach((el) => el.textContent = j.team_new && !BASE.endsWith("/team") ? j.team_new : "");
       }

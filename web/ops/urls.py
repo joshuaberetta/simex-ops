@@ -7,8 +7,9 @@ from . import views_leader as lead
 from . import views_report as rp
 
 # The participant mail client, mounted on a mailbox: /inbox/ for the logged-in member (their
-# team's inbox) or team leader (their own mailbox), /inbox/as/<team id>/ for ExCon's read-only
-# "view as team" and /inbox/as/<team id>/leader/ for that team leader's mailbox.
+# team's inbox) or team leader (their own mailbox), /inbox/me/ for a member's own mailbox,
+# /inbox/as/<team id>/ for ExCon's read-only "view as team", /inbox/as/<team id>/leader/ for that
+# team leader's mailbox and /inbox/as/<team id>/member/<person id>/ for a member's own.
 mail_patterns = [
     path("", p.inbox),
     path("t/<str:thread>/", p.thread_view),
@@ -23,8 +24,9 @@ mail_patterns = [
     path("push/", p.push_subscribe),
     path("labels/", p.labels_save),
 ]
-# A team leader's read-only view of their team's inbox, or of another team leader's mailbox
-# (/inbox/leaders/<team id>/): no route that changes anything.
+# A team leader's read-only view of their team's inbox, of another team leader's mailbox
+# (/inbox/leaders/<team id>/) or of one of their members' own (/inbox/members/<person id>/):
+# no route that changes anything.
 team_patterns = [
     path("", p.inbox),
     path("t/<str:thread>/", p.thread_view),
@@ -44,11 +46,15 @@ urlpatterns = [
     path("inbox/go/<str:token>/", p.signin_link),
     path("inbox/setup/", p.setup),
     path("inbox/as/<int:as_team>/leader/", include(mail_patterns), {"box": "leader"}),
+    path("inbox/as/<int:as_team>/member/<int:pid>/", include(mail_patterns), {"box": "member"}),
     path("inbox/as/<int:as_team>/", include(mail_patterns)),
     path("inbox/team/", include(team_patterns), {"box": "team"}),
     path("inbox/leaders/", lead.peers),
     path("inbox/leaders/<int:as_team>/", include(team_patterns), {"box": "peer"}),
     path("inbox/dashboard/", lead.dashboard),
+    path("inbox/members/", lead.members),
+    path("inbox/members/<int:pid>/", include(team_patterns), {"box": "member"}),
+    path("inbox/me/", include(mail_patterns), {"box": "me"}),
     path("inbox/", include(mail_patterns)),
     # ExCon
     path("injects/", x.injects),

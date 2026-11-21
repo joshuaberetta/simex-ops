@@ -871,8 +871,10 @@ def inboxes(request):
     if request.GET.get("team"):
         return redirect(f"/inbox/as/{int(request.GET['team'])}/")
     teams = list(Team.objects.all())
+    personal = conf.flag("personal_mailboxes")
     for t in teams:
-        mails = Mail.objects.filter(team=t)
+        mails = Mail.objects.filter(team=t, owner=None)
+        t.members = list(t.people.participants().filter(active=True)) if personal else []
         t.n_inbox = mails.filter(folder="inbox").count()
         t.n_unread = mails.filter(folder="inbox", read_at__isnull=True, trashed_at__isnull=True).count()
         t.n_sent = mails.filter(folder="sent").count()
@@ -1526,6 +1528,7 @@ def settings_page(request):
                     v = "10"
             conf.put(k, v if k == "footer" else v.strip())
         conf.put("team_to_team", "1" if P.get("team_to_team") == "1" else "0")
+        conf.put("personal_mailboxes", "1" if P.get("personal_mailboxes") == "1" else "0")
         conf.put("subject_inject_code", "1" if P.get("subject_inject_code") == "1" else "0")
         audit("settings_save", None, _u(request))
         messages.success(request, "Settings saved.")

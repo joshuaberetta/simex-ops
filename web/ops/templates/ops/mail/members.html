@@ -1,0 +1,20 @@
+{% extends "ops/mail/base.html" %}{% load ops %}
+{% block title %}Team members{% endblock %}
+{% block search %}<div class="gm-search-space">{{ team.name }} · Team members</div>{% endblock %}
+{% block side %}{% endblock %}
+{% block main %}
+<div class="gm-dash">
+  <h2>{{ team.name }}: team members</h2>
+  <table class="gm-dtable">
+    <tr><th>Name</th><th>Team role</th><th>Messages to personas</th><th>Messages within the team</th><th>Messages read</th><th>Alerts</th><th>Last sign-in</th>{% if personal %}<th>Own mailbox</th>{% endif %}</tr>
+    {% for p in people %}<tr{% if not p.active %} class="muted"{% endif %}>
+      <td><b>{{ p.name }}</b>{% if personal %}<div class="muted small">{{ p.address }}</div>{% endif %}{% if not p.active %} <span class="muted small">(inactive)</span>{% endif %}</td>
+      <td>{{ p.team_role.name|default:"—" }}</td><td>{{ p.wrote }}</td><td>{{ p.to_team }}</td><td>{{ p.read }}</td>
+      <td>{% if p.alerts %}on{% else %}<span class="muted">off</span>{% endif %}</td>
+      <td class="nowrap">{% if p.user.last_login %}{{ p.user.last_login|date:"D H:i" }}{% else %}<span class="muted">never</span>{% endif %}</td>
+      {% if personal %}<td class="nowrap"><a href="/inbox/members/{{ p.id }}/">Open, read-only</a>{% if p.unread %} <span class="muted small">· {{ p.unread }} unread</span>{% endif %}</td>{% endif %}</tr>
+    {% empty %}<tr><td class="muted">No team members yet.</td></tr>{% endfor %}
+  </table>
+  <p class="small muted">Team roles (such as Deputy Team Leader) are set by ExCon. Messages to personas are the team's answers, also in the team inbox; messages within the team are what a member sent from their own mailbox to teammates or to the team.{% if personal %} A member's own mailbox has a copy of everything sent to the team, plus what they and their teammates or you write to each other personally. Opening it here doesn't mark anything read for them.{% endif %}</p>
+</div>
+{% endblock %}

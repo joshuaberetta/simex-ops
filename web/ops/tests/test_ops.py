@@ -142,7 +142,7 @@ def test_inapp_live_delivery_needs_arming_and_is_idempotent(excon):
     arm()
     inj = deliver_now("1-15")
     assert inj.status == "sent"
-    assert Mail.objects.filter(folder="inbox").count() == 4
+    assert Mail.objects.filter(owner=None, folder="inbox").count() == 4
     a = Mail.objects.get(owner=None, team__code="a")
     assert a.subject == "Update for Team A" and a.from_addr == "undac-a-tl@simex.kobolabs.dev" and a.persona == "undac-a-tl"
     delivery.tick()
@@ -154,7 +154,7 @@ def test_all_bcc_inapp_copies_every_team(excon):
     do_import(excon, SAMPLE)
     arm()
     deliver_now("3-13")
-    assert sorted(Mail.objects.values_list("team__code", flat=True)) == ["a", "b", "c", "d"]
+    assert sorted(Mail.objects.filter(owner=None).values_list("team__code", flat=True)) == ["a", "b", "c", "d"]
 
 
 def test_participant_sees_only_own_team(excon):
@@ -627,7 +627,7 @@ def test_backup_roundtrip(excon):
     from django.core.files.uploadedfile import SimpleUploadedFile
     r = excon.post("/settings/restore/", {"confirm": "RESTORE",
                                           "file": SimpleUploadedFile("b.json", json.dumps(data).encode())}, follow=True)
-    assert Mail.objects.count() == 8  # 4 team inboxes + the 4 leaders' Sent
+    assert Mail.objects.exclude(owner__role="member").count() == 8  # 4 team inboxes + the 4 leaders' Sent
     assert Event.objects.filter(type="read").count() == 1  # read receipts survive a restore
     assert conf.get("live_armed") == "0"
     assert get_user_model().objects.filter(username="a.p").exists()
@@ -666,7 +666,7 @@ def test_channel_switch_email_then_inapp(excon):
     r = excon.post("/settings/channel/", {"mode": "inapp", "confirm": "SWITCH"})
     assert r.status_code == 302 and conf.get("channel_mode") == "inapp"
     deliver_now("3-13")
-    assert Mail.objects.filter(folder="inbox").count() == 4  # all-Bcc copies into every team inbox
+    assert Mail.objects.filter(owner=None, folder="inbox").count() == 4  # all-Bcc copies into every team inbox
     assert len(mailer.get().sent) == 4  # no more email
     assert b"via SIMEX Mail" in excon.get("/injects/").content
 
@@ -1043,12 +1043,12 @@ def test_inapp_delivery_error_marks_message_failed(excon, monkeypatch):
     inj = deliver_now("1-15")
     assert inj.status == "partial"
     assert Message.objects.filter(kind="live", status="failed", error__contains="db hiccup").count() == 1
-    assert Mail.objects.filter(folder="inbox").count() == 3
+    assert Mail.objects.filter(owner=None, folder="inbox").count() == 3
     # Retry delivers only the failed one
     assert delivery.start_live(inj, retry_failed=True) is None
     delivery.tick()
     assert Inject.objects.get(pk=inj.pk).status == "sent"
-    assert Mail.objects.filter(folder="inbox").count() == 4
+    assert Mail.objects.filter(owner=None, folder="inbox").count() == 4
 
 
 def test_stale_pending_answer_is_delivered_by_the_scheduler(excon):

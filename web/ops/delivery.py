@@ -74,6 +74,8 @@ def _put_mail(m):
         message=m, inject_id=m.inject_id, in_reply_to=parent, is_test=m.kind in ("test", "oneoff"))
     _attach(mail, m)
     push.notify_mail(mail)
+    if not m.inbox_owner_id:
+        to_members(mail)
     lead = _leader_sent(m, mail)
     if lead:  # sent as the team leader persona: the leader has it in Sent, in the same conversation
         sent = Mail.objects.create(
@@ -85,6 +87,33 @@ def _put_mail(m):
     return mail
 
 
+# What a copy of a Mail in another mailbox keeps (the mailbox state, star, read..., starts afresh).
+COPIED = ["thread", "from_name", "from_addr", "to_label", "cc_label", "to_person_id", "persona", "to_team_id", "subject",
+          "body", "footer", "banner", "author_id", "message_id", "inject_id", "is_test", "recipients", "created_at"]
+
+
+def copy_mail(src, **over):
+    """src (a Mail) in another mailbox (over: team_id, owner, folder...: fields by their
+    COPIED names), with its files (inject documents by reference)."""
+    mail = Mail.objects.create(**{**{f: getattr(src, f) for f in COPIED}, "team_id": src.team_id, **over})
+    for a in src.files.all():
+        MailAttachment.objects.create(mail=mail, attachment=a.attachment, filename=a.filename, size=a.size,
+                                      content_type=a.content_type, data=a.data)
+    return mail
+
+
+def to_members(mail, exclude=None):
+    """Mail that just landed in a team's shared inbox also goes to its members' own mailboxes
+    (Settings → personal mailboxes): every member, or only the one it is for (to_person),
+    never exclude (who sent it). No push: the team inbox's already reached their devices."""
+    if not conf.flag("personal_mailboxes") or mail.owner_id or mail.folder != "inbox":
+        return []
+    people = Person.objects.participants().filter(team_id=mail.team_id, active=True)
+    if mail.to_person_id:
+        people = people.filter(pk=mail.to_person_id)
+    return [copy_mail(mail, owner=p, folder="inbox", in_reply_to=None) for p in people.exclude(pk=exclude)]
+
+
 def _attach(mail, m):
     for a in Attachment.objects.filter(id__in=m.attachment_ids or []):
         MailAttachment.objects.create(mail=mail, attachment=a, filename=a.filename, content_type=a.content_type,
@@ -92,6 +121,26 @@ def _attach(mail, m):
     for f in m.files.all():  # files ExCon uploaded to an answer: the Mail gets its own copy
         MailAttachment.objects.create(mail=mail, filename=f.filename, content_type=f.content_type, size=f.size,
                                       data=f.data)
+
+
+def deliver_personal(m, people, to_label, cc_label="", recipients=None):
+    """A team leader's message to some of their team's members only (not the team): it goes to
+    those members' own mailboxes and the leader's Sent, at once. m is a new Message (kind
+    leader or reply), saved here as sent."""
+    now = timezone.now()
+    m.status, m.sent_at, m.delivery, m.delivery_at = "sent", now, "delivered", now
+    m.save()
+    name, addr = email.utils.parseaddr(m.from_addr)
+    common = dict(team_id=m.inbox_team_id, thread=m.thread or "", from_name=name, from_addr=addr, to_label=to_label,
+                  cc_label=cc_label, subject=m.subject, body=m.body, footer=m.footer, message=m, inject_id=m.inject_id,
+                  is_test=m.kind in ("test", "oneoff") or Team.objects.filter(pk=m.inbox_team_id, is_test=True).exists(),
+                  author_id=m.author_id, recipients=recipients or {})
+    sent = Mail.objects.create(**common, owner_id=m.author_id, folder="sent", read_at=now)
+    _attach(sent, m)
+    for p in people:
+        mail = copy_mail(sent, owner=p, folder="inbox", read_at=None, persona=m.persona)
+        push.notify_mail(mail)
+    return sent
 
 
 def _leader_sent(m, mail):

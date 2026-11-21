@@ -34,5 +34,5 @@ def status(request):
     person = participant_of(user)
     if person:
         return {"participant": person,
-                "unread": Mail.objects.filter(team=person.team, folder="inbox", read_at__isnull=True).count()}
+                "unread": Mail.objects.filter(team=person.team, owner=None, folder="inbox", read_at__isnull=True).count()}
     return {}

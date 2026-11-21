@@ -5,6 +5,7 @@ You are your team's **team leader**: part of ExCon, not of the team. You play th
 ## The tabs at the top
 - **My mail**: your own mailbox, used like any webmail (Compose, labels, stars, search, alerts).
 - **Team inbox** (read-only): exactly what your team has, so you can follow its work. Opening mail here does **not** mark it read for the team. The red number is new mail in the team's inbox since you last looked.
+- **Team members**: who is in your team, with their team role (e.g. Deputy Team Leader, set by ExCon), what each has written and read so far, whether their alerts are on and when they last signed in, and a link to each member's own mailbox, read-only (opening mail there doesn't mark it read for them; the side bar switches between members).
 - **Team leaders** (read-only): the other team leaders' own mailboxes (pick one in the side bar), to see what they are sending their teams and what their teams write to them. Opening mail here doesn't mark it read for them. They can read yours the same way.
 - **Dashboard**: your team's replies in figures, and Claude's reading of them.
 
@@ -12,7 +13,8 @@ You only ever see your own team's inbox. The other teams are independent of your
 
 ## My mail
 - **Sent** holds everything sent as the team leader persona: the injects ExCon schedules in your name, ExCon's answers in your name, and what you write yourself. **Inbox** holds what your team writes to the team leader persona (also when they copy you in), and the injects ExCon sends to the team leaders too.
-- **Writing to your team:** click **Compose** and pick your team, or open a conversation and click **Reply**. Your message reaches the team's inbox from the team leader persona, in the same conversation. You can only write to your own team.
+- **Writing to your team:** click **Compose** and pick your team, or open a conversation and click **Reply**. Your message reaches the team's inbox (and every member's **My mail**) from the team leader persona, in the same conversation. You can only write to your own team and its members.
+- **Writing to some members only:** pick them by name in To or Cc (e.g. two or three of them). It reaches only their own mailboxes (**My mail**), not the team inbox. A member who writes to you from their own mailbox has your reply in theirs: **Reply** answers them personally, **Reply all** everyone else on it too. Add your team to the recipients to reach everyone.
 - **An inject sent to you as well** (from another persona) can't be answered from here: use **Forward to** your team if you want to pass it on.
 - Your answers to the team count as the persona's answer: ExCon sees them on the Replies tab ("answered by the team leader"), so it won't answer the same message twice.
 

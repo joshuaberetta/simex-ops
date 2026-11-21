@@ -9,10 +9,11 @@ from datetime import timedelta
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
-from . import ai, push
+from . import ai, conf, push
 from .access import leader_required, leader_of
+from .models import Event, Mail, PushSubscription, Response
 from .views_ai import dashboard_data
-from .views_inbox import ai_band, leader_tabs, peer_teams
+from .views_inbox import ai_band, leader_tabs, member_address, member_locals, peer_teams, team_members
 
 
 @leader_required
@@ -51,6 +52,31 @@ def dashboard(request):
         "mean_wpm": round(sum(wpm) / len(wpm)) if wpm else None, "ai_list": ai_list,
         "flagged": data["flagged"], "commitments": data["commitments"], "asks": data["asks"],
         "t0": data["t0"], "t1": data["t1"], "ai_enabled": ai.enabled(), "now": timezone.now(),
+        "simex_js": {"base": "/inbox", "readonly": True, "book": [], "team": team.name, "leader": True,
+                     "folder": "", "unread": 0, "vapid": push.public_key(), "pushBase": "/inbox", "labels": []}})
+
+
+@leader_required
+def members(request):
+    """The Team members tab: who is in the team, with their team roles, what each has done so
+    far and (with personal mailboxes on) a read-only link to their own mailbox."""
+    lead = leader_of(request.user)
+    team = lead.team
+    kind = "test" if team.is_test else "live"
+    locs = member_locals(team)
+    people = list(team_members(team).select_related("user"))
+    for p in people:
+        p.address = member_address(p, locs)
+        p.wrote = Response.objects.filter(person=p, kind=kind).exclude(status="ignored").count()
+        p.to_team = Mail.objects.filter(team=team, owner=p, folder="sent", persona="").count()
+        p.read = Event.objects.filter(person=p, type="read").values("message_id").distinct().count()
+        p.alerts = PushSubscription.objects.filter(person=p).exists()
+        p.unread = Mail.objects.filter(team=team, owner=p, folder="inbox", archived=False, read_at__isnull=True,
+                                       trashed_at__isnull=True).values("thread").distinct().count()
+    people.sort(key=lambda p: (not p.active, p.team_role.sort if p.team_role else 1_000_000, p.name))
+    return render(request, "ops/mail/members.html", {
+        "team": team, "me": lead, "base": "/inbox", "readonly": True, "leader_tabs": leader_tabs(lead, "members"),
+        "people": people, "personal": conf.flag("personal_mailboxes"),
         "simex_js": {"base": "/inbox", "readonly": True, "book": [], "team": team.name, "leader": True,
                      "folder": "", "unread": 0, "vapid": push.public_key(), "pushBase": "/inbox", "labels": []}})
 

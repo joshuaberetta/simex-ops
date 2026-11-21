@@ -2,7 +2,7 @@
 {% block title %}Team inboxes · SIMEX ops{% endblock %}
 {% block body %}
 <h1>Team inboxes</h1>
-<p class="muted">"View as team" opens the participants' mail client exactly as that team sees it, read-only: nothing is marked read and nothing can be sent. "Team leader" does the same for the mailbox of the team's leader (ExCon), who plays the team leader persona.</p>
+<p class="muted">"View as team" opens the participants' mail client exactly as that team sees it, read-only: nothing is marked read and nothing can be sent. "Team leader" does the same for the mailbox of the team's leader (ExCon), who plays the team leader persona, and each member's name for that member's own mailbox (with personal mailboxes on, Settings). The figures are the team inbox's.</p>
 <table class="list">
   <thead><tr><th>Team</th><th>Received</th><th>Unread</th><th>Sent</th><th>Last in</th><th>Last out</th><th>Member logins</th><th>Last sign-in</th><th></th></tr></thead>
   {% for t in teams %}
@@ -10,7 +10,8 @@
     <td>{{ t.n_sent }}</td><td class="small">{{ t.last_in|date:"D H:i"|default:"—" }}</td><td class="small">{{ t.last_out|date:"D H:i"|default:"—" }}</td>
     <td>{{ t.logins }}</td><td class="small">{{ t.last_login|date:"D H:i"|default:"—" }}</td>
     <td><a class="btn small" href="/inbox/as/{{ t.id }}/">View as team</a>
-      {% if t.lead %}<a class="btn small" href="/inbox/as/{{ t.id }}/leader/" title="{{ t.lead.name }}">Team leader</a>{% endif %}</td></tr>
+      {% if t.lead %}<a class="btn small" href="/inbox/as/{{ t.id }}/leader/" title="{{ t.lead.name }}">Team leader</a>{% endif %}
+      {% if t.members %}<div class="small">Own mailboxes: {% for p in t.members %}<a href="/inbox/as/{{ t.id }}/member/{{ p.id }}/">{{ p.name }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</div>{% endif %}</td></tr>
   {% endfor %}
 </table>
 <form method="post" action="/inboxes/clear/" class="card form danger-zone" style="max-width:640px;margin-top:18px">{% csrf_token %}

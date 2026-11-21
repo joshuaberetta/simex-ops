@@ -108,7 +108,9 @@ def test_teams_never_cross(excon):
     la.post("/inbox/send/", {"to": f"t:{ta.id}", "subject": "x", "body": "y", "in_reply_to": b_mail.id})
     assert not Mail.objects.filter(team=tb, body="y").exists()
     book = la.get("/inbox/").context["simex_js"]["book"]
-    assert book == [{"key": f"t:{ta.id}", "name": "Team A", "addr": "a@teams.simex.kobolabs.dev", "kind": "team"}]
+    assert book[0] == {"key": f"t:{ta.id}", "name": "Team A", "addr": "a@teams.simex.kobolabs.dev", "kind": "team"}
+    assert {b["kind"] for b in book[1:]} == {"member"}  # and their own team's members only
+    assert {int(b["key"][2:]) for b in book[1:]} <= set(ta.people.values_list("id", flat=True))
     keys = {b["key"] for b in pa.get("/inbox/").context["simex_js"]["book"]}
     assert "p:undac-a-tl" in keys and "p:undac-b-tl" not in keys
 
@@ -281,7 +283,7 @@ def test_leader_routes_are_leaders_only():
                 yield prefix + str(p.pattern), p.callback
 
     for route, cb in walk(get_resolver().url_patterns):
-        if not (getattr(cb, "leader_only", False) or route.startswith(("inbox/team/", "inbox/leaders/"))):
+        if not (getattr(cb, "leader_only", False) or route.startswith(("inbox/team/", "inbox/leaders/", "inbox/members/"))):
             continue
         url = "/" + re.sub(r"<int:\w+>", "1", re.sub(r"<str:\w+>", "x", route))
         assert pa.get(url).status_code in (403, 404), url

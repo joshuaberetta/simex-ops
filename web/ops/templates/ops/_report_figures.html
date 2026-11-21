@@ -43,15 +43,15 @@
 
 {% with b=f.inbox %}{% if b %}<h4>How you managed your inbox</h4>
 {% if b.members %}<table class="list small fig">
-  <thead><tr><th>Member</th>{% if b.by_team_role %}<th>Team role</th>{% endif %}<th>Messages read</th><th>Written</th><th>Files opened</th><th>Alerts</th></tr></thead>
-  <tbody>{% for m in b.members %}<tr><td>{{ m.name }}</td>{% if b.by_team_role %}<td>{{ m.team_role|default:"—" }}</td>{% endif %}<td>{{ m.read }}</td><td>{{ m.wrote }}</td><td>{{ m.downloads }}</td><td>{% if m.alerts_on %}on{% else %}<span class="muted">off</span>{% endif %}</td></tr>{% endfor %}</tbody>
+  <thead><tr><th>Member</th>{% if b.by_team_role %}<th>Team role</th>{% endif %}<th>Messages read</th><th>Written</th>{% if b.messages_within_team %}<th>Within the team</th>{% endif %}<th>Files opened</th><th>Alerts</th></tr></thead>
+  <tbody>{% for m in b.members %}<tr><td>{{ m.name }}</td>{% if b.by_team_role %}<td>{{ m.team_role|default:"—" }}</td>{% endif %}<td>{{ m.read }}</td><td>{{ m.wrote }}</td>{% if b.messages_within_team %}<td>{{ m.wrote_within_team }}</td>{% endif %}<td>{{ m.downloads }}</td><td>{% if m.alerts_on %}on{% else %}<span class="muted">off</span>{% endif %}</td></tr>{% endfor %}</tbody>
 </table>{% endif %}
 {% if b.by_team_role %}{% include "ops/_report_roles.html" with groups=b.by_team_role %}{% endif %}
 <ul class="small">
   {% if b.documents %}<li>Injects with documents: {{ b.documents|length }}; answered before opening the documents: {% if b.replied_before_opening_documents %}{{ b.replied_before_opening_documents|joinlist }}{% else %}none{% endif %}.</li>{% endif %}
   {% if b.read_but_never_answered %}<li>Read but never answered: {{ b.read_but_never_answered|joinlist }}.</li>{% endif %}
   {% if b.answered_long_after_reading %}<li>Answered long after reading: {% for x in b.answered_long_after_reading %}{{ x.inject }} ({{ x.minutes_after_reading }} min){% if not forloop.last %}, {% endif %}{% endfor %}.</li>{% endif %}
-  <li>{{ b.forwards|length }} forward{{ b.forwards|length|pluralize }}, {{ b.messages_with_cc }} message{{ b.messages_with_cc|pluralize }} with copies, {{ b.messages_to_team_leader }} to the team leader.</li>
+  <li>{{ b.forwards|length }} forward{{ b.forwards|length|pluralize }}, {{ b.messages_with_cc }} message{{ b.messages_with_cc|pluralize }} with copies, {{ b.messages_to_team_leader }} to the team leader{% if b.messages_within_team %}, {{ b.messages_within_team }} between members (from their own mailboxes){% endif %}.</li>
   <li>At the end: {{ b.at_the_end.unread }} unread, {{ b.at_the_end.in_inbox }} in the inbox, {{ b.at_the_end.archived }} archived, {{ b.at_the_end.starred }} starred{% if b.at_the_end.drafts_unsent %}, {{ b.at_the_end.drafts_unsent }} unsent draft{{ b.at_the_end.drafts_unsent|pluralize }}{% endif %}.
     {% if b.starred_threads %}{{ b.starred_threads }} conversation{{ b.starred_threads|pluralize }} starred during the exercise, {{ b.starred_then_unstarred }} unstarred again.{% endif %}</li>
   <li>Labels: {% if b.labels %}{% for l in b.labels %}{{ l.label }} ({{ l.conversations }}){% if not forloop.last %}, {% endif %}{% endfor %}{% else %}none{% endif %}.</li>
