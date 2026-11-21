@@ -19,10 +19,29 @@ MODELS = [Group, get_user_model(), m.Setting, m.Team, m.TeamRole, m.Person, m.Se
           m.ExerciseReport, m.Report, m.MailAction, m.NpcProfile, m.NpcReply, m.NpcSandbox]
 
 
+# Rows serialized at a time: few for tables holding files, so a large exercise's backup (hundreds
+# of MB) is streamed out instead of built in memory (the web instance has 1 GB).
+BATCH, FILE_BATCH = 500, 5
+FILE_MODELS = {m.Attachment, m.MessageAttachment, m.MailAttachment, m.ResponseAttachment}
+
+
+def export_stream():
+    """The backup as chunks of JSON text, the same file as export() gives."""
+    yield json.dumps({"format": FORMAT, "exported_at": timezone.now().isoformat()})[:-1] + ', "objects": ['
+    first = True
+    for model in MODELS:
+        size = FILE_BATCH if model in FILE_MODELS else BATCH
+        pks = list(model.objects.order_by("pk").values_list("pk", flat=True))
+        for i in range(0, len(pks), size):
+            text = serializers.serialize("json", model.objects.filter(pk__in=pks[i:i + size]).order_by("pk"))[1:-1]
+            if text.strip():
+                yield ("" if first else ", ") + text
+                first = False
+    yield "]}"
+
+
 def export():
-    return {"format": FORMAT, "exported_at": timezone.now().isoformat(),
-            "objects": json.loads(serializers.serialize("json", [o for model in MODELS
-                                                                 for o in model.objects.all().order_by("pk")]))}
+    return json.loads("".join(export_stream()))
 
 
 def restore(data):

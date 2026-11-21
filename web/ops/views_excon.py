@@ -14,7 +14,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import BooleanField, Count, ExpressionWrapper, Max, Prefetch, Q, Sum
-from django.http import Http404, HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.http import content_disposition_header
@@ -1594,9 +1594,8 @@ def settings_domain(request):
 
 @excon_required
 def settings_backup(request):
-    data = backup.export()
     audit("backup_download", None, _u(request))
-    resp = HttpResponse(json.dumps(data), content_type="application/json")
+    resp = StreamingHttpResponse(backup.export_stream(), content_type="application/json")
     resp["Content-Disposition"] = f'attachment; filename="simex-inbox-backup-{timezone.localtime():%Y%m%d-%H%M}.json"'
     return resp
 

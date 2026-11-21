@@ -139,6 +139,7 @@ End the rehearsal as you will end the exercise: grade the Test team's replies, t
 
 ### 3.8 Take a backup
 **Settings → Download backup.** One file with everything: injects, attachments, mailboxes, logins, grades.
+Late in the exercise it can be several hundred MB (every file participants sent is in it): download it on a good connection. The database also has DigitalOcean's own daily backups.
 
 ---
 

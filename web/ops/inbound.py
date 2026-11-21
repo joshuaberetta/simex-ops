@@ -5,6 +5,7 @@ import base64
 import hashlib
 import hmac
 import logging
+import queue
 import re
 import threading
 import time
@@ -293,13 +294,32 @@ def fetch(response_id):
         notices.reply(r)  # now with its opening words
 
 
-def fetch_async(response_id):
-    def run():
+# Webhook fetches go through a few worker threads per process: a burst of replies (every team
+# answering the same inject) must not open a database connection each (the cluster has few).
+FETCH_WORKERS = 3
+_fetch_queue = queue.Queue()
+_fetchers = []
+_fetchers_lock = threading.Lock()
+
+
+def _fetch_worker():
+    while True:
+        response_id = _fetch_queue.get()
         try:
             fetch(response_id)
+        except Exception:
+            log.exception("fetch of received email %s failed", response_id)
         finally:
             connection.close()
-    threading.Thread(target=run, daemon=True).start()
+
+
+def fetch_async(response_id):
+    with _fetchers_lock:
+        while len(_fetchers) < FETCH_WORKERS:
+            t = threading.Thread(target=_fetch_worker, daemon=True, name=f"fetch-{len(_fetchers)}")
+            t.start()
+            _fetchers.append(t)
+    _fetch_queue.put(response_id)
 
 
 def catch_up():

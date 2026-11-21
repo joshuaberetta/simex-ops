@@ -631,7 +631,7 @@ def test_backup_roundtrip(excon):
     pa.get(f"/inbox/t/{Mail.objects.get(owner=None, team__code='a').thread}/")  # a read event
     from ops.models import Event
     assert Event.objects.filter(type="read").count() == 1
-    data = excon.get("/settings/backup/").json()
+    data = json.loads(b"".join(excon.get("/settings/backup/").streaming_content))
     Mail.objects.all().delete()
     from django.core.files.uploadedfile import SimpleUploadedFile
     r = excon.post("/settings/restore/", {"confirm": "RESTORE",
