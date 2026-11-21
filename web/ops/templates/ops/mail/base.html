@@ -54,6 +54,7 @@
   <a href="/inbox/team/" class="{% if lt.current == 'team' %}on{% endif %}">{% icon "eye" 20 %} {{ lt.team.name }} inbox <span class="gm-tab-ro">read-only</span><span class="gm-tab-n" data-tab-team>{% if lt.team_new and lt.current != 'team' %}{{ lt.team_new }}{% endif %}</span></a>
   <a href="/inbox/members/" class="{% if lt.current == 'members' %}on{% endif %}">{% icon "label" 20 %} Team members</a>
   {% if lt.peers %}<a href="/inbox/leaders/" class="{% if lt.current == 'peer' %}on{% endif %}">{% icon "eye" 20 %} Team leaders <span class="gm-tab-ro">read-only</span></a>{% endif %}
+  {% if lt.npcs %}<a href="/inbox/personas/" class="{% if lt.current == 'npcs' %}on{% endif %}">{% icon "eye" 20 %} AI personas <span class="gm-tab-ro">read-only</span></a>{% endif %}
   <a href="/inbox/dashboard/" class="{% if lt.current == 'dashboard' %}on{% endif %}">{% icon "all" 20 %} Dashboard</a>
 </nav>
 {% endwith %}{% elif member_tabs %}{% with mt=member_tabs %}

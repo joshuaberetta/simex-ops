@@ -1,0 +1,37 @@
+{% extends "ops/mail/base.html" %}{% load ops %}
+{% block title %}AI personas{% endblock %}
+{% block search %}<div class="gm-search-space">{{ team.name }} · AI personas</div>{% endblock %}
+{% block side %}{% endblock %}
+{% block main %}
+<div class="gm-dash">
+  <h2>{{ team.name }}: conversations with AI personas</h2>
+  <p class="small muted">Some personas answer on their own: Claude writes their answers in character, from a profile ExCon gave them,
+  after a delay that depends on the persona. The team doesn't know which personas these are. What it writes to them and their answers are also in the team inbox.</p>
+  {% for c in convs %}
+  <details class="gm-npc-conv"{% if forloop.first %} open{% endif %}>
+    <summary><b>{{ c.persona.sender.display_name|default:c.persona.sender.local_part }}</b> · {{ c.subject|default:"(no subject)" }}
+      <span class="muted small">· {{ c.items|length }} message{{ c.items|length|pluralize }} · last {{ c.last|date:"D H:i" }}{% if c.channel == 'email' %} · email{% endif %}</span>
+      {% with j=c.job %}{% if j %}<span class="small">·
+        {% if j.status == 'queued' %}answer due about {{ j.due_at|date:"H:i" }}{% elif j.status == 'writing' %}writing its answer
+        {% elif j.status == 'held' %}answer waiting for ExCon{% elif j.status == 'sent' %}answered{% elif j.status == 'skipped' %}not answering{% else %}answer failed (ExCon is told){% endif %}</span>{% endif %}{% endwith %}
+    </summary>
+    {% for i in c.items %}
+    <div class="gm-npc-msg {% if i.team %}from-team{% else %}from-npc{% endif %}">
+      <div class="small"><b>{{ i.who }}</b> · {{ i.at|date:"D H:i" }}{% if not i.team and not i.npc %} <span class="muted">(written by ExCon)</span>{% endif %}</div>
+      <p>{{ i.text|linebreaksbr }}</p>
+    </div>
+    {% endfor %}
+    {% if c.thread %}<p class="small"><a href="/inbox/team/t/{{ c.thread }}/">Open in the team inbox, read-only</a></p>{% endif %}
+  </details>
+  {% empty %}<p class="muted">{{ team.name }} hasn't written to an AI persona yet.</p>{% endfor %}
+
+  {% if personas %}
+  <h2>The AI personas {{ team.name }} can write to</h2>
+  <table class="gm-dtable">
+    <tr><th>Persona</th><th>Address</th><th>Who</th><th>Answers</th></tr>
+    {% for p in personas %}<tr><td><b>{{ p.sender.display_name|default:p.sender.local_part }}</b></td><td>{{ p.sender.inapp_address }}</td>
+      <td>{{ p.role }}{% if p.role and p.organisation %}, {% endif %}{{ p.organisation }}</td><td class="small">{{ p.timing_text }}</td></tr>{% endfor %}
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

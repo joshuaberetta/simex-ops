@@ -4,6 +4,7 @@ from . import views_ai as a
 from . import views_excon as x
 from . import views_inbox as p
 from . import views_leader as lead
+from . import views_npc as npc
 from . import views_report as rp
 
 # The participant mail client, mounted on a mailbox: /inbox/ for the logged-in member (their
@@ -53,6 +54,7 @@ urlpatterns = [
     path("inbox/leaders/<int:as_team>/", include(team_patterns), {"box": "peer"}),
     path("inbox/dashboard/", lead.dashboard),
     path("inbox/members/", lead.members),
+    path("inbox/personas/", lead.npcs),
     path("inbox/members/<int:pid>/", include(team_patterns), {"box": "member"}),
     path("inbox/me/", include(mail_patterns), {"box": "me"}),
     path("inbox/", include(mail_patterns)),
@@ -81,6 +83,11 @@ urlpatterns = [
     path("import/clear/", x.injects_clear),
     path("senders/", x.senders_page),
     path("senders/<int:sid>/delete/", x.sender_delete),
+    path("npcs/", npc.npcs_page),
+    path("npcs/<int:pid>/", npc.npc_page),
+    path("npcs/<int:pid>/try/", npc.npc_try),
+    path("npcs/<int:pid>/delete/", npc.npc_delete),
+    path("npcs/answers/<int:jid>/", npc.npc_reply_action),
     path("people/", x.people_page),
     path("people/bulk/", x.people_bulk),
     path("people/save/", x.person_save),
@@ -132,6 +139,7 @@ urlpatterns = [
     path("settings/channel/", x.settings_channel),
     path("settings/ai/", a.settings_ai),
     path("settings/ai/prompts/", a.settings_ai_prompts),
+    path("settings/npc/", npc.settings_npc),
     path("settings/domain/", x.settings_domain),
     path("settings/backup/", x.settings_backup),
     path("settings/restore/", x.settings_restore),

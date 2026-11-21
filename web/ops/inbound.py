@@ -141,6 +141,8 @@ def from_mail(mail, personas):
     r.save()
     audit("inapp_response", f"{mail.team.name} -> {', '.join(personas)}: {mail.subject[:80]}")
     notices.reply(r)
+    from . import npc
+    npc.on_response(r)
     return r
 
 
@@ -235,6 +237,8 @@ def _new_email(rid, data):
     r.save()
     audit("inbound", f"{addr} -> {persona or '?'}: {r.subject[:80]}")
     notices.reply(r)
+    from . import npc
+    npc.on_response(r)  # answered once its content is fetched
     return r
 
 

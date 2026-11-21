@@ -273,6 +273,7 @@ class Message(models.Model):
     # they changed its text first. Injects made from a draft link through InjectDraft.created.
     ai_draft = models.ForeignKey("InjectDraft", null=True, blank=True, on_delete=models.SET_NULL, related_name="messages")
     ai_edited = models.BooleanField(null=True, blank=True)
+    npc = models.BooleanField(default=False)  # an answer an AI persona wrote and sent (ops/npc.py)
 
     class Meta:
         ordering = ["-id"]
@@ -711,3 +712,71 @@ class NoticeState(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["notice", "user"], name="notice_state_once")]
+
+
+# --- AI personas (ops/npc.py): personas whose answers Claude writes in character, sent after a
+# delay drawn from their timing. ------------------------------------------------------------
+
+class NpcProfile(models.Model):
+    """The character behind a persona (Sender): who they are, what they know and may share
+    with the teams, how they write and how fast they answer. Only what the teams may learn
+    goes here, never control-side material."""
+    sender = models.OneToOneField(Sender, on_delete=models.CASCADE, related_name="npc")
+    enabled = models.BooleanField(default=False)  # answers on its own
+    organisation = models.CharField(max_length=200, blank=True, default="")
+    role = models.CharField(max_length=200, blank=True, default="")
+    personality = models.TextField(blank=True, default="")
+    knowledge = models.TextField(blank=True, default="")
+    boundaries = models.TextField(blank=True, default="")
+    timing = models.CharField(max_length=20, default="responsive")  # a key of npc.TIMINGS, or custom
+    min_minutes = models.FloatField(default=5)
+    max_minutes = models.FloatField(default=20)
+    quick_chance = models.FloatField(default=0)  # 0..1: answers within a few minutes instead
+    no_reply_chance = models.FloatField(default=0)  # 0..1: doesn't answer at all
+    office_from = models.IntegerField(null=True, blank=True)  # hour, exercise time; empty = any time
+    office_to = models.IntegerField(null=True, blank=True)
+    auto_send = models.BooleanField(default=True)  # else each answer waits for ExCon
+    # Generate with AI: the brief, and the run filling this profile in (a web-process thread).
+    brief = models.TextField(blank=True, default="")
+    gen_status = models.CharField(max_length=10, blank=True, default="")  # "" | running | done | failed
+    gen_error = models.TextField(blank=True, default="")
+    gen_notes = models.JSONField(default=dict, blank=True)  # rationale, new facts to check
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sender__display_name", "sender__local_part"]
+
+
+class NpcReply(models.Model):
+    """An AI persona's answer to a team's conversation: due at a time drawn on arrival, written
+    when due, then sent (or held for ExCon). Messages that arrive while it is queued in the same
+    conversation move it on to the latest (one answer to all of them)."""
+    npc = models.ForeignKey(NpcProfile, on_delete=models.CASCADE, related_name="replies")
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="+")
+    response = models.ForeignKey(Response, on_delete=models.CASCADE, related_name="npc_replies")  # the latest it answers
+    thread_key = models.CharField(max_length=300, default="")
+    status = models.CharField(max_length=10, default="queued")  # queued | writing | held | sent | skipped | failed
+    due_at = models.DateTimeField(default=timezone.now)
+    note = models.CharField(max_length=300, blank=True, default="")  # why skipped, held...
+    body = models.TextField(blank=True, default="")
+    out = models.JSONField(default=dict, blank=True)  # shared, flags, note for ExCon
+    model = models.CharField(max_length=120, default="")
+    attempts = models.IntegerField(default=0)
+    error = models.TextField(blank=True, null=True)
+    message = models.ForeignKey(Message, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-id"]
+
+
+class NpcSandbox(models.Model):
+    """ExCon trying an AI persona out (its page → Try it): a conversation nothing delivers."""
+    npc = models.ForeignKey(NpcProfile, on_delete=models.CASCADE, related_name="sandboxes")
+    user = models.CharField(max_length=150, blank=True, default="")
+    turns = models.JSONField(default=list)  # [{"who": "team" | "npc", "text": ...}]
+    status = models.CharField(max_length=10, default="done")  # running | done | failed
+    error = models.TextField(blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)

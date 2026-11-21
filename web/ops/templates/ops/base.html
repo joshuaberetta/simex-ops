@@ -21,6 +21,7 @@
     <span class="tabsep" aria-hidden="true"></span>
     <a href="/people/" class="{% if tab == 'people' %}on{% endif %}">People &amp; logins</a>
     <a href="/senders/" class="{% if tab == 'senders' %}on{% endif %}">Senders</a>
+    {% if cfg.npc_enabled == '1' %}<a href="/npcs/" class="{% if tab == 'npcs' %}on{% endif %}">AI personas</a>{% endif %}
     <a href="/tests/" class="{% if tab == 'tests' %}on{% endif %}">Test runs</a>
     <a href="/settings/" class="{% if tab == 'settings' %}on{% endif %}">Settings</a>
   </nav>

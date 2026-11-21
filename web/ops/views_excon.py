@@ -539,7 +539,7 @@ def senders_page(request):
         messages.success(request, f"Saved {local} ({x.inapp_address} in SIMEX Mail)." + (f" {renamed} injects now use it." if renamed else ""))
         return redirect("/senders/")
     usage = dict(Inject.objects.values_list("sender_local").annotate(n=Count("id")).values_list("sender_local", "n"))
-    senders = list(Sender.objects.all())
+    senders = list(Sender.objects.select_related("npc"))
     for x in senders:
         x.usage = usage.get(x.local_part, 0)
     return render(request, "ops/senders.html", {"tab": "senders", "senders": senders})

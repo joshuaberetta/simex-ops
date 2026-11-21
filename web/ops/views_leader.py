@@ -1,6 +1,7 @@
 """A team leader's Dashboard (the Dashboard tab above their SIMEX Mail): their team's replies
 and Claude's reading of them. The figures come from views_ai.dashboard_data, as ExCon's
-Dashboard, for this team only and without grades. Every view is leader_required; a leader
+Dashboard, for this team only and without grades. The AI personas tab shows the team's
+conversations with them (ops/npc.py). Every view is leader_required; a leader
 never sees another team's inbox (only, read-only, the other team leaders' mailboxes)."""
 
 from collections import Counter
@@ -9,9 +10,9 @@ from datetime import timedelta
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
-from . import ai, conf, push
+from . import ai, conf, npc, push
 from .access import leader_required, leader_of
-from .models import Event, Mail, PushSubscription, Response
+from .models import Event, Mail, NpcProfile, PushSubscription, Response
 from .views_ai import dashboard_data
 from .views_inbox import ai_band, leader_tabs, member_address, member_locals, peer_teams, team_members
 
@@ -86,3 +87,20 @@ def peers(request):
     """The Team leaders tab: the first other team leader's mailbox (the others are in its side bar)."""
     first = peer_teams(leader_of(request.user)).first()
     return redirect(f"/inbox/leaders/{first.id}/" if first else "/inbox/")
+
+
+@leader_required
+def npcs(request):
+    """The AI personas tab: who the team can write to among them, and every conversation the team
+    has had with one (both ways, with when the persona's answer is due), read-only."""
+    lead = leader_of(request.user)
+    team = lead.team
+    personas = [p for p in NpcProfile.objects.select_related("sender").filter(enabled=True, sender__active=True)
+                if npc.in_scope(team)]
+    for p in personas:
+        p.timing_text = npc.timing_text(p)
+    return render(request, "ops/mail/npcs.html", {
+        "team": team, "me": lead, "base": "/inbox", "readonly": True, "leader_tabs": leader_tabs(lead, "npcs"),
+        "personas": personas, "convs": npc.team_conversations(team), "now": timezone.now(),
+        "simex_js": {"base": "/inbox", "readonly": True, "book": [], "team": team.name, "leader": True,
+                     "folder": "", "unread": 0, "vapid": push.public_key(), "pushBase": "/inbox", "labels": []}})

@@ -26,7 +26,7 @@
   </div>
   {% elif kind_ == 'answer' %}
   <div class="conv-item from-persona">
-    <div class="small"><b>{{ o.from_addr|name_only }}</b> (ExCon answer) · {{ at|date:"D d M H:i" }} · <a href="/log/{{ o.id }}/">{{ o.status }}</a></div>
+    <div class="small"><b>{{ o.from_addr|name_only }}</b> ({% if o.npc %}<a href="/npcs/">AI persona</a> answer{% else %}ExCon answer{% endif %}) · {{ at|date:"D d M H:i" }} · <a href="/log/{{ o.id }}/">{{ o.status }}</a></div>
     <pre class="mailtext">{{ o.shown }}</pre>
     {% include "ops/_conv_files.html" with files=o.file_list %}
   </div>
@@ -58,6 +58,7 @@
   </fieldset>{% endif %}
   <p class="hint">Up to {{ max_mb }} MB of files in all.</p>
   <button class="btn">Send reply</button>
+  {% for j in latest.npc_replies.all %}<p class="small"><span class="flag ai">AI persona</span> {% if j.status == 'queued' %}It answers on its own about {{ j.due_at|date:"H:i" }}{% elif j.status == 'held' %}Its answer is waiting for you{% elif j.status == 'sent' %}It answered{% elif j.status == 'skipped' %}It isn't answering{% elif j.status == 'writing' %}Writing its answer{% else %}Its answer failed{% endif %}: <a href="/npcs/{{ j.npc_id }}/#q{{ j.id }}">open</a>.</p>{% endfor %}
   {% for m in answers %}<p class="small">Answered {{ m.created_at|date:"D H:i" }}{% if m.author %} <b>by the team leader, {{ m.author.name }}</b>, in SIMEX Mail{% endif %}: <a href="/log/{{ m.id }}/">{{ m.status }}</a></p>{% endfor %}
 </form>
 {% endif %}

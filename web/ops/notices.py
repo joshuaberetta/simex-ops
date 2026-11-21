@@ -103,6 +103,31 @@ def attachments_done(job):
     return add(f"zip:{job.id}", "system", "Inject documents import failed", f"{job.filename}: {job.error}", url="/import/")
 
 
+def npc(job):
+    """An AI persona's answer: sent, waiting for ExCon or failed; a flag it raised on top."""
+    who, team = job.npc.sender.display_name or job.npc.sender.local_part, _team(job.team)
+    test = bool(job.team and job.team.is_test)
+    url, links = f"/npcs/{job.npc_id}/#q{job.id}", dict(team=job.team, response=job.response, test=test)
+    if job.status == "failed":
+        return add(f"npc:{job.id}:failed", "system", f"AI persona {who} could not answer {team}", job.error or "", url=url, **links)
+    out = job.out or {}
+    if "escalate" in out.get("flags", []):
+        add(f"npc:{job.id}:flag", "flag", f"⚑ AI persona {who}: {team} needs ExCon attention", out.get("note", ""), url=url, **links)
+    if job.status == "held":
+        return add(f"npc:{job.id}:held", "system", f"AI persona {who}'s answer to {team} is waiting for you",
+                   out.get("note", ""), job.body[:160], url, **links)
+    if job.status == "sent":
+        return add(f"npc:{job.id}:sent", "system", f"AI persona {who} answered {team}", out.get("note", ""), job.body[:160],
+                   url, **links)
+    return None
+
+
+def npc_ready(p):
+    if p.gen_status == "done":
+        return add(f"npc-new:{p.id}", "system", "AI persona written", p.sender.display_name, p.brief, f"/npcs/{p.id}/")
+    return add(f"npc-new:{p.id}", "system", "Writing an AI persona failed", p.gen_error, p.brief, f"/npcs/{p.id}/")
+
+
 def scheduler_check(tick):
     """Called from ExCon's poll: once per stop, the scheduler hasn't ticked for a while."""
     if tick and (timezone.now() - tick).total_seconds() > SCHEDULER_STALE:

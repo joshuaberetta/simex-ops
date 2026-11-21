@@ -321,7 +321,7 @@ PROMPT_MAX = 30_000  # characters per set of instructions
 
 
 def ai_prompts():
-    from . import report  # noqa: F401  registers the report instructions
+    from . import npc, report  # noqa: F401  register their instructions
     return [{"key": k, **v, "value": ai.instructions(k), "custom": bool((conf.get(f"ai_prompt_{k}") or "").strip())}
             for k, v in ai.INSTRUCTIONS.items()]
 
@@ -331,7 +331,7 @@ def ai_prompts():
 def settings_ai_prompts(request):
     """Settings → AI instructions: save the edited ones, or put one back to the default. Text
     equal to the default is stored as empty, so later changes to the default still apply."""
-    from . import report  # noqa: F401
+    from . import npc, report  # noqa: F401
     P, changed = request.POST, []
     reset = P.get("reset")
     if reset in ai.INSTRUCTIONS:

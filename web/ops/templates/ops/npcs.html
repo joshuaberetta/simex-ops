@@ -1,0 +1,63 @@
+{% extends "ops/base.html" %}
+{% block title %}AI personas · SIMEX ops{% endblock %}
+{% block head %}{% if writing %}<meta http-equiv="refresh" content="10">{% endif %}{% endblock %}
+{% block body %}
+<div class="bar">
+  <h1>AI personas</h1>
+  <span class="small muted">{% if not on %}<span class="pill warn">Off</span> nothing answers on its own (<a href="/settings/#npc">Settings</a>){% else %}<span class="pill safe">On</span> for {% if scope == 'all' %}every team{% else %}the Test team only{% endif %} (<a href="/settings/#npc">Settings</a>){% endif %}
+    · {% if not ai_available %}no AI provider configured{% elif not ai_enabled %}AI analysis is off (<a href="/settings/#ai">Settings</a>){% else %}about ${{ ai_spent|floatformat:2 }} of ${{ ai_cap|floatformat:2 }} today{% endif %}</span>
+</div>
+<p class="small muted">Personas the teams can write to that answer on their own, like non-player characters: Claude writes each answer in character from the persona's profile (who they are, what they know and may share, their limits), after a delay drawn from its timing, in the same conversation, in SIMEX Mail or by email.
+Put only what the teams may learn in a profile: never control-side material. Answers go out as the persona and are on the Replies tab; team leaders see their team's conversations with them.</p>
+
+<div class="cols">
+<section class="col-main">
+<table class="list">
+  <thead><tr><th>Persona</th><th>Timing</th><th>Answers</th><th></th></tr></thead>
+  <tbody>
+  {% for p in profiles %}<tr>
+    <td><a href="/npcs/{{ p.id }}/"><b>{{ p.sender.display_name|default:p.sender.local_part }}</b></a> <span class="muted small">{{ p.sender.inapp_address }}</span>
+      <div class="small muted">{{ p.role }}{% if p.role and p.organisation %}, {% endif %}{{ p.organisation }}</div></td>
+    <td class="small">{{ p.timing_text }}</td>
+    <td class="small">{% if p.n_open %}<b>{{ p.n_open }} open</b> · {% endif %}{{ p.n_sent }} sent</td>
+    <td class="nowrap">{% if p.gen_status == 'running' %}<span class="status running">writing</span>{% elif p.gen_status == 'done' %}<span class="status queued">to review</span>{% elif p.gen_status == 'failed' %}<span class="status failed">failed</span>{% elif p.enabled %}<span class="status sent">answers</span>{% else %}<span class="status cancelled">off</span>{% endif %}
+      {% if not p.sender.active %}<div class="small muted">not in the address book</div>{% endif %}</td>
+  </tr>{% empty %}<tr><td colspan="4" class="muted">None yet: generate one, or make an existing persona answer on its own.</td></tr>{% endfor %}
+  </tbody>
+</table>
+
+<h3>Waiting answers</h3>
+<table class="list"><tbody>
+  {% for j in queue %}{% include "ops/_npc_job.html" with persona=True %}{% empty %}<tr><td class="muted">None.</td></tr>{% endfor %}
+</tbody></table>
+{% if recent %}<h3>Recent</h3>
+<table class="list"><tbody>{% for j in recent %}{% include "ops/_npc_job.html" with persona=True %}{% endfor %}</tbody></table>{% endif %}
+</section>
+
+<section class="col-side">
+<form method="post" action="/npcs/" class="card form">{% csrf_token %}
+  <h3>Generate with AI</h3>
+  <label>Who is it? <span class="hint">role, organisation, temperament, what they know, how fast they answer</span>
+    <textarea name="brief" rows="5" required placeholder="e.g. The deputy governor of the worst-hit province: proud, defensive about the province's preparedness, knows which roads are cut and where the evacuation centres are; slow to answer, office hours only."></textarea></label>
+  <button class="btn primary" {% if not ai_enabled %}disabled{% endif %}>Generate</button>
+  <p class="hint">Claude writes the profile from your brief and the injects (a few seconds). It stays off and out of the address book until you have read it and saved it.</p>
+</form>
+<form method="post" action="/npcs/" class="card form">{% csrf_token %}
+  <h3>From the injects</h3>
+  <p class="small">Profiles for the personas your injects come from: Claude reads each one's injects for who they are and how they write, and gives them what the teams have been told (never what their planned injects will say).</p>
+  {% if seedable %}<p class="small muted">{% for s in seedable %}{{ s.display_name|default:s.local_part }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+  <button class="btn" name="seed" value="1" {% if not ai_enabled %}disabled{% endif %}>Write {{ seedable|length }} profile{{ seedable|length|pluralize }}</button>
+  <p class="hint">One call each, about a cent apiece; each stays off until you have read it and saved it.</p>
+  {% else %}<p class="small muted">Every persona the injects use has a profile (team leader and {team} personas can't have one).</p>{% endif %}
+</form>
+<form method="post" action="/npcs/" class="card form">{% csrf_token %}
+  <h3>From an existing persona</h3>
+  <label>Persona <select name="sender">{% for s in free %}<option value="{{ s.id }}">{{ s.display_name|default:s.local_part }} &lt;{{ s.inapp_address }}&gt;</option>{% empty %}<option value="">— none free —</option>{% endfor %}</select></label>
+  <label class="chk"><input type="checkbox" name="ai" value="1" {% if ai_enabled %}checked{% else %}disabled{% endif %}> write it with AI from its injects</label>
+  <label>Anything to add? <span class="hint">optional, for the AI</span><input name="hint" placeholder="e.g. more cooperative than the injects suggest"></label>
+  <button class="btn">Give it a profile</button>
+  <p class="hint">To add a persona from scratch, add it on the <a href="/senders/">Senders</a> tab first. The team leader persona can't be one.</p>
+</form>
+</section>
+</div>
+{% endblock %}

@@ -1,0 +1,24 @@
+{# One AI persona answer (NpcReply) as a table row: j, with persona=True to name the persona. #}
+<tr id="q{{ j.id }}">
+  <td class="nowrap"><span class="status {% if j.status == 'writing' %}sending{% elif j.status == 'held' %}paused{% elif j.status == 'skipped' %}cancelled{% else %}{{ j.status }}{% endif %}">{{ j.status }}</span>
+    <div class="small muted">{% if j.status == 'queued' %}due {{ j.due_at|date:"D H:i" }}{% elif j.status == 'sent' %}{{ j.updated_at|date:"D H:i" }}{% else %}{{ j.updated_at|date:"D H:i" }}{% endif %}</div></td>
+  <td>{% if persona %}<a href="/npcs/{{ j.npc_id }}/"><b>{{ j.npc.sender.display_name|default:j.npc.sender.local_part }}</b></a> ← {% endif %}{{ j.team.name }}
+    · <a href="/replies/{{ j.response_id }}/">{{ j.response.subject|default:"(no subject)"|truncatechars:60 }}</a>
+    {% if j.note %}<div class="small muted">{{ j.note }}</div>{% endif %}
+    {% if j.error %}<div class="small err">{{ j.error|truncatechars:200 }}</div>{% endif %}
+    {% if j.out.flags %}<div class="flags">{% for f in j.out.flags %}<span class="flag check">{{ f }}</span>{% endfor %}</div>{% endif %}
+    {% if j.out.note %}<div class="small muted">{{ j.out.note }}</div>{% endif %}
+    {% if j.status == 'held' %}
+    <form method="post" action="/npcs/answers/{{ j.id }}/" class="form">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}">
+      <textarea name="body" rows="6">{{ j.body }}</textarea>
+      <button class="btn small primary" name="action" value="send">Send as {{ j.npc.sender.display_name|default:j.npc.sender.local_part }}</button>
+      <button class="btn small" name="action" value="skip">Don't answer</button>
+    </form>
+    {% elif j.body %}<details><summary class="small">The answer{% if j.out.shared %} · shared: {{ j.out.shared|join:"; "|truncatechars:80 }}{% endif %}</summary><pre class="mailtext">{{ j.body }}</pre></details>{% endif %}
+  </td>
+  <td class="nowrap">{% if j.status != 'held' %}<form method="post" action="/npcs/answers/{{ j.id }}/" class="inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}">
+    {% if j.status == 'queued' %}<button class="btn small" name="action" value="now">Answer now</button> <button class="link" name="action" value="skip">skip</button>
+    {% elif j.status == 'failed' or j.status == 'skipped' %}<button class="btn small" name="action" value="retry">{% if j.status == 'failed' %}Try again{% else %}Answer anyway{% endif %}</button>
+    {% elif j.message_id %}<a href="/log/{{ j.message_id }}/" class="small">{{ j.message.status }}</a>{% endif %}
+  </form>{% endif %}</td>
+</tr>

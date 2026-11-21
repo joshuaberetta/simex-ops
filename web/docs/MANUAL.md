@@ -33,6 +33,7 @@ The tabs come in two groups: what you use while the exercise runs (**Injects**, 
 | **Log** | Every delivery the app made, with content and status, plus the activity log of every action. |
 | **People & logins** | Teams, participants, and their logins (create, reset password, disable, printable credential sheet). |
 | **Senders** | The personas: username (`cnn`), display name ("CNN Breaking News"). They are also the participants' address book. |
+| **AI personas** | Only while Settings → AI personas is on: personas that answer the teams on their own, in character (5.9). |
 | **Test runs** | Replays injects on a fast clock into the **Test team** mailbox (and, for email injects, to a test address). |
 | **Settings** | **Delivery channel**, footer, subject prefix and inject code in the subject, **AI analysis** and **AI instructions**, team-to-team messaging, attachment limit, email options, grace period, **live sending switch**, backup and restore. |
 | **Help** | This manual (top right, next to your name). |
@@ -75,7 +76,7 @@ Only participant-facing fields are imported. Expected outcomes, story, theme, ke
    - **QR sign-in.** Scanning a slip's QR code with a phone's camera signs that person in on the phone and opens **Set up this device**: one button to turn on alerts (on an iPhone, first **Add to Home Screen**; the home-screen app is then signed in already). A code works on any number of devices for 14 days from printing, or until that person's password is reset or their login disabled; it never signs in an ExCon login. Treat a slip like the password: hand it to its person.
    - **Sign-in slips** prints slips again (QR code and username, passwords unchanged): for everyone (link above the People table), a team (**sign-in slips** on its row) or one person (**slip** next to their username). Use it the day before, so the codes are fresh.
 3. Each team shares **one mailbox**: everyone in Team A sees Team A's mail, and what one member sends appears in everyone's *Sent*, with the sender's name. With **personal mailboxes** on (Settings, on by default) each member also has **My mail**, their own mailbox at `name@<team code>.teams.simex.kobolabs.dev`: a copy of everything delivered to the team (an inject for one person, only theirs), plus personal mail between teammates and with their team leader (To, Cc, Bcc, as in any webmail). Members choose the **From** address of each message (the team's or their own, colour-coded); what goes from the team's address is in the team inbox's Sent. A member's answer to a persona from their own address is also put in the team inbox's Sent, and is the reply ExCon sees and grades, as before; mail only between members never reaches the Replies tab. Reading a copy in My mail counts as the team reading the inject. The team leader writes to the team (team inbox and every My mail) or to chosen members only (their My mail); In the leader's mailbox, mail from the team is labelled **Team account** or **Personal account** by the address it came from. Members are alerted (and pushed) for team mail and personal mail alike, in either tab. ExCon and the leader read every member's My mail read-only (**Team inboxes** → the member's name; the leader's **Team members** tab).
-4. **Team leaders** sign in at the same SIMEX Mail address and get five tabs: **My mail** (their own mailbox, as the team leader persona), the **team inbox** read-only (with Claude's reading of each reply from the team: who wrote it, tone, quality, flags, possibly AI-written), **Team members** (each member with their team role, what they have written and read, alerts, last sign-in, and their own mailbox read-only), **Team leaders** (the other team leaders' mailboxes, read-only, one per team in the side bar; never the other teams' inboxes) and the team's **Dashboard**. They only ever see their own team's inbox, write only to their own team, and never see injects, rubrics or grades. Their guide is under **?** in SIMEX Mail. Changing someone's role takes effect on their next page; their devices then turn alerts on again.
+4. **Team leaders** sign in at the same SIMEX Mail address and get five tabs: **My mail** (their own mailbox, as the team leader persona), the **team inbox** read-only (with Claude's reading of each reply from the team: who wrote it, tone, quality, flags, possibly AI-written), **Team members** (each member with their team role, what they have written and read, alerts, last sign-in, and their own mailbox read-only), **Team leaders** (the other team leaders' mailboxes, read-only, one per team in the side bar; never the other teams' inboxes) and the team's **Dashboard**, plus, while AI personas are on (5.9), **AI personas**: the team's conversations with them. They only ever see their own team's inbox, write only to their own team, and never see injects, rubrics or grades. Their guide is under **?** in SIMEX Mail. Changing someone's role takes effect on their next page; their devices then turn alerts on again.
 5. Give yourself a login in the **Test team** (Add person → team "Test team" → create login) to try SIMEX Mail as a participant.
 
 - **Team code** fills `{team}` in addresses (`undac-{team}-tl` → `undac-a-tl@…`); **team name** fills `{team_name}`.
@@ -233,6 +234,35 @@ Claude (Sonnet) can draft a message for you to edit and send. It never sends any
   - An answer opens the reply's **Answer as <persona>** box, filled in.
   - Either way you read it and send it yourself. A persona Claude made up shows as *new persona*: add it on **Senders** or pick an existing one.
 - The app records which injects, follow-ups and answers were sent from an AI draft, and whether you changed the text first. The end-of-exercise reports count them (6.1).
+
+### 5.9 AI personas
+Some personas can answer the teams on their own, like non-player characters in a game: a deputy governor, an agency contact, a journalist. Claude (Sonnet) writes each answer in character, after a delay drawn from the persona's timing, in the same conversation, in SIMEX Mail or by email. Turn it on in **Settings → AI personas** (off by default; AI analysis must be on too). It answers **the Test team only** until you choose **every team** there. The **AI personas** tab appears while it is on.
+- **Making one** (AI personas tab):
+  - **From the injects**: a profile for each persona your injects come from. Claude reads each one's injects to work out who they are and how they write. Their knowledge comes only from what the teams have been told, never from their planned injects. This is one call each, about a cent apiece.
+  - **Generate with AI**: describe a new one ("the deputy governor of the worst-hit province: proud, defensive, knows which roads are cut; slow to answer"). Claude writes the name, address, profile and timing from your brief and the injects.
+  - **From an existing persona**: give a persona on **Senders** a profile, written by you or by Claude from its injects.
+  - Profiles Claude writes are **off**, and new personas are out of the address book, until you have read them and saved them. Check the **new facts** Claude lists against the scenario. Team leader personas and `{team}` personas can't be AI personas.
+- **The profile**:
+  - who they are: name, username, the address shown in SIMEX Mail, role, organisation
+  - **personality and voice**
+  - **what they know and may share**: only what the teams may learn, never control-side material
+  - **boundaries**: what they won't share or promise
+  - **timing**: *Instant* (1–3 min), *Responsive* (5–20 min), *Busy official* (20–90 min, sometimes within minutes, sometimes never), *Bureaucrat* (1–4 h), *Unpredictable* (often within minutes, else hours, 15 % never), or *Custom*, with optional office hours in exercise time
+  - **Answers on its own**; **sends its answers straight away** (untick it to read and send each answer yourself); **in the address book**
+
+  The wait is drawn when a message arrives. More messages in the same conversation before the persona answers get one answer to all of them.
+- **What it knows when answering**: its profile, the other personas, every inject the teams have received, the conversation, and what it told the same team before. It doesn't invent official figures or events. When asked something outside its knowledge, it answers as a real person would ("I'll check").
+- **Try it** (the persona's page): write as a team and see the answer at once, with how long it would have made the team wait. Nothing is delivered.
+- **Answers**, on the persona's page and the tab:
+  - *queued* (with when it is due): **Answer now**, or skip it
+  - *held*: edit it, then **Send**, or **Don't answer**
+  - *failed* (after three tries): **Try again**
+  - *skipped* (its timing drew no answer, or you skipped it): **Answer anyway**
+
+  Each answer shows what it shared, any flags (*asked for something it doesn't know*, *stepped out of the exercise*, *ExCon should look*, *pushed past its boundaries*) and a note for you. The Notifications panel tells you when one is sent, waiting for you or failed.
+- On the **Replies** tab, the team's messages to an AI persona are replies like any other. A persona's answers are marked *AI persona answer*. They are left out of ExCon's own answer times in the reports.
+- **Team leaders** get an **AI personas** tab in SIMEX Mail (read-only): every conversation their team has had with an AI persona, both ways, with when the persona's answer is due, and the AI personas their team can write to. They never see another team's conversations, or the profiles.
+- **Pause all sending** stops the answers too. They go out when you resume. Answers count toward the daily AI cap.
 
 ## 6. After the exercise
 In this order:

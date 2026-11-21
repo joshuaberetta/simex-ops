@@ -1,0 +1,96 @@
+{% extends "ops/base.html" %}
+{% block title %}{{ s.display_name|default:s.local_part }} · AI personas · SIMEX ops{% endblock %}
+{% block head %}{% if refresh %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
+{% block body %}
+<div class="bar">
+  <h1><a href="/npcs/" class="muted">AI personas</a> / {{ s.display_name|default:s.local_part }}</h1>
+  <span class="small muted">{% if not on %}<span class="pill warn">AI personas are off</span> (<a href="/settings/#npc">Settings</a>){% elif scope != 'all' %}Test team only (<a href="/settings/#npc">Settings</a>){% endif %}
+    · {% if not ai_enabled %}AI analysis is off (<a href="/settings/#ai">Settings</a>){% else %}about ${{ ai_spent|floatformat:2 }} of ${{ ai_cap|floatformat:2 }} today{% endif %}</span>
+</div>
+
+{% if p.gen_status == 'running' %}
+<div class="card"><p class="muted">Claude is writing this persona's profile{% if p.brief %} from your brief{% else %} from its injects{% endif %}… the page refreshes on its own.</p>{% if p.brief %}<p class="small"><b>Brief:</b> {{ p.brief }}</p>{% endif %}</div>
+{% elif p.gen_status == 'failed' %}
+<div class="flash error">Writing it failed: {{ p.gen_error }}. Fill it in yourself below, or generate another from the <a href="/npcs/">list</a>.</div>
+{% elif p.gen_status == 'done' %}
+<div class="card ai-note"><p class="small"><span class="flag ai">AI</span> Written {% if p.brief %}from your brief{% else %}from its injects{% endif %}: read it, change what you like, then tick <b>Answers on its own</b> and save.</p>
+  {% if p.gen_notes.rationale %}<p class="small">{{ p.gen_notes.rationale }}</p>{% endif %}
+  {% if p.gen_notes.new_facts %}<p class="small"><b>New facts: check them against the scenario</b></p><ul class="small">{% for x in p.gen_notes.new_facts %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}</div>
+{% endif %}
+
+<div class="cols">
+<section class="col-main">
+<form method="post" class="card form">{% csrf_token %}
+  <h3>Who they are</h3>
+  <div class="row">
+    <label>Name shown <input name="display_name" value="{{ s.display_name }}" placeholder="Hon. Grace Mwangi, Deputy Governor"></label>
+    <label>Username <input name="local_part" value="{{ s.local_part }}" required><span class="hint">its email address: {{ s.local_part }}@{{ MAIL_DOMAIN }}</span></label>
+  </div>
+  <div class="row">
+    <label>Address in SIMEX Mail <span class="addr"><input name="inapp_local" value="{{ s.inapp_local }}" placeholder="{{ s.local_part }}"><span>@</span><input name="domain" value="{{ s.domain }}" placeholder="{{ MAIL_DOMAIN }}"></span></label>
+    <label>Role <input name="role" value="{{ p.role }}" placeholder="Deputy Governor"></label>
+    <label>Organisation <input name="organisation" value="{{ p.organisation }}" placeholder="Plaida Provincial Government"></label>
+  </div>
+  <label>Personality and voice <span class="hint">temperament, agenda, attitude to the team, how guarded, how they write (length, formality, greeting, signature)</span>
+    <textarea name="personality" rows="5">{{ p.personality }}</textarea></label>
+  <label>What they know and may share <span class="hint">facts the teams may learn from them, one per line; only what is participant-facing</span>
+    <textarea name="knowledge" rows="8">{{ p.knowledge }}</textarea></label>
+  <label>Boundaries <span class="hint">what they won't share or promise, what they deflect</span>
+    <textarea name="boundaries" rows="4">{{ p.boundaries }}</textarea></label>
+
+  <h3>How fast they answer</h3>
+  <fieldset><legend>Timing</legend>
+    {% for k, t in TIMINGS.items %}<label class="chk"><input type="radio" name="timing" value="{{ k }}" {% if p.timing == k %}checked{% endif %}> <b>{{ t.label }}</b> <span class="muted small">{{ t.help }}</span></label><br>{% endfor %}
+  </fieldset>
+  <div class="row">
+    <label>Custom: from (min) <input type="number" name="min_minutes" value="{{ p.min_minutes|floatformat:'-1' }}" min="0" step="0.5" class="narrow"></label>
+    <label>to (min) <input type="number" name="max_minutes" value="{{ p.max_minutes|floatformat:'-1' }}" min="0" step="0.5" class="narrow"></label>
+    <label>within minutes (%) <input type="number" name="quick_pct" value="{{ quick_pct }}" min="0" max="100" class="narrow"></label>
+    <label>never answers (%) <input type="number" name="none_pct" value="{{ none_pct }}" min="0" max="100" class="narrow"></label>
+  </div>
+  <div class="row">
+    <label>Office hours from (hour) <input type="number" name="office_from" value="{{ p.office_from|default_if_none:'' }}" min="0" max="23" class="narrow" placeholder="any"></label>
+    <label>to (hour) <input type="number" name="office_to" value="{{ p.office_to|default_if_none:'' }}" min="0" max="23" class="narrow" placeholder="any"><span class="hint">exercise time; outside them it answers soon after they open</span></label>
+  </div>
+  <p class="small muted">Now: {{ p.timing_text }}. The wait is drawn when a message arrives (shorter waits are likelier); more messages in the same conversation before it answers get one answer to them all.</p>
+
+  <h3>Answering</h3>
+  <label class="chk"><input type="checkbox" name="enabled" value="1" {% if p.enabled %}checked{% endif %}> <b>Answers on its own</b></label><br>
+  <label class="chk"><input type="checkbox" name="auto_send" value="1" {% if p.auto_send %}checked{% endif %}> sends its answers straight away (otherwise each waits for you to read and send it)</label><br>
+  <label class="chk"><input type="checkbox" name="active" value="1" {% if s.active %}checked{% endif %}> in the address book in SIMEX Mail</label>
+  <div><button class="btn primary">Save</button></div>
+</form>
+
+<h3>Answers</h3>
+<table class="list"><tbody>
+  {% for j in jobs %}{% include "ops/_npc_job.html" %}{% empty %}<tr><td class="muted">No team has written to it yet.</td></tr>{% endfor %}
+</tbody></table>
+
+<form method="post" action="/npcs/{{ p.id }}/delete/" class="inline">{% csrf_token %}<button class="link" data-confirm="Stop {{ s.local_part }} being an AI persona? Its profile and answer queue go; the persona and what it sent stay.">Remove the AI profile</button></form>
+</section>
+
+<section class="col-side">
+<div class="card" id="try">
+  <h3>Try it <span class="muted">nothing is delivered</span></h3>
+  {% if box.turns %}
+  {% for t in box.turns %}
+  <div class="conv-item {% if t.who == 'team' %}from-team{% else %}from-persona{% endif %}">
+    <div class="small"><b>{% if t.who == 'team' %}You, as a team{% else %}{{ s.display_name|default:s.local_part }}{% endif %}</b>{% if t.who == 'npc' %} <span class="muted">· {% if t.wait %}would have answered after about {{ t.wait }} min{% else %}would not have answered this time{% endif %}</span>{% endif %}</div>
+    <pre class="mailtext">{{ t.text }}</pre>
+    {% if t.flags %}<div class="flags">{% for f in t.flags %}<span class="flag check">{{ f }}</span>{% endfor %}</div>{% endif %}
+    {% if t.shared %}<div class="small muted">Shared: {{ t.shared|join:"; " }}</div>{% endif %}
+    {% if t.note %}<div class="small muted">{{ t.note }}</div>{% endif %}
+  </div>
+  {% endfor %}
+  {% endif %}
+  {% if box.status == 'running' %}<p class="muted small">Answering…</p>{% elif box.status == 'failed' %}<p class="small err">{{ box.error }}</p>{% endif %}
+  <form method="post" action="/npcs/{{ p.id }}/try/" class="form">{% csrf_token %}
+    <textarea name="text" rows="4" placeholder="Write to them as a team would."></textarea>
+    <button class="btn small" {% if not ai_enabled or box.status == 'running' %}disabled{% endif %}>Send</button>
+    {% if box.turns %}<button class="link" name="reset" value="1">start over</button>{% endif %}
+  </form>
+  <p class="hint">Answers from the profile as saved, at once. About a cent each.</p>
+</div>
+</section>
+</div>
+{% endblock %}

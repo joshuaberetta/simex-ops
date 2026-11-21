@@ -27,6 +27,10 @@ DEFAULTS = {
     "ai_tests": "1",  # include Test team replies
     "ai_injects": "1",  # review unsent injects (missing attachments, placeholders...) when they change
     "ai_daily_usd": "5",  # spend cap per day (Nairobi), estimated
+    # AI personas (ops/npc.py): personas whose answers Claude writes. Off, and for the Test team
+    # only ("test") until ExCon widens it to every team ("all").
+    "npc_enabled": "0",
+    "npc_scope": "test",
 }
 CHANNEL_MODES = {"email": "Email (Resend)", "inapp": "SIMEX Mail (in-app inboxes)", "per_inject": "Per inject"}
 

@@ -405,7 +405,7 @@ def exercise_figures(kind, team_figs, grid=None):
                 disagree.append({"inject": inj.mel_id, "team": c["team"].name, "grade": c["score"], "ai_suggested": c["ai"],
                                  "max": c["max"]})
 
-    answers = list(Message.objects.filter(kind="reply", response__in=reps).exclude(status="failed")
+    answers = list(Message.objects.filter(kind="reply", response__in=reps, npc=False).exclude(status="failed")
                    .select_related("response"))
     by_persona = {}
     for m in answers:

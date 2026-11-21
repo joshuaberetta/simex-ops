@@ -75,6 +75,16 @@
     about ${{ ai_spent|floatformat:2 }} of ${{ cfg.ai_daily_usd }}.{% if ai_pending %} {{ ai_pending }} queued.{% endif %}</p>
   {% if ai_last_error %}<p class="small err">Last error ({{ ai_last_error.at|date:"H:i" }}): {{ ai_last_error.error|truncatechars:200 }}</p>{% endif %}
 </div>
+<div class="card" id="npc">
+  <h3>AI personas</h3>
+  <p class="small">Personas that answer the teams on their own, in character, after a delay of their own (the <a href="/npcs/">AI personas</a> tab, shown while this is on). Uses AI analysis above (provider, spending cap).</p>
+  <form method="post" action="/settings/npc/" class="form">{% csrf_token %}
+    <label class="chk"><input type="checkbox" name="npc_enabled" value="1" {% if cfg.npc_enabled == '1' %}checked{% endif %}> AI personas on</label><br>
+    <label class="chk"><input type="radio" name="npc_scope" value="test" {% if cfg.npc_scope != 'all' %}checked{% endif %}> they answer the Test team only</label><br>
+    <label class="chk"><input type="radio" name="npc_scope" value="all" {% if cfg.npc_scope == 'all' %}checked{% endif %}> they answer every team</label><br>
+    <button class="btn small">Save</button>
+  </form>
+</div>
 <div class="card {% if cfg.live_armed == '1' %}live-card{% endif %}">
   <h3>Live sending</h3>
   {% if cfg.live_armed == '1' %}

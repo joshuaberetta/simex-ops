@@ -517,9 +517,11 @@ def _unread(team, owner):
 def leader_tabs(leader, current):
     """The tab bar a team leader sees above SIMEX Mail: their mail, the team inbox, their team's
     members (with their team roles and, read-only, their own mailboxes), the other team
-    leaders' mailboxes, the Dashboard."""
+    leaders' mailboxes, the Dashboard, and with AI personas on, their team's conversations with them."""
     team = leader.team
+    from . import npc
     return {"current": current, "team": team, "peers": list(peer_teams(leader)), "mail_unread": _unread(team, leader),
+            "npcs": npc.shown_to(team),
             "team_new": Mail.objects.filter(team=team, owner=None, id__gt=leader.lead_seen).exclude(folder="drafts").count(),
             "members": list(team_members(team).filter(active=True)), "personal": conf.flag("personal_mailboxes")}
 

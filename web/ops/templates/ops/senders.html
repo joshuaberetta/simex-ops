@@ -17,7 +17,7 @@ The <b>team leader</b> persona (e.g. <code>undac-{team}-tl</code>) is played by 
         <input name="local_part" value="{{ x.local_part }}" required title="username">
         <span class="addr" title="address in SIMEX Mail"><input name="inapp_local" value="{{ x.inapp_local }}" placeholder="{{ x.local_part }}"><span>@</span><input name="domain" value="{{ x.domain }}" placeholder="{{ MAIL_DOMAIN }}"></span>
         <input name="reply_to" value="{{ x.reply_to }}" placeholder="reply-to (email)">
-        <span class="count">{{ x.usage }}</span>
+        <span class="count">{{ x.usage }}</span>{% if x.npc %}<a href="/npcs/{{ x.npc.id }}/" class="flag ai" title="Answers on its own (AI personas)">AI</a>{% endif %}
         <label class="chk"><input type="checkbox" name="active" value="1" {% if x.active %}checked{% endif %}></label>
         <label class="chk small" title="Each team's leader plays this persona in SIMEX Mail (one persona, e.g. undac-{team}-tl)"><input type="checkbox" name="team_leader" value="1" {% if x.team_leader %}checked{% endif %}> team leader</label>
         <label class="chk small" title="When the username changes, update the injects that use it"><input type="checkbox" name="rename_injects" value="1" checked> rename in injects</label>

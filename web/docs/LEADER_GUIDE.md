@@ -7,6 +7,7 @@ You are your team's **team leader**: part of ExCon, not of the team. You play th
 - **Team inbox** (read-only): exactly what your team has, so you can follow its work. Opening mail here does **not** mark it read for the team. The red number is new mail in the team's inbox since you last looked.
 - **Team members**: who is in your team, with their team role (e.g. Deputy Team Leader, set by ExCon), what each has written and read so far, whether their alerts are on and when they last signed in, and a link to each member's own mailbox, read-only (opening mail there doesn't mark it read for them; the side bar switches between members).
 - **Team leaders** (read-only): the other team leaders' own mailboxes (pick one in the side bar), to see what they are sending their teams and what their teams write to them. Opening mail here doesn't mark it read for them. They can read yours the same way.
+- **AI personas** (read-only, when ExCon has them on): some personas answer on their own, with answers written by Claude in character after a delay of their own. Here you see every conversation your team has had with one, both ways, with when the persona's answer is due, and the AI personas your team can write to. Your team isn't told which personas these are.
 - **Dashboard**: your team's replies in figures, and Claude's reading of them.
 
 You only ever see your own team's inbox. The other teams are independent of yours.

@@ -390,10 +390,12 @@ def drafted(m, draft, text):
         m.ai_edited = " ".join(text.split()) != " ".join(str(draft.body.get("body") or "").split())
 
 
-def answer(response, body, user="", files=(), attachments=(), ai_draft=None):
+def answer(response, body, user="", files=(), attachments=(), ai_draft=None, idem_key=None, npc=False):
     """Reply as the persona the participant wrote to: into their team's inbox (in-app
     thread) or by email (email thread), with files ExCon uploaded ((filename, content_type,
-    data) tuples) and inject documents (Attachment rows). Returns the Message."""
+    data) tuples) and inject documents (Attachment rows). Returns the Message. An AI
+    persona's answer (npc) passes its own deterministic idem_key."""
+    idem_key = idem_key or f"reply-{response.id}-{uuid.uuid4().hex}"
     persona = response.persona or ""
     sender, ctx = render.sender_by_local(persona)
     team = response.team
@@ -410,7 +412,7 @@ def answer(response, body, user="", files=(), attachments=(), ai_draft=None):
                          team_id=response.team_id, person_id=response.person_id, reply_local=persona,
                          channel="inapp", inbox_team_id=response.team_id,
                          to_label=(response.person.name if response.person else (team.name if team else "")))
-        m = new_message(response.inject, d, "reply", f"reply-{response.id}-{uuid.uuid4().hex}")
+        m = new_message(response.inject, d, "reply", idem_key)
         m.response = response
         m.thread = response.mail.thread if response.mail else ""
     else:
@@ -423,11 +425,12 @@ def answer(response, body, user="", files=(), attachments=(), ai_draft=None):
                          subject=subject, body=text_body, footer=cfg.get("footer", ""),
                          attachment_ids=[a.id for a in attachments],
                          team_id=response.team_id, person_id=response.person_id, reply_local=persona, channel="email")
-        m = new_message(response.inject, d, "reply", f"reply-{response.id}-{uuid.uuid4().hex}")
+        m = new_message(response.inject, d, "reply", idem_key)
         m.response = response
         if response.message_id_header:
             m.extra_headers = {"In-Reply-To": response.message_id_header, "References": response.message_id_header}
     drafted(m, ai_draft, body)
+    m.npc = npc
     with transaction.atomic():  # the files are in place before anything can deliver the Message
         m.save()
         for name, ctype, data in files:

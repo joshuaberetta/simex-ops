@@ -3,7 +3,8 @@ process (the DO worker component). Safe to run alongside the web process: rows a
 with conditional UPDATEs (and SELECT ... FOR UPDATE SKIP LOCKED on Postgres).
 
 Claude analysis of replies (ops/ai.py) runs in a second thread of the same process, so a
-slow model call never holds up an inject."""
+slow model call never holds up an inject. AI personas' answers (ops/npc.py) are written there too,
+before the analysis, as teams are waiting for them."""
 
 import logging
 import signal
@@ -14,7 +15,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import close_old_connections, connection
 
-from ops import ai, delivery, inbound
+from ops import ai, delivery, inbound, npc
 
 log = logging.getLogger("simex.scheduler")
 AI_IDLE_SECONDS = 15
@@ -27,7 +28,11 @@ def ai_loop(stop):
         close_old_connections()
         busy = 0
         try:
-            busy = ai.tick()
+            busy = npc.tick()
+        except Exception:
+            log.exception("AI persona tick failed")
+        try:
+            busy += ai.tick()
         except Exception:
             log.exception("AI tick failed")
         if not busy:
@@ -62,6 +67,7 @@ class Command(BaseCommand):
         if opts["once"]:
             delivery.tick()
             if not opts["no_ai"]:
+                npc.tick()
                 ai.tick()
             return
         if not opts["no_ai"] and ai.available():
