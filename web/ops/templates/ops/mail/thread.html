@@ -63,12 +63,18 @@
           <span class="gm-msg-date" title="{{ m.created_at|date:'D d M Y H:i' }}">{{ m.created_at|fulldate }}</span>
           <button type="button" class="gm-star sm{% if m.starred %} on{% endif %}" data-star-mail="{{ m.id }}" aria-label="Star" {% if readonly %}disabled{% endif %}>{% if m.starred %}{% icon "star" 20 %}{% else %}{% icon "star_border" 20 %}{% endif %}</button>
           {% if not readonly %}
-          <button type="button" class="gm-icon-btn gm-open-only" data-reply="{{ m.id }}" title="Reply" aria-label="Reply">{% icon "reply" %}</button>
+          {% if can_reply %}<button type="button" class="gm-icon-btn gm-open-only" data-reply="{{ m.id }}" title="Reply" aria-label="Reply">{% icon "reply" %}</button>{% endif %}
           <button type="button" class="gm-icon-btn gm-open-only" data-forward="{{ m.id }}" title="Forward" aria-label="Forward">{% icon "forward" %}</button>
           {% endif %}
         </div>
       </div>
       <div class="gm-msg-body gm-open-only">
+        {% if m.note %}{% with n=m.note %}<div class="gm-note">
+          {% if n.author %}Written by <b>{{ n.author }}</b>{% endif %}{% if n.after is not None %} · {{ n.after }} min after the message it answers{% endif %}
+          {% if n.ai %}<div>{% if n.band %}<span class="gm-band" title="Claude's estimate from the text and the time taken: a hint, never proof">{{ n.band }}</span> {% endif %}{% if n.ai.tone %}Tone <b>{{ n.ai.tone }}</b>{% endif %}{% if n.quality %} · quality <b>{{ n.quality }}</b>/5{% endif %}{% if n.ai.wpm %} · {{ n.ai.wpm|floatformat:0 }} words/min{% endif %}</div>
+          {% for f in n.flags %}<span class="gm-flag">{{ f }}</span>{% endfor %}
+          <details><summary>Claude's reading</summary><p>{{ n.ai.summary }}</p>{% if n.band and n.ai.ai_signals %}<p><b>Why it may be AI-written:</b> {{ n.ai.ai_signals }}</p>{% endif %}</details>
+          {% endif %}</div>{% endwith %}{% endif %}
         {% if m.banner %}<div class="gm-banner">{{ m.banner }}</div>{% endif %}
         <div class="gm-text">{{ m.body|mailbody }}</div>
         {% if m.footer %}<div class="gm-footer">{{ m.footer|mailbody }}</div>{% endif %}
@@ -92,9 +98,9 @@
 
   {% if not readonly %}
   <div class="gm-reply-actions" data-reply-actions>
-    <button type="button" class="gm-outline-btn" data-reply="{{ last.id }}">{% icon "reply" 18 %} Reply</button>
-    <button type="button" class="gm-outline-btn" data-reply-all="{{ last.id }}">{% icon "reply_all" 18 %} Reply all</button>
-    <button type="button" class="gm-outline-btn" data-forward="{{ last.id }}">{% icon "forward" 18 %} Forward</button>
+    {% if can_reply %}<button type="button" class="gm-outline-btn" data-reply="{{ last.id }}">{% icon "reply" 18 %} Reply</button>
+    <button type="button" class="gm-outline-btn" data-reply-all="{{ last.id }}">{% icon "reply_all" 18 %} Reply all</button>{% endif %}
+    <button type="button" class="gm-outline-btn" data-forward="{{ last.id }}">{% icon "forward" 18 %} {% if v.leader_box and not can_reply %}Forward to {{ team.name }}{% else %}Forward{% endif %}</button>
   </div>
   <div class="gm-inline-reply" hidden>
     <div class="gm-avatar" style="background: {{ team.name|avatar_colour }}">{% if me %}{{ me.name|initial }}{% else %}{{ team.name|initial }}{% endif %}</div>

@@ -402,3 +402,62 @@ body.gm { height: var(--app-h, 100%); }
     background-size: 22px !important; background-position: center !important; background-repeat: no-repeat !important; }
   body.selecting .gm-tb-right { display: none; }
 }
+
+/* team leader: tabs above the mail (My mail, the team inbox read-only, Dashboard) */
+.gm-tabs { height: 48px; display: flex; align-items: flex-end; gap: 4px; padding: 0 16px; border-bottom: 1px solid var(--line);
+  overflow-x: auto; scrollbar-width: none; }
+.gm-tabs a { display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 18px; color: var(--ink2);
+  border-bottom: 3px solid transparent; white-space: nowrap; font-weight: 500; }
+.gm-tabs a:hover { background: var(--hover); border-radius: 8px 8px 0 0; }
+.gm-tabs a.on { color: var(--blue); border-bottom-color: var(--blue); }
+.gm-tab-ro { font-size: 11px; font-weight: 400; color: var(--muted); background: #e9eef6; border-radius: 10px; padding: 0 8px; }
+.gm-tab-n:empty { display: none; }
+.gm-tab-n { min-width: 20px; height: 20px; border-radius: 10px; background: var(--red); color: #fff; font-size: 12px;
+  font-weight: 700; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; }
+body.has-tabs .gm-body { height: calc(100% - 64px - 49px); }
+.gm-ro-note { display: flex; gap: 10px; align-items: flex-start; margin: 8px 0 16px; padding: 12px 14px; border-radius: 16px;
+  background: #e9eef6; color: var(--ink2); font-size: 13px; line-height: 18px; }
+/* the AI reading under a team member's message, leaders only */
+.gm-note { margin: 0 0 12px; padding: 8px 12px; border-left: 3px solid #a8c7fa; background: #f8fafd; border-radius: 0 8px 8px 0;
+  font-size: 13px; color: var(--ink2); }
+.gm-note b { color: var(--ink); font-weight: 500; }
+.gm-note .gm-band { display: inline-block; border-radius: 10px; padding: 0 8px; background: #fef7e0; color: #7a4f01; }
+.gm-note .gm-flag { display: inline-block; border-radius: 10px; padding: 0 8px; background: #fce8e6; color: #a50e0e; margin-right: 4px; }
+.gm-note details summary { cursor: pointer; color: var(--blue); }
+/* team leader dashboard */
+.gm-dash { padding: 16px 24px 48px; overflow-y: auto; height: 100%; }
+.gm-dash h2 { font-size: 18px; font-weight: 500; margin: 24px 0 8px; }
+.gm-dash h2:first-child { margin-top: 4px; }
+.gm-dash .muted { color: var(--muted); }
+.gm-dash .small { font-size: 12px; }
+.gm-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.gm-card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
+.gm-card .n { font-size: 28px; line-height: 34px; font-weight: 500; }
+.gm-card .n span { font-size: 14px; color: var(--muted); font-weight: 400; }
+.gm-card .lab { color: var(--muted); font-size: 13px; }
+.gm-bars { display: flex; align-items: flex-end; gap: 3px; height: 72px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.gm-bars span { flex: 1; min-width: 4px; max-width: 28px; background: #6da7ec; border-radius: 3px 3px 0 0; }
+.gm-dtable { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.gm-dtable td, .gm-dtable th { padding: 8px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-size: 13px; }
+.gm-dtable tr:last-child td { border-bottom: 0; }
+.gm-dtable a { color: var(--blue); }
+.gm-dtable .nowrap { white-space: nowrap; }
+.gm-funnel td.bar { width: 60%; }
+.gm-funnel .bar span { display: block; height: 10px; border-radius: 5px; background: #6da7ec; }
+.gm-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+@media (max-width: 760px) {
+  body.has-tabs .gm-body { height: calc(100% - 56px - 49px); }
+  body.has-tabs .gm-side { top: 105px; }
+  .gm-tabs { padding: 0 4px; gap: 0; }
+  .gm-tabs a { flex: 1; justify-content: center; padding: 0 6px; gap: 6px; font-size: 13px; }
+  .gm-tabs a .ic { display: none; }
+  .gm-tab-ro { display: none; }
+  body.has-tabs .gm-ro-bar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #e9eef6; color: var(--ink2); font-size: 13px; }
+  .gm-dash { padding: 12px; }
+  .gm-cols { grid-template-columns: 1fr; }
+  .gm-cards { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .gm-card { padding: 10px 12px; }
+  .gm-card .n { font-size: 22px; line-height: 28px; }
+}
+.gm-search-space { flex: 0 1 720px; padding-left: 12px; font-size: 16px; color: var(--ink2); }
+.gm-ro-bar { display: none; }

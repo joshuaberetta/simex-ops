@@ -4,10 +4,12 @@ from django.urls import include, path
 from . import views_ai as a
 from . import views_excon as x
 from . import views_inbox as p
+from . import views_leader as lead
 from . import views_report as rp
 
-# The participant mail client. Mounted twice: /inbox/ for the logged-in team, and
-# /inbox/as/<team id>/ for ExCon's read-only "view as team".
+# The participant mail client, mounted on a mailbox: /inbox/ for the logged-in member (their
+# team's inbox) or team leader (their own mailbox), /inbox/as/<team id>/ for ExCon's read-only
+# "view as team" and /inbox/as/<team id>/leader/ for that team leader's mailbox.
 mail_patterns = [
     path("", p.inbox),
     path("t/<str:thread>/", p.thread_view),
@@ -22,6 +24,14 @@ mail_patterns = [
     path("push/", p.push_subscribe),
     path("labels/", p.labels_save),
 ]
+# A team leader's read-only view of their team's inbox: no route that changes anything.
+team_patterns = [
+    path("", p.inbox),
+    path("t/<str:thread>/", p.thread_view),
+    path("poll/", p.poll),
+    path("file/<int:fid>/", p.mail_file),
+    path("help/", p.guide),
+]
 
 urlpatterns = [
     path("", p.home),
@@ -31,7 +41,10 @@ urlpatterns = [
     path("webhooks/resend", p.resend_webhook),
     path("inbox/sw.js", p.service_worker),
     path("inbox/manifest.webmanifest", p.manifest),
+    path("inbox/as/<int:as_team>/leader/", include(mail_patterns), {"box": "leader"}),
     path("inbox/as/<int:as_team>/", include(mail_patterns)),
+    path("inbox/team/", include(team_patterns), {"box": "team"}),
+    path("inbox/dashboard/", lead.dashboard),
     path("inbox/", include(mail_patterns)),
     # ExCon
     path("injects/", x.injects),

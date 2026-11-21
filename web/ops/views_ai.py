@@ -48,12 +48,15 @@ def sparkline(points, t0, t1):
             "zero": PAD + h / 2, "top": PAD, "bottom": PAD + h, "w": SPARK_W, "h": SPARK_H}
 
 
-@excon_required
-def dashboard(request):
-    ai.expire_drafts()  # also a summary interrupted by a restart
-    kind = "test" if request.GET.get("kind") == "test" else "live"
-    source = "ai" if request.GET.get("score") == "ai" else "human"
+def dashboard_data(kind, team=None):
+    """The Dashboard's figures: per-team tiles and the lists of flagged, possibly AI-written
+    replies, asks and commitments. With team, that team's only (its leader's Dashboard, which
+    shows no grades)."""
     teams, all_in, matrix, team_sum = reply_grid(kind)
+    if team:
+        teams = [t for t in teams if t.id == team.id]
+        team_sum = [ts for ts in team_sum if ts["team"].id == team.id]
+        all_in = [r for r in all_in if r.team_id == team.id]
     reps = [r for r in all_in if r.status != "ignored"]
     analyses = {a.response_id: a for a in ReplyAnalysis.objects.filter(response__in=reps)}
     done = {rid: a for rid, a in analyses.items() if a.status == "done"}
@@ -68,7 +71,9 @@ def dashboard(request):
 
     # Per-inject delivery / read state, for the funnel.
     delivered, read = {}, {}
-    for m in Message.objects.filter(kind__in=msg_kinds, status="sent").exclude(inject=None).values("inject_id", "team_id", "inbox_team_id", "opened_at"):
+    leader_copies = Message.objects.filter(person__role="tl")  # a team leader reading isn't the team reading
+    for m in (Message.objects.filter(kind__in=msg_kinds, status="sent").exclude(inject=None).exclude(pk__in=leader_copies)
+              .values("inject_id", "team_id", "inbox_team_id", "opened_at")):
         for tid in {m["team_id"], m["inbox_team_id"]} - {None} or {None}:
             delivered.setdefault(tid, set()).add(m["inject_id"])
             if m["opened_at"]:
@@ -87,7 +92,8 @@ def dashboard(request):
         n_deliv = len(delivered.get(t.id, set()) | delivered.get(None, set()))
         n_read = len(read.get(t.id, set()) | read.get(None, set()))
         n_replied = len({r.inject_id for r in mine if r.inject_id})
-        funnel = [("Delivered", n_deliv), ("Read", n_read), ("Answered", n_replied), ("Graded", graded.get(t.id, 0))]
+        funnel = [("Delivered", n_deliv), ("Read", n_read), ("Answered", n_replied)] + (
+            [] if team else [("Graded", graded.get(t.id, 0))])
         top = max(n_deliv, 1)
         tiles.append({
             **ts, "n_analysed": len(an), "quality": round(sum(quality) / len(quality), 1) if quality else None,
@@ -99,6 +105,25 @@ def dashboard(request):
             "spark": sparkline(sentiment, t0, t1) if sentiment else None,
             "funnel": [(label, n, round(100 * n / top)) for label, n in funnel],
         })
+
+    flagged = sorted([r for r in reps if r.ai and r.ai.flags], key=lambda r: r.received_at, reverse=True)[:40]
+    for r in flagged:
+        r.flag_labels = [ai.FLAGS[f] for f in r.ai.flags if f in ai.FLAGS]
+    ai_written = sorted([r for r in reps if r.ai and (r.ai.ai_written or 0) >= 60],
+                        key=lambda r: -(r.ai.ai_written or 0))[:30]
+    commitments = [(r, c) for r in reversed(reps) if r.ai for c in r.ai.commitments][:30]
+    asks = [(r, c) for r in reversed(reps) if r.ai for c in r.ai.asks][:30]
+    return {"teams": teams, "tiles": tiles, "matrix": matrix, "reps": reps, "analyses": analyses, "flagged": flagged,
+            "ai_written": ai_written, "commitments": commitments, "asks": asks, "t0": t0, "t1": t1}
+
+
+@excon_required
+def dashboard(request):
+    ai.expire_drafts()  # also a summary interrupted by a restart
+    kind = "test" if request.GET.get("kind") == "test" else "live"
+    source = "ai" if request.GET.get("score") == "ai" else "human"
+    data = dashboard_data(kind)
+    matrix, reps, analyses = data["matrix"], data["reps"], data["analyses"]
 
     # Rubric heatmap (human or AI points) and where the two disagree.
     heat_rows, disagree = [], []
@@ -122,21 +147,12 @@ def dashboard(request):
         heat_rows.append((inj, row))
     disagree.sort(key=lambda d: -abs(d["gap"]))
 
-    flagged = sorted([r for r in reps if r.ai and r.ai.flags], key=lambda r: r.received_at, reverse=True)[:40]
-    for r in flagged:
-        r.flag_labels = [ai.FLAGS[f] for f in r.ai.flags if f in ai.FLAGS]
-    ai_written = sorted([r for r in reps if r.ai and (r.ai.ai_written or 0) >= 60],
-                        key=lambda r: -(r.ai.ai_written or 0))[:30]
-    commitments = [(r, c) for r in reversed(reps) if r.ai for c in r.ai.commitments][:30]
-    asks = [(r, c) for r in reversed(reps) if r.ai for c in r.ai.asks][:30]
-
     report = AiReport.objects.filter(kind=kind).order_by("-id").first()
     return render(request, "ops/dashboard.html", {
-        "tab": "dashboard", "kind": kind, "source": source, "teams": teams, "tiles": tiles,
+        **data, "tab": "dashboard", "kind": kind, "source": source,
         "heat_rows": heat_rows, "heat_legend": [(f"{round(i * 100 / len(HEAT))}–{round((i + 1) * 100 / len(HEAT))}%", bg, ink)
                                                 for i, (bg, ink) in enumerate(HEAT)],
-        "disagree": disagree[:20], "flagged": flagged, "ai_written": ai_written, "commitments": commitments,
-        "asks": asks, "report": report, "t0": t0, "t1": t1, **ai_status(reps, analyses)})
+        "disagree": disagree[:20], "report": report, **ai_status(reps, analyses)})
 
 
 def ai_status(reps=None, analyses=None):

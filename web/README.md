@@ -10,6 +10,7 @@ The Django version of SIMEX ops, **the app in production at https://ops.simex.ko
 | Participants | Email addresses only | Logins (one per person), each in a team; a shared **team mailbox** ("SIMEX Mail", a familiar webmail layout) |
 | Replies | Resend inbound webhook, matched by reply token or a guess | In-app replies matched **exactly**; email as before |
 | ExCon view of teams | — | **View as team** (read-only, nothing marked read) |
+| Team leaders | — | One per team, from ExCon (role `tl`, never a participant): in SIMEX Mail, their own mailbox as the team leader persona, their team's inbox read-only with Claude's reading of each reply, and the team's Dashboard (`ops/views_leader.py`); guide [`docs/LEADER_GUIDE.md`](docs/LEADER_GUIDE.md) |
 | Engagement | Resend opens/clicks | In-app **read** (first read, times opened) and attachment downloads; email opens/clicks/bounces as before |
 | Users | One shared login | Django auth: ExCon = staff or group `excon`; participants see only `/inbox/` for their team, on its own host (`MAIL_URL`, https://mail.simex.kobolabs.dev, with a webmail-style sign-in), installable on a phone's home screen with push notifications for new mail (`ops/push.py`, `VAPID_PRIVATE_KEY` from `manage.py vapid_keys`) |
 | Scheduler | Thread in the web process | Separate worker (`manage.py run_scheduler`) |
@@ -18,7 +19,7 @@ The Django version of SIMEX ops, **the app in production at https://ops.simex.ko
 ## Decisions made (the user can overturn them)
 
 - **Accounts:** one login per participant; one shared mailbox per team; every sent message records who wrote it. ExCon creates logins on **People & logins** (single, or bulk CSV `name,email,team code,role`), sees generated passwords once, can print a credential sheet, reset passwords, disable logins. Django admin is a secondary tool only.
-- **Who participants can write to:** the active Senders (personas) as an address book. **Team-to-team** messages are a setting, off by default.
+- **Who participants can write to:** the active Senders (personas) as an address book, their own team leader among them (the team leader persona). **Team-to-team** messages are a setting, off by default. A team leader writes only to their own team.
 - **Channel per inject:** `inapp` by default (also for imports); `email` keeps the Resend path with idempotency keys, placeholder stripping, reply tokens and the Svix-verified webhook.
 - **In-app delivery:** each_team → that team's mailbox; each_person → the person's team mailbox, addressed to them; everyone → a copy in every team's mailbox. "Only these addresses" is email-only.
 - **Tests:** in-app test sends and test runs go to the **Test team** mailbox with a banner naming the real team; email tests keep the address redirect.

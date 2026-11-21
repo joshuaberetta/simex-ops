@@ -65,7 +65,7 @@ def a_reply(excon):
     deliver_now("1-15")
     pa = participant("a", "Jane")
     from ops.models import Mail
-    mail = Mail.objects.get(team__code="a")
+    mail = Mail.objects.get(owner=None, team__code="a")
     pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: Update", "body": "Plan by 15:00", "in_reply_to": mail.id})
     return Response.objects.get()
 

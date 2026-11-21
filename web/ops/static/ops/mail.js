@@ -528,7 +528,11 @@
   // on an iPhone once it is on the home screen. While this device is subscribed the page leaves
   // system notifications to the service worker (no doubles) and keeps the chime and the snackbar.
   const PUSH = "simex-push";
-  const pushable = !CFG.readonly && !!CFG.vapid && "serviceWorker" in navigator && "PushManager" in window;
+  // A team leader's tabs (their mail, the team inbox read-only, the Dashboard) all keep their device
+  // subscribed for their own mailbox; ExCon's read-only views never subscribe.
+  const alertsHere = !CFG.readonly || CFG.leader;
+  const PUSH_BASE = CFG.pushBase || BASE;
+  const pushable = alertsHere && !!CFG.vapid && "serviceWorker" in navigator && "PushManager" in window;
   const swReady = pushable ? navigator.serviceWorker.register("/inbox/sw.js", { scope: "/inbox/" }).catch(() => null)
     : Promise.resolve(null);
   const b64 = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)),
@@ -546,7 +550,7 @@
       if (sub && !sameKey(sub, key)) { await sub.unsubscribe(); sub = null; }  // the server key changed
       sub = sub || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
       const j = sub.toJSON();
-      const r = await post(`${BASE}/push/`, { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth });
+      const r = await post(`${PUSH_BASE}/push/`, { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth });
       if (r.ok) localStorage.setItem(PUSH, "1");
     } catch (e) { localStorage.removeItem(PUSH); }
   }
@@ -554,7 +558,7 @@
     localStorage.removeItem(PUSH);
     const reg = await swReady;
     const sub = reg && await reg.pushManager.getSubscription();
-    if (sub) { await post(`${BASE}/push/`, { endpoint: sub.endpoint, off: "1" }); await sub.unsubscribe(); }
+    if (sub) { await post(`${PUSH_BASE}/push/`, { endpoint: sub.endpoint, off: "1" }); await sub.unsubscribe(); }
   }
   const pushing = () => pushable && localStorage.getItem(PUSH) === "1" && N.permission() === "granted";
   if (pushable) {
@@ -575,7 +579,7 @@
   const install = $("#gm-install");
   const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
-  if (install && CFG.vapid && !CFG.readonly && ios && !standalone && localStorage.getItem("simex-install-asked") !== "1") {
+  if (install && CFG.vapid && alertsHere && ios && !standalone && localStorage.getItem("simex-install-asked") !== "1") {
     install.hidden = false;
     $("[data-install-ok]", install).onclick = () => { localStorage.setItem("simex-install-asked", "1"); install.hidden = true; };
   }
@@ -584,7 +588,7 @@
   const banner = $("#gm-alerts");
   function paintBanner() {
     if (!banner) return;
-    banner.hidden = CFG.readonly || !N.enabled() || N.permission() !== "default" || localStorage.getItem("simex-alerts-asked") === "1";
+    banner.hidden = !alertsHere || !N.enabled() || N.permission() !== "default" || localStorage.getItem("simex-alerts-asked") === "1";
   }
   if (banner) {
     $("[data-alerts-on]", banner).onclick = async () => {
@@ -604,9 +608,14 @@
       const n = j.unread;
       $$("[data-unread-count]").forEach((el) => el.textContent = n ? n : "");
       const inboxLink = $('[data-folder="inbox"]'); if (inboxLink) inboxLink.classList.toggle("bold", n > 0);
+      if (j.mail_unread !== undefined) {  // a team leader's tab bar
+        $$("[data-tab-mail]").forEach((el) => el.textContent = j.mail_unread ? j.mail_unread : "");
+        $$("[data-tab-team]").forEach((el) => el.textContent = j.team_new && !BASE.endsWith("/team") ? j.team_new : "");
+      }
       N.title(n);
       N.favicon(n, "#0b57d0");
-      if (!CFG.readonly && navigator.setAppBadge) (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {});
+      const badge = j.mail_unread !== undefined ? j.mail_unread : n;  // a leader's badge: their own mail
+      if (alertsHere && navigator.setAppBadge) (badge ? navigator.setAppBadge(badge) : navigator.clearAppBadge()).catch(() => {});
       const fresh = latest !== null ? (j.new || []).filter((m) => m.id > latest) : [];
       if (fresh.length) {
         const m = fresh[0];

@@ -86,7 +86,7 @@ def guess(r: Response):
     if not r.persona:
         return
     qs = Message.objects.filter(from_addr__icontains=f"<{r.persona}@", status="sent", sent_at__lte=r.received_at,
-                                kind__in=["live", "reply", "followup"])
+                                kind__in=["live", "reply", "followup", "leader"])
     if r.team_id:
         qs = qs.filter(Q(team_id=r.team_id) | Q(team__isnull=True) | Q(inbox_team_id=r.team_id))
     cands = list(qs.order_by("-sent_at")[:20])
@@ -99,17 +99,21 @@ def guess(r: Response):
 
 def match_email(r: Response):
     _, from_addr = _addr(r.from_addr)
-    person = Person.objects.filter(email__iexact=from_addr).first() if from_addr else None
+    person = Person.objects.participants().filter(email__iexact=from_addr).first() if from_addr else None
     if person:
         r.person, r.team_id = person, person.team_id
-    if r.reply_token:
-        m = Message.objects.filter(reply_token=r.reply_token).first()
-        if m:
-            r.message, r.inject_id, r.match = m, m.inject_id, "token"
-            r.team_id = r.team_id or m.team_id
-            r.kind = "live" if m.kind in ("live", "reply", "followup") else "test"
-            return
-    guess(r)
+    m = Message.objects.filter(reply_token=r.reply_token).first() if r.reply_token else None
+    if m:
+        r.message, r.inject_id, r.match = m, m.inject_id, "token"
+        r.team_id = r.team_id or m.team_id
+        r.kind = "live" if m.kind in ("live", "reply", "followup", "leader") else "test"
+    else:
+        guess(r)
+    # A team leader answering their copy of an inject: kept, never counted as the team's reply.
+    leader = Person.objects.filter(role="tl", email__iexact=from_addr).first() if from_addr and not person else None
+    if leader or (m and m.person and m.person.is_leader):
+        r.match, r.status = "leader", "ignored"
+        r.team_id = r.team_id or (leader.team_id if leader else None)
 
 
 # --- in-app ----------------------------------------------------------------------------------
@@ -196,7 +200,7 @@ def record_read(mails, person, user_agent="", what="read", link=None):
     now = timezone.now()
     for mail in mails:
         m = mail.message
-        if not m or m.kind not in ("live", "reply", "followup", "test", "oneoff"):
+        if not m or m.kind not in ("live", "reply", "followup", "leader", "test", "oneoff"):
             continue
         Event.objects.create(message=m, type=what, at=now, person=person, link=link, user_agent=(user_agent or "")[:400] or None)
         if what == "read":
@@ -312,10 +316,10 @@ def split_quoted(text):
 
 
 def first_sent(kinds):
-    """(inject id, team id or None) -> earliest delivery time."""
+    """(inject id, team id or None) -> earliest delivery time (to the team: not its leader's copy)."""
     from django.db.models import Min
     out = {}
-    for row in (Message.objects.filter(status="sent", kind__in=kinds)
+    for row in (Message.objects.filter(status="sent", kind__in=kinds).exclude(person__role="tl")
                 .values("inject_id", "team_id").annotate(at=Min("sent_at"))):
         out[(row["inject_id"], row["team_id"])] = row["at"]
     return out

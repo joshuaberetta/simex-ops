@@ -5,9 +5,10 @@
 <p class="muted">The personas injects come from, and the address book participants write to.
 The <b>username</b> identifies the persona (injects use it) and is its email address, <i>username</i>@{{ MAIL_DOMAIN }}: email can only be sent from that domain.
 In SIMEX Mail a persona can show <b>any address</b>, e.g. <code>news@cnn.com</code> and <code>news@reuters.com</code> for the usernames <code>cnn-news</code> and <code>reuters-news</code>; empty parts default to the username and {{ MAIL_DOMAIN }}.
-<code>{team}</code> in a username, and <code>{team_name}</code> in a name, are filled in per team. Reply-to only matters for the email channel (leave it empty so replies are tracked).</p>
+<code>{team}</code> in a username, and <code>{team_name}</code> in a name, are filled in per team. Reply-to only matters for the email channel (leave it empty so replies are tracked).
+The <b>team leader</b> persona (e.g. <code>undac-{team}-tl</code>) is played by each team's leader in SIMEX Mail: what is sent as it is in the leader's Sent, and the team's mail to it reaches the leader's Inbox.</p>
 <table class="list">
-  <thead><tr><th colspan="6">Name shown · username · address in SIMEX Mail · reply-to (email) · injects using it · active</th></tr></thead>
+  <thead><tr><th colspan="6">Name shown · username · address in SIMEX Mail · reply-to (email) · injects using it · active · team leader</th></tr></thead>
   {% for x in senders %}
   <tr><td colspan="6">
       <form method="post" action="/senders/" class="rowform">{% csrf_token %}
@@ -18,6 +19,7 @@ In SIMEX Mail a persona can show <b>any address</b>, e.g. <code>news@cnn.com</co
         <input name="reply_to" value="{{ x.reply_to }}" placeholder="reply-to (email)">
         <span class="count">{{ x.usage }}</span>
         <label class="chk"><input type="checkbox" name="active" value="1" {% if x.active %}checked{% endif %}></label>
+        <label class="chk small" title="Each team's leader plays this persona in SIMEX Mail (one persona, e.g. undac-{team}-tl)"><input type="checkbox" name="team_leader" value="1" {% if x.team_leader %}checked{% endif %}> team leader</label>
         <label class="chk small" title="When the username changes, update the injects that use it"><input type="checkbox" name="rename_injects" value="1" checked> rename in injects</label>
         <button class="btn small">Save</button>
       </form>

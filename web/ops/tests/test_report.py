@@ -87,7 +87,7 @@ def _exercise(excon):
     deliver_now("1-15")
     Message.objects.update(sent_at=timezone.now() - timedelta(hours=2))
     pa, pc = participant("a", "Jane"), participant("c", "Carol")
-    mail = Mail.objects.get(team__code="a")
+    mail = Mail.objects.get(owner=None, team__code="a")
     pa.get(f"/inbox/t/{mail.thread}/")
     pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: Update", "body": "Plan by 15:00. Need 2 trucks.",
                              "in_reply_to": mail.id})

@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="SIMEX Mail">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#f6f8fc">
+{% block head %}{% endblock %}
 <script>
 // iPhone home-screen app: 100% height there is the whole screen, status bar included, which pushed
 // the bottom (Compose, alerts) off screen. Size the page to what is actually visible instead.
@@ -19,20 +20,20 @@
 })();
 </script>
 </head>
-<body class="gm{% if readonly %} readonly{% endif %}">
+<body class="gm{% if readonly %} readonly{% endif %}{% if leader_tabs %} has-tabs{% endif %}">
 <header class="gm-top">
   <button class="gm-icon-btn" data-toggle-side title="Main menu" aria-label="Main menu">{% icon "menu" 24 %}</button>
   <a class="gm-logo" href="{{ base }}/" aria-label="SIMEX Mail">
     <svg width="34" height="26" viewBox="0 0 34 26" aria-hidden="true"><rect x="1" y="2" width="32" height="22" rx="4" fill="#0b57d0"/><path d="M3 5l14 10L31 5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linejoin="round"/></svg>
     <span>SIMEX <b>Mail</b></span>
   </a>
-  <form class="gm-search" method="get" action="{{ base }}/" role="search">
+  {% block search %}<form class="gm-search" method="get" action="{{ base }}/" role="search">
     <button class="gm-icon-btn" aria-label="Search">{% icon "search" 24 %}</button>
     <input name="q" value="{{ q|default:'' }}" placeholder="Search mail" autocomplete="off" data-search>
     {% if q %}<a class="gm-icon-btn" href="{{ base }}/?folder={{ folder }}" aria-label="Clear search">{% icon "close" 22 %}</a>{% endif %}
-  </form>
+  </form>{% endblock %}
   <div class="gm-top-right">
-    {% if readonly %}<a class="gm-viewas" href="/inboxes/" title="Back to ExCon">{% icon "eye" 18 %} Viewing as {{ team.name }} · read-only</a>{% endif %}
+    {% if readonly and not leader_tabs %}<a class="gm-viewas" href="/inboxes/" title="Back to ExCon">{% icon "eye" 18 %} Viewing {% if v.leader_box %}{{ team.name }}'s team leader{% else %}as {{ team.name }}{% endif %} · read-only</a>{% endif %}
     <a class="gm-icon-btn" href="{{ base }}/help/" title="Help" aria-label="Help">{% icon "help" 22 %}</a>
     <button class="gm-icon-btn" data-sound title="Notification sound" aria-label="Notification sound">{% icon "bell" 22 %}</button>
     <div class="gm-account">
@@ -40,13 +41,20 @@
       <div class="gm-account-card" hidden>
         <div class="gm-avatar huge" style="background: {{ team.name|avatar_colour }}">{% if me %}{{ me.name|initial }}{% else %}{{ team.name|initial }}{% endif %}</div>
         <div class="gm-acc-name">{% if me %}{{ me.name }}{% else %}{{ team.name }}{% endif %}</div>
-        <div class="gm-acc-mail">{{ team.name }} · {{ my_address }}</div>
-        {% if readonly %}<a class="gm-pill-btn" href="/inboxes/">Back to ExCon</a>
+        <div class="gm-acc-mail">{% if leader_tabs %}Team leader (ExCon) · {{ team.name }}{% else %}{{ team.name }} · {{ my_address }}{% endif %}</div>
+        {% if readonly and not leader_tabs %}<a class="gm-pill-btn" href="/inboxes/">Back to ExCon</a>
         {% else %}<form method="post" action="/logout/">{% csrf_token %}<button class="gm-pill-btn">Sign out</button></form>{% endif %}
       </div>
     </div>
   </div>
 </header>
+{% if leader_tabs %}{% with lt=leader_tabs %}
+<nav class="gm-tabs" aria-label="Team leader">
+  <a href="/inbox/" class="{% if lt.current == 'mail' %}on{% endif %}">{% icon "inbox" 20 %} My mail<span class="gm-tab-n" data-tab-mail>{% if lt.mail_unread %}{{ lt.mail_unread }}{% endif %}</span></a>
+  <a href="/inbox/team/" class="{% if lt.current == 'team' %}on{% endif %}">{% icon "eye" 20 %} {{ lt.team.name }} inbox <span class="gm-tab-ro">read-only</span><span class="gm-tab-n" data-tab-team>{% if lt.team_new and lt.current != 'team' %}{{ lt.team_new }}{% endif %}</span></a>
+  <a href="/inbox/dashboard/" class="{% if lt.current == 'dashboard' %}on{% endif %}">{% icon "all" 20 %} Dashboard</a>
+</nav>
+{% endwith %}{% endif %}
 <div class="gm-alerts" id="gm-alerts" hidden>
   {% icon "bell" 20 %} <span><b>Don't miss a message.</b> Turn on alerts to get a notification and a sound when new mail arrives, even when this tab is in the background.</span>
   <button type="button" class="gm-pill-btn primary" data-alerts-on>Turn on alerts</button>
@@ -57,18 +65,19 @@
   <button type="button" class="gm-pill-btn" data-install-ok>OK</button>
 </div>
 <div class="gm-body">
-  <nav class="gm-side">
-    <button class="gm-compose-btn" data-compose {% if readonly %}disabled title="Read-only view"{% endif %}>{% icon "edit" 24 %}<span>Compose</span></button>
+  {% block side %}<nav class="gm-side">
+    {% if v.leader_mode %}<div class="gm-ro-note">{% icon "eye" 20 %}<span>{{ team.name }}'s inbox, read-only. Opening mail here doesn't mark it read for the team.</span></div>
+    {% else %}<button class="gm-compose-btn" data-compose {% if readonly %}disabled title="Read-only view"{% endif %}>{% icon "edit" 24 %}<span>Compose</span></button>{% endif %}
     <ul class="gm-folders">
       {% for key, label in folders %}
       <li><a href="{{ base }}/?folder={{ key }}" class="{% if folder == key and not q %}on{% endif %}{% if key == 'inbox' and inbox_unread %} bold{% endif %}" data-folder="{{ key }}"{% if key == 'inbox' %} data-drop-to="inbox"{% endif %}>
-        {% if key == 'inbox' %}{% icon "inbox" %}{% elif key == 'starred' %}{% icon "star_border" %}{% elif key == 'sent' %}{% icon "send" %}{% elif key == 'drafts' %}{% icon "draft" %}{% elif key == 'all' %}{% icon "all" %}{% else %}{% icon "trash" %}{% endif %}
+        {% if key == 'inbox' %}{% icon "inbox" %}{% elif key == 'starred' %}{% icon "star_border" %}{% elif key == 'sent' %}{% icon "send" %}{% elif key == 'drafts' %}{% icon "draft" %}{% elif key == 'all' %}{% icon "all" %}{% elif key == 'replies' %}{% icon "reply" %}{% else %}{% icon "trash" %}{% endif %}
         <span class="gm-flabel">{{ label }}</span>
         {% if key == 'inbox' %}<span class="gm-count" data-unread-count>{% if inbox_unread %}{{ inbox_unread }}{% endif %}</span>{% elif key == 'drafts' and drafts %}<span class="gm-count">{{ drafts }}</span>{% endif %}
       </a></li>
       {% endfor %}
     </ul>
-    <div class="gm-labels-head"><span class="gm-flabel">Labels</span>{% if not readonly %}<button type="button" class="gm-icon-btn sm" data-label-create="" title="Create new label" aria-label="Create new label">{% icon "add" 20 %}</button>{% endif %}</div>
+    {% if not v.leader_mode %}<div class="gm-labels-head"><span class="gm-flabel">Labels</span>{% if not readonly %}<button type="button" class="gm-icon-btn sm" data-label-create="" title="Create new label" aria-label="Create new label">{% icon "add" 20 %}</button>{% endif %}</div>
     <ul class="gm-folders gm-labels">
       {% for l in labels %}
       <li class="gm-lrow"><a href="{{ base }}/?folder={{ l.key }}" class="{% if folder == l.key and not q %}on{% endif %}{% if l.unread %} bold{% endif %}" data-drop-to="{{ l.id }}" title="{{ l.name }}">
@@ -88,13 +97,14 @@
       </span>{% endif %}
       </li>
       {% endfor %}
-    </ul>
+    </ul>{% endif %}
     <div class="gm-side-foot">
-      <div class="gm-side-team">{% icon "label" 18 %} {{ team.name }}</div>
+      <div class="gm-side-team">{% icon "label" 18 %} {% if v.leader_box %}{{ team.name }} · team leader{% else %}{{ team.name }}{% endif %}</div>
       <p>Exercise mail for the UNDAC SIMEX. Not a real emergency. <a href="{{ base }}/help/" class="gm-link">How to use SIMEX Mail</a></p>
     </div>
-  </nav>
+  </nav>{% endblock %}
   <main class="gm-main">
+    {% if v.leader_mode %}<div class="gm-ro-bar">{% icon "eye" 18 %} {{ team.name }}'s inbox, read-only</div>{% endif %}
     {% for m in messages %}<div class="gm-toast-inline {{ m.tags }}">{{ m }}</div>{% endfor %}
     {% block main %}{% endblock %}
   </main>

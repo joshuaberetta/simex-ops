@@ -38,6 +38,7 @@ class Draft:
     reply_local: str = ""  # with reply_to None, replies go to <reply_local>+<token>@MAIL_DOMAIN
     channel: str = "email"
     inbox_team_id: int | None = None  # in-app: the team inbox it lands in
+    inbox_owner_id: int | None = None  # in-app: ... or that team leader's own mailbox
     to_label: str = ""  # in-app: what the To line shows
     from_name: str = ""
 
@@ -129,6 +130,31 @@ def persona_addr(local, channel="inapp"):
     return persona_address(s, local, ctx, channel)
 
 
+def team_ctx(team):
+    return {"team": team.code, "team_name": team.name, "name": team.name, "first_name": team.name}
+
+
+def leader_persona(team):
+    """The team leader persona as team's leader plays it: {"local", "name", "addr"} (username
+    with {team} filled, name shown, SIMEX Mail address), or None when no persona is marked
+    as the team leader on the Senders tab."""
+    s = Sender.objects.filter(team_leader=True, active=True).first()
+    if not s or not team:
+        return None
+    ctx = team_ctx(team)
+    local = fill(s.local_part, ctx).lower()
+    return {"local": local, "name": (fill(s.display_name, ctx) or local).replace('"', "'"),
+            "addr": persona_address(s, local, ctx)}
+
+
+def leader_locals():
+    """{filled team leader username: team id}, over all active teams."""
+    s = Sender.objects.filter(team_leader=True, active=True).first()
+    if not s:
+        return {}
+    return {fill(s.local_part, team_ctx(t)).lower(): t.id for t in Team.objects.filter(active=True)}
+
+
 def scope_teams(inj):
     teams = list(Team.objects.filter(active=True, is_test=False))
     if inj.team_ids:
@@ -141,7 +167,7 @@ def _targets(inj, warnings):
     teams = scope_teams(inj)
 
     def members(t):
-        return [p for p in t.people.all() if p.active and p.email]
+        return [p for p in t.people.participants() if p.active and p.email]
     if inj.delivery == "each_team":
         if not teams:
             warnings.append("No active teams: add teams on the People tab.")
@@ -153,7 +179,7 @@ def _targets(inj, warnings):
                 continue
             out.append((t.name, {"team": t.code, "team_name": t.name, "name": t.name, "first_name": t.name}, to,
                         t.id, None))
-        return out
+        return out + _leader_targets(inj, teams)
     if inj.delivery == "each_person":
         out = []
         for t in teams:
@@ -163,23 +189,37 @@ def _targets(inj, warnings):
                             {"team": t.code, "team_name": t.name, "name": p.name, "first_name": first}, [p.email],
                             t.id, p.id))
         if not inj.team_ids:  # people not in a team are included when sending to everyone
-            for p in Person.objects.filter(active=True, team=None).exclude(email="").order_by("name"):
+            for p in Person.objects.participants().filter(active=True, team=None).exclude(email="").order_by("name"):
                 first = p.name.split()[0] if p.name.split() else p.name
                 out.append((p.name, {"team": "", "team_name": "", "name": p.name, "first_name": first}, [p.email],
                             None, p.id))
         if not out:
             warnings.append("No active participants to send to.")
-        return out
+        return out + _leader_targets(inj, teams)
     if inj.delivery == "all_bcc":
         people = [p.email for t in teams for p in members(t)]
         if not inj.team_ids:
-            people += [p.email for p in Person.objects.filter(active=True, team=None).exclude(email="")]
+            people += [p.email for p in Person.objects.participants().filter(active=True, team=None).exclude(email="")]
         if not people:
             warnings.append("No active participants to send to.")
             return []
         return [("all participants (Bcc)", {"team": "", "team_name": "", "name": "", "first_name": ""},
-                 ["__bcc__"] + people, None, None)]
+                 ["__bcc__"] + people, None, None)] + _leader_targets(inj, teams)
     return [("custom", {"team": "", "team_name": "", "name": "", "first_name": ""}, [], None, None)]
+
+
+def _leader_targets(inj, teams):
+    """Email: an inject marked "Also to team leaders" -> one email to each team's leader."""
+    if not inj.to_leaders:
+        return []
+    out = []
+    for t in teams:
+        lead = t.leader()
+        if lead and lead.email:
+            out.append((f"{lead.name} (team leader, {t.name})", {**team_ctx(t), "name": lead.name,
+                                                                 "first_name": lead.first_name},
+                        [lead.email], t.id, lead.id))
+    return out
 
 
 def _sender_checks(inj, warnings):
@@ -220,7 +260,7 @@ def build_inapp(inj, cfg):
     targets = []
     for t in teams:
         if inj.delivery == "each_person":
-            people = [p for p in t.people.all() if p.active]
+            people = [p for p in t.people.participants() if p.active]
             if not people:
                 warnings.append(f"{t.name} has no participants.")
             for p in people:
@@ -232,6 +272,15 @@ def build_inapp(inj, cfg):
         else:  # all_bcc / custom: the same message in every team's inbox
             targets.append((t.name, {"team": "", "team_name": "", "name": "", "first_name": ""}, t, None,
                             "All teams"))
+    # "Also to team leaders": a copy in each team leader's own mailbox, unless the inject comes
+    # from the team leader persona (the leader then has it in Sent).
+    if inj.to_leaders and not (sender and sender.team_leader):
+        for t in teams:
+            lead = t.leader()
+            if lead:
+                targets.append((f"{lead.name} (team leader, {t.name})", {**team_ctx(t), "name": lead.name,
+                                                                         "first_name": lead.first_name},
+                                t, lead, lead.name))
     drafts = []
     for target, ctx, team, person, to_label in targets:
         local, name = _identity(inj, sender, ctx)
@@ -239,7 +288,8 @@ def build_inapp(inj, cfg):
         d = Draft(target=target, from_addr=f'"{name}" <{persona_address(sender, local, ctx)}>', reply_to=None, to=[], cc=[],
                   bcc=[], subject=subject, body=fill(inj.body or "", ctx), footer=footer,
                   attachment_ids=[a.id for a in atts], team_id=team.id, person_id=person.id if person else None,
-                  reply_local=local, channel="inapp", inbox_team_id=team.id, to_label=to_label, from_name=name)
+                  reply_local=local, channel="inapp", inbox_team_id=team.id, to_label=to_label, from_name=name,
+                  inbox_owner_id=person.id if person and person.is_leader else None)
         if not LOCAL.match(local):
             d.warnings.append(f"Sender username '{local}' is not a valid email username.")
         if not subject.strip():
@@ -345,5 +395,8 @@ def redirect_inapp(d: Draft, test_team, label="TEST"):
         f" (To: {d.to_label})" if d.to_label and d.to_label != d.target else "") + "."
     d.original_to = {"inbox": d.target}
     d.inbox_team_id = test_team.id
+    if d.inbox_owner_id:  # a team leader's copy goes to the Test team's leader, if it has one
+        lead = test_team.leader()
+        d.inbox_owner_id = lead.id if lead else None
     d.subject = f"[{label}] {d.subject}"
     return d
