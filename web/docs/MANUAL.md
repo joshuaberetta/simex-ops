@@ -93,6 +93,8 @@ Only participant-facing fields are imported. Expected outcomes, story, theme, ke
 ### 3.3 Personas (Senders)
 One row per persona, created from the MEL's sender aliases. Fix display names (e.g. `CCDPR` → "CCDPR Deputy Director"); **rename in injects** keeps injects in step when a username changes. Add personas the MEL lacks (e.g. `cnn` / "CNN Breaking News").
 
+**Which mailbox.** SIMEX Mail names the mailbox at the top, next to the logo, each kind in its own colour: a team inbox (blue), a member's **My mail** (green), a team leader's mailbox and tabs (purple), the persona desk (teal), and ExCon's read-only views (amber, with *Back to ExCon*). The search box says which mailbox it searches.
+
 Active senders are who participants can write to. Their **address book** starts empty and grows with use, as in a webmail: whoever wrote to their mailbox or was written to (a member's book is their own mailbox's and the team inbox's), latest first. To write to a persona first, a team types its full SIMEX Mail address (from an inject, a document, a signature): SIMEX Mail never lists the personas they haven't been in touch with. Teammates' and the team's addresses are found the same way. Team leaders' and the persona desk's books are full lists, as before (the desk's lists every team and every member). In SIMEX Mail a member is named with their team, e.g. **Team A (Jane Doe)**, as the From of what they send, in To and Cc and in the address book. Untick **active** to make a persona unreachable.
 
 **The team leader persona.** Tick **team leader** on the persona each team's leader plays (`undac-{team}-tl`; the import ticks it for you). Then, for each team:

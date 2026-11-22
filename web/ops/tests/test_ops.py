@@ -210,7 +210,7 @@ def test_view_as_team_is_read_only(excon):
     deliver_now("1-15")
     team = Team.objects.get(code="a")
     r = excon.get(f"/inbox/as/{team.id}/")
-    assert r.status_code == 200 and b"Viewing as Team A" in r.content
+    assert r.status_code == 200 and b"ExCon view" in r.content and b"Team A inbox \xc2\xb7 read-only" in r.content
     mail = Mail.objects.get(owner=None, team=team)
     excon.get(f"/inbox/as/{team.id}/t/{mail.thread}/")
     assert Mail.objects.get(pk=mail.pk).read_at is None  # viewing as the team does not mark read

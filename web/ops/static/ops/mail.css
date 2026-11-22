@@ -495,3 +495,28 @@ body.desk .gm-row[style*="--persona"]::after { content: ""; position: absolute; 
 .gm-from-field.desk .gm-from-select { font-weight: 600; }
 .gm-presence { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: #fef7e0; color: #7a4f01; font-size: 14px; }
 .gm-presence.replying { background: #fce8e6; color: #a50e0e; font-weight: 600; }
+
+/* The kind of mailbox (views_inbox.box_theme): its name in the top bar and its own colours, so
+   nobody mistakes a team inbox for their own mail, a team leader's or the persona desk's. */
+body.box-team { --accent: #0b57d0; --top-bg: #eef3fd; }
+body.box-me { --bg: #f4f9f5; --sel: #cfead7; --blue: #146c2e; --blue-soft: #c4e8cf; --read-row: #f1f7f2; --accent: #146c2e; --top-bg: #e3f2e7; }
+body.box-leader { --bg: #f8f5fc; --sel: #e6dcf6; --blue: #6236b0; --blue-soft: #e0d1f7; --read-row: #f5f1fb; --accent: #6236b0; --top-bg: #ede4f9; }
+body.box-desk { --bg: #f3f9f8; --sel: #cbe9e6; --blue: #00696b; --blue-soft: #bfe6e2; --read-row: #eff7f6; --accent: #00696b; --top-bg: #dff0ee; }
+body.box-excon { --bg: #fbf8f1; --sel: #f3e3bd; --blue: #8a5300; --blue-soft: #f5deab; --read-row: #f8f3e8; --accent: #8a5300; --top-bg: #f7ecd2; }
+body[class*="box-"] .gm-top { background: var(--top-bg); box-shadow: inset 0 -3px var(--accent); }
+.gm-logo { white-space: nowrap; }
+.gm-boxname { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; min-width: 0; max-width: 380px; margin: 0 8px 0 -8px;
+  padding: 4px 14px 4px 10px; border-radius: 10px; background: #fff; color: var(--accent); border-left: 4px solid var(--accent); }
+.gm-boxname > span { display: flex; flex-direction: column; min-width: 0; line-height: 18px; }
+.gm-boxname b { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gm-boxname small { font-size: 12px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gm-pill-btn.primary { background: var(--blue); border-color: var(--blue); }
+body[class*="box-"] .gm-alerts { background: var(--sel); }
+body[class*="box-"] .gm-search { flex: 1 1 400px; min-width: 180px; }
+.gm-tabs a.on { background: var(--top-bg); border-radius: 8px 8px 0 0; }
+@media (max-width: 1100px) { .gm-boxname small { display: none; } .gm-logo { width: auto; } }
+@media (max-width: 760px) {
+  .gm-boxname { display: none; }
+  body[class*="box-"] .gm-top { box-shadow: none; border: 2px solid var(--accent); }
+  body[class*="box-"] .gm-tabs { background: var(--top-bg); }
+}
