@@ -1371,3 +1371,13 @@ def test_push_goes_through_a_few_worker_threads(monkeypatch):
         assert done.acquire(timeout=5)
     assert names <= {f"push-{i}" for i in range(push.WORKERS)}
     assert threading.active_count() - before <= push.WORKERS
+
+
+def test_excon_password_changed_in_admin_survives_a_restart():
+    from django.core.management import call_command
+    u = get_user_model().objects.get(username="undac")
+    u.set_password("changed-in-admin")
+    u.save()
+    call_command("seed_simex", verbosity=0)  # what every container start runs
+    u.refresh_from_db()
+    assert u.check_password("changed-in-admin")

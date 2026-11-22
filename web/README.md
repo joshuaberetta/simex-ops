@@ -34,7 +34,7 @@ The Django version of SIMEX ops, **the app in production at https://ops.simex.ko
 ```
 cd web
 uv venv -p 3.12 .venv && uv pip install -p .venv -r requirements.txt pytest pytest-django
-.venv/bin/python manage.py migrate && .venv/bin/python manage.py seed_simex      # ExCon login undac / nairobi2026 (APP_PASSWORD), teams A-D, Test team
+.venv/bin/python manage.py migrate && .venv/bin/python manage.py seed_simex      # ExCon login undac / nairobi2026 (APP_PASSWORD: only its first password), teams A-D, Test team
 .venv/bin/python manage.py runserver                                            # http://127.0.0.1:8000
 .venv/bin/python manage.py run_scheduler                                        # in a second terminal
 .venv/bin/python -m pytest -q                                                   # tests (SQLite, log mailer)

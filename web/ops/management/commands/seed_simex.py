@@ -1,7 +1,7 @@
 """Idempotent first-run setup: the ExCon superuser (APP_USERNAME / APP_PASSWORD), the
 "excon" group, placeholder teams A-D (people on .invalid addresses, no logins) and the Test
-team. Runs at every container start; changes nothing that already exists, except that the
-superuser's password follows APP_PASSWORD."""
+team. Runs at every container start and changes nothing that already exists: APP_PASSWORD is
+only the superuser's first password (change it in Django admin, or `manage.py changepassword`)."""
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -21,11 +21,10 @@ class Command(BaseCommand):
         if settings.APP_PASSWORD:
             u, created = User.objects.get_or_create(username=settings.APP_USERNAME,
                                                     defaults={"is_staff": True, "is_superuser": True})
-            if created or not u.check_password(settings.APP_PASSWORD):
+            if created:
                 u.set_password(settings.APP_PASSWORD)
-                u.is_staff = u.is_superuser = u.is_active = True
                 u.save()
-                self.stdout.write(f"ExCon login {u.username} {'created' if created else 'password updated'}")
+                self.stdout.write(f"ExCon login {u.username} created")
         else:
             self.stdout.write("APP_PASSWORD not set: no ExCon login created")
         if not Team.objects.filter(is_test=False).exists():
