@@ -20,7 +20,7 @@
 })();
 </script>
 </head>
-<body class="gm{% if readonly %} readonly{% endif %}{% if leader_tabs or member_tabs %} has-tabs{% endif %}">
+<body class="gm{% if readonly %} readonly{% endif %}{% if leader_tabs or member_tabs or desk_tabs %} has-tabs{% endif %}{% if v.desk %} desk{% endif %}">
 <header class="gm-top">
   <button class="gm-icon-btn" data-toggle-side title="Main menu" aria-label="Main menu">{% icon "menu" 24 %}</button>
   <a class="gm-logo" href="{{ base }}/" aria-label="SIMEX Mail">
@@ -33,7 +33,7 @@
     {% if q %}<a class="gm-icon-btn" href="{{ base }}/?folder={{ folder }}" aria-label="Clear search">{% icon "close" 22 %}</a>{% endif %}
   </form>{% endblock %}
   <div class="gm-top-right">
-    {% if readonly and not leader_tabs %}<a class="gm-viewas" href="/inboxes/" title="Back to ExCon">{% icon "eye" 18 %} Viewing {% if v.leader_box %}{{ team.name }}'s team leader{% elif v.member_box %}{{ v.owner.name }} ({{ team.name }}){% else %}as {{ team.name }}{% endif %} · read-only</a>{% endif %}
+    {% if readonly and not leader_tabs and v %}<a class="gm-viewas" href="{{ back_url|default:'/inboxes/' }}" title="{% if desk_tabs %}Back to the teams{% else %}Back to ExCon{% endif %}">{% icon "eye" 18 %} Viewing {% if v.leader_box %}{{ team.name }}'s team leader{% elif v.member_box %}{{ v.owner.name }} ({{ team.name }}){% else %}as {{ team.name }}{% endif %} · read-only</a>{% endif %}
     <a class="gm-icon-btn" href="{{ base }}/help/" title="Help" aria-label="Help">{% icon "help" 22 %}</a>
     <button class="gm-icon-btn" data-sound title="Notification sound" aria-label="Notification sound">{% icon "bell" 22 %}</button>
     <div class="gm-account">
@@ -41,8 +41,8 @@
       <div class="gm-account-card" hidden>
         <div class="gm-avatar huge" style="background: {{ team.name|avatar_colour }}">{% if me %}{{ me.name|initial }}{% else %}{{ team.name|initial }}{% endif %}</div>
         <div class="gm-acc-name">{% if me %}{{ me.name }}{% else %}{{ team.name }}{% endif %}</div>
-        <div class="gm-acc-mail">{% if leader_tabs %}Team leader (ExCon) · {{ leader_tabs.team.name }}{% else %}{{ team.name }} · {{ my_address }}{% if me.team_role %}<br>{{ me.team_role.name }}{% endif %}{% endif %}</div>
-        {% if readonly and not leader_tabs %}<a class="gm-pill-btn" href="/inboxes/">Back to ExCon</a>
+        <div class="gm-acc-mail">{% if leader_tabs %}Team leader (ExCon) · {{ leader_tabs.team.name }}{% elif desk_tabs or v.desk %}Persona desk (ExCon){% else %}{{ team.name }} · {{ my_address }}{% if me.team_role %}<br>{{ me.team_role.name }}{% endif %}{% endif %}</div>
+        {% if readonly and not leader_tabs and not desk_tabs or v.desk and not me %}<a class="gm-pill-btn" href="/inboxes/">Back to ExCon</a>
         {% else %}<form method="post" action="/logout/">{% csrf_token %}<button class="gm-pill-btn">Sign out</button></form>{% endif %}
       </div>
     </div>
@@ -56,6 +56,11 @@
   {% if lt.peers %}<a href="/inbox/leaders/" class="{% if lt.current == 'peer' %}on{% endif %}">{% icon "eye" 20 %} Team leaders <span class="gm-tab-ro">read-only</span></a>{% endif %}
   {% if lt.npcs %}<a href="/inbox/personas/" class="{% if lt.current == 'npcs' %}on{% endif %}">{% icon "eye" 20 %} AI personas <span class="gm-tab-ro">read-only</span></a>{% endif %}
   <a href="/inbox/dashboard/" class="{% if lt.current == 'dashboard' %}on{% endif %}">{% icon "all" 20 %} Dashboard</a>
+</nav>
+{% endwith %}{% elif desk_tabs %}{% with dt=desk_tabs %}
+<nav class="gm-tabs" aria-label="Persona desk">
+  <a href="/inbox/desk/" class="{% if dt.current == 'desk' %}on{% endif %}">{% icon "inbox" 20 %} Persona desk<span class="gm-tab-n" data-tab-desk>{% if dt.unread and dt.current != 'desk' %}{{ dt.unread }}{% endif %}</span></a>
+  <a href="/inbox/desk/teams/" class="{% if dt.current == 'teams' %}on{% endif %}">{% icon "eye" 20 %} Teams &amp; team leaders <span class="gm-tab-ro">read-only</span></a>
 </nav>
 {% endwith %}{% elif member_tabs %}{% with mt=member_tabs %}
 <nav class="gm-tabs" aria-label="Mailboxes">
@@ -83,7 +88,12 @@
     <ul class="gm-folders gm-peers">
       {% for p in leader_tabs.members %}<li><a href="/inbox/members/{{ p.id }}/" class="{% if p.id == v.owner.id %}on{% endif %}">{% icon "label" %}<span class="gm-flabel">{{ p.name }}{% if p.team_role %} · {{ p.team_role.name }}{% endif %}</span></a></li>{% endfor %}
     </ul>
-    {% else %}<button class="gm-compose-btn" data-compose {% if readonly %}disabled title="Read-only view"{% endif %}>{% icon "edit" 24 %}<span>Compose</span></button>{% endif %}
+    {% elif desk_tabs and readonly %}<div class="gm-ro-note">{% icon "eye" 20 %}<span>{% if v.leader_box %}{{ team.name }}'s team leader's mailbox{% elif v.member_box %}{{ v.owner.name }}'s own mailbox{% else %}{{ team.name }}'s inbox{% endif %}, read-only. Opening mail here doesn't mark it read for them.</span></div>
+    <ul class="gm-folders gm-peers">
+      {% for t in desk_tabs.teams %}<li><a href="/inbox/as/{{ t.id }}/" class="{% if t.id == team.id and not v.owner %}on{% endif %}">{% icon "label" %}<span class="gm-flabel">{{ t.name }}</span></a></li>
+      {% if t.lead %}<li><a href="/inbox/as/{{ t.id }}/leader/" class="{% if t.id == team.id and v.leader_box %}on{% endif %}">{% icon "label" %}<span class="gm-flabel">{{ t.name }} · team leader</span></a></li>{% endif %}{% endfor %}
+    </ul>
+    {% else %}<button class="gm-compose-btn" data-compose {% if readonly %}disabled title="Read-only view"{% endif %}>{% icon "edit" 24 %}<span>{% if v.desk %}Write as a persona{% else %}Compose{% endif %}</span></button>{% endif %}
     <ul class="gm-folders">
       {% for key, label in folders %}
       <li><a href="{{ base }}/?folder={{ key }}" class="{% if folder == key and not q %}on{% endif %}{% if key == 'inbox' and inbox_unread %} bold{% endif %}" data-folder="{{ key }}"{% if key == 'inbox' %} data-drop-to="inbox"{% endif %}>
@@ -114,8 +124,21 @@
       </li>
       {% endfor %}
     </ul>{% endif %}
+    {% if desk_side %}<div class="gm-labels-head"><span class="gm-flabel">Personas</span></div>
+    <ul class="gm-folders gm-labels gm-desk-personas">
+      {% for p in desk_side.personas %}<li class="gm-lrow"><a href="{{ base }}/?folder={{ p.key }}" class="{% if folder == p.key and not q %}on{% endif %}{% if p.unread %} bold{% endif %}" title="{{ p.name }} <{{ p.addr }}>">
+        <span class="gm-pdot" style="background: {{ p.colour }}"></span><span class="gm-flabel">{{ p.name }}{% if p.ai %} <span class="gm-ai">AI</span>{% endif %}</span>
+        <span class="gm-count">{% if p.unread %}{{ p.unread }}{% endif %}</span></a></li>
+      {% empty %}<li class="gm-side-empty">No personas yet (ExCon, Senders tab).</li>{% endfor %}
+    </ul>
+    <div class="gm-labels-head"><span class="gm-flabel">Teams</span></div>
+    <ul class="gm-folders gm-labels">
+      {% for t in desk_side.teams %}<li class="gm-lrow"><a href="{{ base }}/?folder={{ t.key }}" class="{% if folder == t.key and not q %}on{% endif %}{% if t.unread %} bold{% endif %}">
+        <span class="gm-licon">{% icon "label" %}</span><span class="gm-flabel">{{ t.name }}</span>
+        <span class="gm-count">{% if t.unread %}{{ t.unread }}{% endif %}</span></a></li>{% endfor %}
+    </ul>{% endif %}
     <div class="gm-side-foot">
-      <div class="gm-side-team">{% icon "label" 18 %} {% if v.leader_box %}{{ team.name }} · team leader{% elif v.member_box %}{{ v.owner.name }} · {{ team.name }}{% else %}{{ team.name }}{% endif %}</div>
+      <div class="gm-side-team">{% icon "label" 18 %} {% if v.desk %}Persona desk · {% if me %}{{ me.name }}{% else %}ExCon{% endif %}{% elif v.leader_box %}{{ team.name }} · team leader{% elif v.member_box %}{{ v.owner.name }} · {{ team.name }}{% else %}{{ team.name }}{% endif %}</div>
       <p>Exercise mail for the UNDAC SIMEX. Not a real emergency. <a href="{{ base }}/help/" class="gm-link">How to use SIMEX Mail</a></p>
       <p class="gm-source">Open source (AGPL-3.0). <a href="{{ SOURCE_URL }}" class="gm-link" target="_blank" rel="noopener">Source code</a></p>
     </div>
@@ -123,7 +146,8 @@
   <main class="gm-main">
     {% if v.leader_mode %}<div class="gm-ro-bar">{% icon "eye" 18 %} {{ team.name }}'s inbox, read-only</div>
     {% elif v.peer %}<div class="gm-ro-bar">{% icon "eye" 18 %} {{ team.name }}'s team leader, read-only</div>
-    {% elif v.member_box and leader_tabs %}<div class="gm-ro-bar">{% icon "eye" 18 %} {{ v.owner.name }}'s mailbox, read-only</div>{% endif %}
+    {% elif v.member_box and leader_tabs %}<div class="gm-ro-bar">{% icon "eye" 18 %} {{ v.owner.name }}'s mailbox, read-only</div>
+    {% elif desk_tabs and readonly and v %}<div class="gm-ro-bar">{% icon "eye" 18 %} {% if v.leader_box %}{{ team.name }}'s team leader{% elif v.member_box %}{{ v.owner.name }}'s mailbox{% else %}{{ team.name }}'s inbox{% endif %}, read-only</div>{% endif %}
     {% for m in messages %}<div class="gm-toast-inline {{ m.tags }}">{{ m }}</div>{% endfor %}
     {% block main %}{% endblock %}
   </main>

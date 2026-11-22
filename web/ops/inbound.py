@@ -88,7 +88,7 @@ def guess(r: Response):
         return
     qs = Message.objects.filter(Q(persona=r.persona) | Q(from_addr__icontains=f"<{r.persona}@"), status="sent",
                                 sent_at__lte=r.received_at,
-                                kind__in=["live", "reply", "followup", "leader"])
+                                kind__in=["live", "reply", "followup", "leader", "desk"])
     if r.team_id:
         qs = qs.filter(Q(team_id=r.team_id) | Q(team__isnull=True) | Q(inbox_team_id=r.team_id))
     cands = list(qs.order_by("-sent_at")[:20])
@@ -108,7 +108,7 @@ def match_email(r: Response):
     if m:
         r.message, r.inject_id, r.match = m, m.inject_id, "token"
         r.team_id = r.team_id or m.team_id
-        r.kind = "live" if m.kind in ("live", "reply", "followup", "leader") else "test"
+        r.kind = "live" if m.kind in ("live", "reply", "followup", "leader", "desk") else "test"
     else:
         guess(r)
     # A team leader answering their copy of an inject: kept, never counted as the team's reply.
@@ -143,7 +143,8 @@ def from_mail(mail, personas):
     r.save()
     audit("inapp_response", f"{mail.team.name} -> {', '.join(personas)}: {mail.subject[:80]}")
     notices.reply(r)
-    from . import npc
+    from . import desk, npc
+    desk.on_response(r, personas)
     npc.on_response(r)
     return r
 
@@ -205,7 +206,7 @@ def record_read(mails, person, user_agent="", what="read", link=None):
     now = timezone.now()
     for mail in mails:
         m = mail.message
-        if not m or m.kind not in ("live", "reply", "followup", "leader", "test", "oneoff"):
+        if not m or m.kind not in ("live", "reply", "followup", "leader", "desk", "test", "oneoff"):
             continue
         Event.objects.create(message=m, type=what, at=now, person=person, link=link, user_agent=(user_agent or "")[:400] or None)
         if what == "read":
@@ -292,6 +293,8 @@ def fetch(response_id):
            + (["status"] if r.status == "ignored" else []))
     if r.fetched:
         notices.reply(r)  # now with its opening words
+        from . import desk
+        desk.on_response(r)
 
 
 # Webhook fetches go through a few worker threads per process: a burst of replies (every team

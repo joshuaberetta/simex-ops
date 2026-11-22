@@ -20,13 +20,15 @@ from django.utils import timezone
 from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_POST
 
-from . import (ai, legacy_import, backup, checks, conf, delivery, documents, importer, inbound, mailer, notices,
-               render as rnd, signin)
+from . import (ai, legacy_import, backup, checks, conf, delivery, desk, documents, importer, inbound, mailer,
+               notices, render as rnd, signin)
 from .access import excon_required
 from .models import (CHANNELS, DELIVERY_MODES, ROLES, STATUSES, AiGrade, Attachment, AttachmentImport, Audit, Grade,
                      ImportBatch, Inject, InjectDraft, InjectReview, Mail, MailAttachment, MailLabel, Message,
                      MessageAttachment, Notice, Person, PushSubscription, ReplyAnalysis, Response,
                      ResponseAttachment, RubricCriterion, Sender, Team, TeamRole, TestRun, TestRunItem, audit)
+
+from .views_inbox import LABEL_COLOURS  # noqa: E402
 
 MAX_ATTACHMENT = documents.MAX_ATTACHMENT
 User = get_user_model()
@@ -523,6 +525,7 @@ def senders_page(request):
         old = x.local_part
         x.local_part, x.display_name, x.reply_to = local, (P.get("display_name") or "").strip(), reply_to
         x.inapp_local, x.domain = inapp_local, domain
+        x.colour = P.get("colour") if P.get("colour") in LABEL_COLOURS else x.colour if "colour" not in P else ""
         clash = next((o for o in Sender.objects.exclude(pk=x.pk) if o.inapp_address == x.inapp_address), None)
         if clash:
             messages.error(request, f"{x.inapp_address} is already the SIMEX Mail address of {clash.local_part}.")
@@ -542,7 +545,8 @@ def senders_page(request):
     senders = list(Sender.objects.select_related("npc"))
     for x in senders:
         x.usage = usage.get(x.local_part, 0)
-    return render(request, "ops/senders.html", {"tab": "senders", "senders": senders})
+        x.desk_colour = desk.colour(x)[0]
+    return render(request, "ops/senders.html", {"tab": "senders", "senders": senders, "colours": LABEL_COLOURS})
 
 
 @excon_required
@@ -716,8 +720,8 @@ def person_save(request):
     p = get_object_or_404(Person, pk=_int(pid)) if pid else Person()
     old_role = p.role if pid else None
     p.name, p.email = name, email
-    p.team_id = _int(P.get("team_id"))
-    p.role = "tl" if P.get("role") == "tl" else "member"
+    p.role = P.get("role") if P.get("role") in ROLES else "member"
+    p.team_id = None if p.role == "desk" else _int(P.get("team_id"))  # the persona desk belongs to no team
     p.team_role = TeamRole.objects.filter(pk=_int(P.get("team_role_id"))).first() if p.role == "member" else None
     p.active = P.get("active") == "1" or not pid
     problem = _leader_problem(p)
@@ -792,7 +796,8 @@ def people_bulk(request):
         name, email = row[0], row[1] if len(row) > 1 else ""
         code = re.sub(r"[^a-z0-9-]", "", row[2].lower()) if len(row) > 2 else ""
         role_cell = row[3] if len(row) > 3 else ""
-        role = "tl" if role_cell.lower() in ("tl", "team leader", "leader") else "member"
+        role = ("tl" if role_cell.lower() in ("tl", "team leader", "leader")
+                else "desk" if role_cell.lower() in ("desk", "persona desk") else "member")
         team_role = role_cell if role == "member" and role_cell.lower() not in ("member", "team member") else ""
         if email and not rnd.EMAIL.match(email):
             errors.append(f"line {n}: bad email '{email}'")
@@ -805,7 +810,7 @@ def people_bulk(request):
         p = existing or Person()
         old_role = p.role if p.pk else None
         p.name, p.email, p.role, p.active = name, email, role, True
-        p.team = teams[code] if code else None
+        p.team = teams[code] if code and role != "desk" else None
         problem = _leader_problem(p)
         if problem:
             errors.append(f"line {n}: {problem}")
@@ -938,6 +943,7 @@ def inbox_clear(request):
         reps.delete()
         n_mails = Mail.objects.filter(team=team).count()
         Mail.objects.filter(team=team).delete()
+        Mail.objects.filter(team=None, desk_team=team).delete()  # the persona desk's copies of its mail
         MailLabel.objects.filter(team=team).delete()
         n_grades = Grade.objects.filter(team=team).delete()[0] + AiGrade.objects.filter(team=team).delete()[0]
     detail = f"{team.name}: {n_mails} mails, {n_reps} replies, {n_answers} answers, {n_grades} grades"
@@ -1071,7 +1077,7 @@ def conversations(reps):
 def reply_grid(kind):
     """Teams, every Response of this kind, the inject x team matrix and per-team totals
     (Replies tab and Dashboard)."""
-    kinds = ["live", "reply", "followup", "leader"] if kind == "live" else ["test", "oneoff"]
+    kinds = ["live", "reply", "followup", "leader", "desk"] if kind == "live" else ["test", "oneoff"]
     teams = list(Team.objects.filter(active=True, is_test=(kind != "live")) if kind != "live"
                  else Team.objects.filter(active=True, is_test=False))
     all_in = list(Response.objects.filter(kind=kind).select_related("inject", "team", "person__team_role", "mail", "message")
@@ -1144,7 +1150,7 @@ def replies_page(request):
     kind = request.GET.get("kind", "live")
     team_f, inject_f = _int(request.GET.get("team")) or 0, _int(request.GET.get("inject")) or 0
     status_f, matched_f = request.GET.get("status", ""), request.GET.get("matched", "")
-    kinds = ["live", "reply", "followup", "leader"] if kind == "live" else ["test", "oneoff"]
+    kinds = ["live", "reply", "followup", "leader", "desk"] if kind == "live" else ["test", "oneoff"]
     teams, all_in, matrix, team_sum = reply_grid(kind)
     # Read / opens & clicks: per inject x team, from the delivering Messages.
     eng_msgs = list(Message.objects.filter(kind__in=["live"] if kind == "live" else ["test", "oneoff"],
@@ -1410,7 +1416,7 @@ def grade_page(request, iid, tid):
         return redirect(f"/grades/{iid}/{nxt}/" if nxt else "/replies/")
     reps = list(Response.objects.filter(inject=inj, team=team).exclude(status="ignored")
                 .select_related("person", "mail").order_by("received_at"))
-    sent = inbound.first_sent(["live", "reply", "followup", "leader", "test", "oneoff"] if team.is_test else ["live", "reply", "followup", "leader"])
+    sent = inbound.first_sent(["live", "reply", "followup", "leader", "desk", "test", "oneoff"] if team.is_test else ["live", "reply", "followup", "leader", "desk"])
     sent_at = sent.get((iid, tid)) or sent.get((iid, None))
     tags = {a.response_id: a for a in ReplyAnalysis.objects.filter(response__in=reps, status="done")}
     for r in reps:

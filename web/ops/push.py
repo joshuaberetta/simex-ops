@@ -63,15 +63,16 @@ def _webpush(info, data):
 
 
 def payload(mail):
-    # A member's own mailbox is at /inbox/me/; a leader's, like the team inbox, at /inbox/.
-    base = "/inbox/me" if mail.owner_id and not mail.owner.is_leader else "/inbox"
+    # A member's own mailbox is at /inbox/me/; a leader's, like the team inbox, at /inbox/; the persona desk's at /inbox/desk/.
+    base = "/inbox/desk" if not mail.team_id else "/inbox/me" if mail.owner_id and not mail.owner.is_leader else "/inbox"
     return {"title": mail.from_name or mail.from_addr or "New message", "body": mail.subject or "(no subject)",
             "url": f"{base}/t/{mail.thread}/", "tag": f"mail-{mail.id}"}
 
 
 def notify_mail(mail):
     """Push a Mail that just landed in a mailbox (call inside or outside a transaction): the
-    team's members' devices for the team inbox, the owner's for a leader's or member's own mailbox."""
+    team's members' devices for the team inbox, the owner's for a leader's or member's own mailbox,
+    the persona desk's for the desk."""
     if not (enabled() or _sender) or mail.folder != "inbox":
         return
     transaction.on_commit(lambda: _start(mail.team_id, payload(mail), mail.author_id, mail.owner_id))
@@ -109,7 +110,8 @@ def send_team(team_id, data, author_id=None, owner_id=None):
     from django.db import connection
     from .models import PushSubscription
     try:
-        who = {"person_id": owner_id} if owner_id else {"person__team_id": team_id, "person__role": "member"}
+        who = ({"person_id": owner_id} if owner_id else {"person__team_id": team_id, "person__role": "member"}
+               if team_id else {"person__role": "desk"})  # no team: the persona desk's mailbox
         subs = list(PushSubscription.objects.filter(**who, person__active=True,
                                                     person__user__is_active=True).exclude(person_id=author_id))
         body = json.dumps(data)

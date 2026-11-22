@@ -1,0 +1,21 @@
+{% extends "ops/mail/base.html" %}{% load ops %}
+{% block title %}Teams{% endblock %}
+{% block search %}<div class="gm-search-space">Persona desk · Teams &amp; team leaders</div>{% endblock %}
+{% block side %}{% endblock %}
+{% block main %}
+<div class="gm-dash">
+  <h2>Teams and team leaders</h2>
+  <table class="gm-dtable">
+    <tr><th>Team</th><th>Waiting on the desk</th><th>Last message to a persona</th><th>Team inbox</th><th>Team leader</th>{% if personal %}<th>Members' own mailboxes</th>{% endif %}</tr>
+    {% for t in teams %}<tr>
+      <td><b>{{ t.name }}</b>{% if t.is_test %} <span class="gm-label test">Test</span>{% endif %}</td>
+      <td>{% if t.desk_unread %}<a href="/inbox/desk/?folder=t{{ t.id }}">{{ t.desk_unread }} unread</a>{% else %}<a href="/inbox/desk/?folder=t{{ t.id }}" class="muted">none</a>{% endif %}</td>
+      <td class="nowrap">{% if t.last_in %}{{ t.last_in|date:"D H:i" }}{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td class="nowrap"><a href="/inbox/as/{{ t.id }}/">Open, read-only</a>{% if t.unread %} <span class="muted small">· {{ t.unread }} unread by the team</span>{% endif %}</td>
+      <td class="nowrap">{% if t.lead %}<a href="/inbox/as/{{ t.id }}/leader/">{{ t.lead.name }}</a>{% else %}<span class="muted">none</span>{% endif %}</td>
+      {% if personal %}<td>{% for p in t.members %}<a href="/inbox/as/{{ t.id }}/member/{{ p.id }}/">{{ p.name }}</a>{% if not forloop.last %} · {% endif %}{% empty %}<span class="muted">—</span>{% endfor %}</td>{% endif %}</tr>
+    {% empty %}<tr><td class="muted">No teams yet.</td></tr>{% endfor %}
+  </table>
+  <p class="small muted">Every mailbox here opens read-only, exactly as its owner sees it: opening mail doesn't mark it read for them. You write to the teams from the <a href="/inbox/desk/">Persona desk</a>.</p>
+</div>
+{% endblock %}

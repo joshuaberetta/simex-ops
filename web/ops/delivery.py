@@ -84,6 +84,8 @@ def _put_mail(m):
             banner=m.banner, message=m, inject_id=m.inject_id, is_test=mail.is_test, read_at=timezone.now(),
             author_id=m.author_id)
         _attach(sent, m)
+    from . import desk
+    desk.on_delivered(m, mail)  # the persona desk's Sent
     return mail
 
 
@@ -198,6 +200,8 @@ def deliver(msgs, dry_run=False, respect_pause=True):
         try:
             rid = m_.send(mailer.payload(m, atts, m.extra_headers), m.idem_key)
             Message.objects.filter(pk=m.pk).update(status="sent", sent_at=timezone.now(), error=None, resend_id=rid)
+            from . import desk
+            desk.on_delivered(m)  # the persona desk's Sent
         except mailer.SendError as e:
             Message.objects.filter(pk=m.pk).update(status="failed", error=str(e))
         except Exception as e:  # never leave a message half-processed
@@ -390,11 +394,12 @@ def drafted(m, draft, text):
         m.ai_edited = " ".join(text.split()) != " ".join(str(draft.body.get("body") or "").split())
 
 
-def answer(response, body, user="", files=(), attachments=(), ai_draft=None, idem_key=None, npc=False):
+def answer(response, body, user="", files=(), attachments=(), ai_draft=None, idem_key=None, npc=False, author=None):
     """Reply as the persona the participant wrote to: into their team's inbox (in-app
     thread) or by email (email thread), with files ExCon uploaded ((filename, content_type,
     data) tuples) and inject documents (Attachment rows). Returns the Message. An AI
-    persona's answer (npc) passes its own deterministic idem_key."""
+    persona's answer (npc) passes its own deterministic idem_key; one from the persona desk,
+    the desk member who wrote it (author)."""
     idem_key = idem_key or f"reply-{response.id}-{uuid.uuid4().hex}"
     persona = response.persona or ""
     sender, ctx = render.sender_by_local(persona)
@@ -430,7 +435,7 @@ def answer(response, body, user="", files=(), attachments=(), ai_draft=None, ide
         if response.message_id_header:
             m.extra_headers = {"In-Reply-To": response.message_id_header, "References": response.message_id_header}
     drafted(m, ai_draft, body)
-    m.npc = npc
+    m.npc, m.author = npc, author
     with transaction.atomic():  # the files are in place before anything can deliver the Message
         m.save()
         for name, ctype, data in files:
@@ -561,8 +566,9 @@ def tick():
         followups = list(Message.objects.filter(kind="followup", channel="email", status="pending").order_by("id"))
         if followups:
             _guarded(deliver, followups)
-    # ExCon answers a crashed or slow web request left behind (put back to pending above).
-    stale = list(Message.objects.filter(kind="reply", status="pending", claimed_at__isnull=False).order_by("id"))
+    # ExCon (or persona desk) answers a crashed or slow web request left behind (put back to pending above).
+    stale = list(Message.objects.filter(kind__in=["reply", "desk"], status="pending", claimed_at__isnull=False)
+                 .order_by("id"))
     if stale:
         _guarded(deliver, stale)
     with transaction.atomic():

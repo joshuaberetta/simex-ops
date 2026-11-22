@@ -422,7 +422,7 @@ def exercise_figures(kind, team_figs, grid=None):
     for edited in _drafted_injects().values():
         drafts["new_edited"] += edited
     ai_pct = {ts["team"].name: ts["ai_pct"] for ts in team_sum}
-    kinds = DELIVERY_KINDS[kind] + (["followup", "reply", "leader"] if kind == "live" else [])
+    kinds = DELIVERY_KINDS[kind] + (["followup", "reply", "leader", "desk"] if kind == "live" else [])
     msgs = Message.objects.filter(kind__in=kinds)
     return {
         "teams": [{k: f[k] for k in ("team", "delivery", "replies", "time_to_reply", "critical_missed")}

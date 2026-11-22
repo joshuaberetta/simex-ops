@@ -12,7 +12,9 @@ A team leader can also read the other team leaders' mailboxes, read-only, at
 read-only, at /inbox/members/<person id>/.
 ExCon can open any team's inbox read-only at /inbox/as/<team id>/ ("view as team"), its
 leader's at /inbox/as/<team id>/leader/ and a member's at /inbox/as/<team id>/member/<person id>/:
-exactly what they see, without marking anything read.
+exactly what they see, without marking anything read. The persona desk (ops/desk.py) has its
+shared mailbox at /inbox/desk/ (team None, owner None), writing as the personas, and the same
+read-only views of every team.
 """
 
 import copy
@@ -29,7 +31,7 @@ from django.contrib.auth.views import LoginView, LogoutView
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
-from django.db.models import Prefetch, Q
+from django.db.models import Count, Prefetch, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -37,8 +39,8 @@ from django.utils.http import content_disposition_header
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import conf, delivery, inbound, push, render as rnd, signin
-from .access import is_excon, leader_of, login_required_any, participant_of
+from . import conf, delivery, desk, inbound, push, render as rnd, signin
+from .access import desk_of, is_excon, leader_of, login_required_any, participant_of
 from .models import (Mail, MailAction, MailAttachment, MailLabel, MessageAttachment, Person, PushSubscription, Response,
                      Sender, Team, ThreadLabel, audit)
 
@@ -133,6 +135,8 @@ def home(request):
         return redirect("/injects/")
     if participant_of(request.user) or leader_of(request.user):
         return redirect("/inbox/")
+    if desk_of(request.user):
+        return redirect("/inbox/desk/")
     logout(request)
     messages.error(request, "This account has no team. Ask ExCon.")
     return redirect("/login/")
@@ -150,16 +154,25 @@ class Viewer:
     leader's read-only view of their team's inbox; "peer" = a leader's read-only view of
     another team leader's mailbox (as_team: that team); "member" = a leader's read-only view
     of one of their members' mailboxes (pid), or ExCon's (as_team, pid); "leader" = ExCon
-    viewing a team leader's mailbox."""
+    viewing a team leader's mailbox; "desk" = the persona desk's shared mailbox (team None),
+    where person is the desk member (None for ExCon staff). The persona desk also has ExCon's
+    read-only views of the teams (as_team)."""
 
     def __init__(self, request, as_team=None, box="", pid=None):
         self.person = participant_of(request.user)
         self.leader = leader_of(request.user)
+        self.desk_person = desk_of(request.user)
         self.owner, self.leader_mode = None, False  # leader_mode: a leader reading their team's inbox
         self.peer = box == "peer"
+        self.desk = box == "desk"
         if box in ("me", "member") and not conf.flag("personal_mailboxes"):
             raise Http404
-        if self.peer:
+        if self.desk:
+            if not (self.desk_person or is_excon(request.user)):
+                raise PermissionDenied("Persona desk only.")
+            self.team, self.person, self.leader = None, self.desk_person, None
+            self.readonly, self.base = False, "/inbox/desk"
+        elif self.peer:
             if not self.leader:
                 raise PermissionDenied("Team leaders only.")
             self.team = get_object_or_404(peer_teams(self.leader), pk=as_team)
@@ -168,7 +181,7 @@ class Viewer:
                 raise Http404
             self.person, self.readonly, self.base = self.leader, True, f"/inbox/leaders/{self.team.id}"
         elif as_team is not None:
-            if not is_excon(request.user):
+            if not (is_excon(request.user) or self.desk_person):
                 raise PermissionDenied
             self.team = get_object_or_404(Team, pk=as_team)
             self.readonly, self.person, self.leader, self.base = True, None, None, f"/inbox/as/{self.team.id}"
@@ -238,9 +251,11 @@ def peer_teams(leader):
 def mailbox_view(view):
     @login_required_any
     def wrapper(request, *args, as_team=None, box="", pid=None, **kwargs):
-        if as_team is None and not participant_of(request.user) and not leader_of(request.user) \
-                and is_excon(request.user):
-            return redirect("/inboxes/")  # ExCon: choose a team to view as
+        if as_team is None and box != "desk" and not participant_of(request.user) and not leader_of(request.user):
+            if desk_of(request.user):
+                return redirect("/inbox/desk/")
+            if is_excon(request.user):
+                return redirect("/inboxes/")  # ExCon: choose a team to view as
         if box == "me" and not conf.flag("personal_mailboxes") and participant_of(request.user):
             return redirect("/inbox/")
         v = Viewer(request, as_team, box, pid)
@@ -257,7 +272,11 @@ def address_book(v):
     """Who the viewer can write to. In the team inbox and a member's own mailbox: the personas
     ({team} filled with the own team, so the team leader persona is their own leader), their
     teammates (personal mailboxes), from their own mailbox the team itself and, if allowed,
-    the other teams. In a team leader's mailbox: their own team and its members only."""
+    the other teams. In a team leader's mailbox: their own team and its members only. On the
+    persona desk: every active team."""
+    if v.desk:
+        return [{"key": f"t:{t.id}", "name": t.name, "addr": team_address(t), "kind": "team"}
+                for t in Team.objects.filter(active=True)]
     team = v.team
     mates = []
     if conf.flag("personal_mailboxes"):
@@ -327,7 +346,7 @@ TRACKED = {"star", "unstar", "read", "unread", "archive", "unarchive", "trash", 
 def track(v, action, threads=(), **detail):
     """Log a participant's (or a leader's, in their own mailbox) action. Never ExCon's or a
     read-only view."""
-    if v.readonly or not v.person or action not in TRACKED:
+    if v.readonly or not v.person or v.desk or action not in TRACKED:
         return None
     return MailAction.objects.create(**v.box, person=v.person, action=action, threads=[t for t in threads if t][:200],
                                      detail=detail)
@@ -335,7 +354,10 @@ def track(v, action, threads=(), **detail):
 
 def my_identity(v):
     """(From name, address) of what the viewer sends: a member as themselves at the team's
-    address, or from their own mailbox at their own; a team leader as the team leader persona."""
+    address, or from their own mailbox at their own; a team leader as the team leader persona;
+    the persona desk chooses a persona for each message."""
+    if v.desk:
+        return "Persona desk", ""
     if v.leader_box:
         lp = rnd.leader_persona(v.team)
         return (lp["name"], lp["addr"]) if lp else (v.owner.name, team_address(v.team))
@@ -358,7 +380,7 @@ def _resolve(keys, book, v):
             continue
         if k in by:
             out.append(by[k])
-        elif k.startswith("p:") and rnd.LOCAL.match(k[2:]) and not v.leader_box:
+        elif k.startswith("p:") and rnd.LOCAL.match(k[2:]) and not v.leader_box and not v.desk:
             if other_leaders is None:
                 other_leaders = {lp for lp, tid in rnd.leader_locals().items() if tid != v.team.id}
             if k[2:] not in other_leaders:
@@ -407,10 +429,30 @@ def label_of(v, folder):
     return None
 
 
+def desk_filter(v, folder):
+    """On the persona desk, a sidebar filter "a<sender id>" (one persona's conversations) or
+    "t<team id>" (one team's): (kind, Sender or Team), or None."""
+    if not (v.desk and folder and folder[0] in "at" and folder[1:].isdigit()):
+        return None
+    obj = (Sender if folder[0] == "a" else Team).objects.filter(pk=int(folder[1:])).first()
+    return (folder[0], obj) if obj else None
+
+
+def persona_locals(sender):
+    """The usernames a Sender writes as: its own, or with {team}, one per team."""
+    if "{team}" not in sender.local_part:
+        return [sender.local_part]
+    return [rnd.fill(sender.local_part, rnd.team_ctx(t)).lower() for t in Team.objects.all()]
+
+
 def _folder_qs(v, folder, q=""):
     qs = v.mails()
     label = label_of(v, folder)
-    if label:
+    flt = desk_filter(v, folder)
+    if flt:
+        qs = qs.filter(trashed_at__isnull=True).exclude(folder="drafts")
+        qs = qs.filter(desk_team=flt[1]) if flt[0] == "t" else qs.filter(persona__in=persona_locals(flt[1]))
+    elif label:
         qs = qs.filter(trashed_at__isnull=True, thread__in=label.threads.values("thread")).exclude(folder="drafts")
     elif folder == "trash":
         qs = qs.filter(trashed_at__isnull=False)
@@ -456,7 +498,7 @@ def conversations(v, folder, q=""):
     all_in = {}
     for m in (v.mails().filter(thread__in=order).exclude(folder="drafts")
               .only("id", "thread", "folder", "read_at", "from_name", "from_addr", "to_label", "starred", "trashed_at",
-                    "subject", "author__name").select_related("author")):
+                    "subject", "author__name", "persona", "desk_team", "is_test").select_related("author")):
         all_in.setdefault(m.thread, []).append(m)
     on, ids_on = {}, {}
     for tl in ThreadLabel.objects.filter(label__in=v.labels(), thread__in=order).select_related("label"):
@@ -464,12 +506,13 @@ def conversations(v, folder, q=""):
         if folder != f"l{tl.label_id}":  # the label being viewed isn't repeated on every row
             on.setdefault(tl.thread, []).append(_label_dict(tl.label))
     rows = []
+    memo, team_names = {}, dict(Team.objects.values_list("id", "name")) if v.desk else {}
     for t in order:
         latest = threads[t][0]
         conv = [m for m in all_in.get(t, []) if (folder == "trash") == (m.trashed_at is not None)] or threads[t]
         names = []
         for m in sorted(conv, key=lambda x: x.id):
-            n = "me" if m.folder == "sent" and not v.leader_mode else (m.from_name or m.from_addr)
+            n = "me" if m.folder == "sent" and not v.leader_mode and not v.desk else (m.from_name or m.from_addr)
             if v.leader_mode and m.folder == "sent" and m.author:
                 n = m.author.name  # who in the team wrote it
             if n not in names:
@@ -483,13 +526,55 @@ def conversations(v, folder, q=""):
                      "unread": any(m.folder == "inbox" and m.read_at is None for m in conv),
                      "starred": any(m.starred for m in conv), "people": people,
                      "has_files": any(m.files.all() for m in threads[t]), "draft": False,
-                     "labels": sorted(on.get(t, []), key=lambda x: x["name"].lower()), "all_labels": ids_on.get(t, [])})
+                     "labels": sorted(on.get(t, []), key=lambda x: x["name"].lower()), "all_labels": ids_on.get(t, []),
+                     "desk": desk_chips(conv, memo, team_names) if v.desk else None})
     if folder == "replies":  # newest team reply first
         last_sent = {}
         for th, at in v.mails().filter(folder="sent", thread__in=order).values_list("thread", "created_at"):
             last_sent[th] = max(at, last_sent.get(th, at))
         rows.sort(key=lambda r: last_sent.get(r["thread"]) or r["latest"].created_at, reverse=True)
     return rows
+
+
+def desk_chips(mails, memo, team_names):
+    """What a desk conversation shows to tell it apart: its personas (name and colour) and the
+    teams on the other side."""
+    personas, teams = [], []
+    for m in sorted(mails, key=lambda x: x.id):
+        if m.persona and m.persona not in [p["local"] for p in personas]:
+            personas.append(desk.describe(m.persona, memo=memo))
+        name = team_names.get(m.desk_team_id)
+        if name and name not in teams:
+            teams.append(name)
+    return {"personas": personas, "teams": teams, "test": any(m.is_test for m in mails),
+            "colour": personas[0]["colour"] if personas else ""}
+
+
+def desk_side(v):
+    """The persona desk's sidebar: each persona and each team, with its unread conversations."""
+    unread = list(v.mails().filter(folder="inbox", read_at__isnull=True, trashed_at__isnull=True, archived=False)
+                  .values_list("thread", "persona", "desk_team_id").distinct())
+    from .models import NpcProfile
+    ai = set(NpcProfile.objects.filter(enabled=True).values_list("sender_id", flat=True)) if conf.flag("npc_enabled") else set()
+    personas = []
+    for s in desk.personas():
+        locs = set(persona_locals(s))
+        bg, fg = desk.colour(s)
+        personas.append({"key": f"a{s.id}", "name": s.display_name or s.local_part, "addr": s.inapp_address,
+                         "colour": bg, "fg": fg, "ai": s.id in ai,
+                         "unread": len({t for t, p, _ in unread if p in locs})})
+    teams = [{"key": f"t{t.id}", "name": t.name, "test": t.is_test,
+              "unread": len({th for th, _, tid in unread if tid == t.id})} for t in Team.objects.filter(active=True)]
+    return {"personas": personas, "teams": teams}
+
+
+def desk_tabs(person, current):
+    """A persona desk member's tab bar: the desk, and the teams' and team leaders' mailboxes (read-only)."""
+    teams = list(Team.objects.filter(active=True))
+    leads = {p.team_id: p for p in Person.objects.filter(role="tl", active=True, team__in=teams)}
+    for t in teams:
+        t.lead = leads.get(t.id)
+    return {"current": current, "teams": teams, "unread": _unread(None, None)}
 
 
 def _label_dict(label, unread=0):
@@ -548,25 +633,39 @@ def _seen(v):
             v.leader.lead_seen = last
 
 
+DESK = {"name": "Persona desk", "id": None}  # what the templates show as the desk's "team"
+
+
 def _ctx(v, **extra):
-    c = {"v": v, "team": v.team, "base": v.base, "readonly": v.readonly, "folders": v.folders, "me": v.person,
-         "my_address": my_identity(v)[1], "my_name": my_identity(v)[0], **_counts(v),
-         "from_choices": from_choices(v), "from_default": "me" if v.member_box else "team"}
+    choices = from_choices(v)
+    c = {"v": v, "team": DESK if v.desk else v.team, "base": v.base, "readonly": v.readonly, "folders": v.folders,
+         "me": v.person, "my_address": my_identity(v)[1], "my_name": my_identity(v)[0], **_counts(v),
+         "from_choices": choices,
+         "from_default": choices[0]["key"] if v.desk and choices else "me" if v.member_box else "team"}
     c.update(extra)
     c["labels"] = [] if v.leader_mode else labels(v)
     folder = c.get("folder", "")
     c["folder_name"] = dict(v.folders).get(folder) or next((lab["name"] for lab in c["labels"] if lab["key"] == folder), "")
     c["label_colours"] = LABEL_COLOURS
+    if v.desk:
+        c["desk_side"] = desk_side(v)
+        flt = desk_filter(v, folder)
+        if flt:
+            c["folder_name"] = (flt[1].display_name or flt[1].local_part) if flt[0] == "a" else flt[1].name
+    if v.desk_person:
+        c["desk_tabs"] = desk_tabs(v.desk_person, "desk" if v.desk else "teams")
+        c["back_url"], c["me"] = "/inbox/desk/teams/", v.desk_person  # also on the teams it views
     if v.leader:
         c["leader_tabs"] = leader_tabs(v.leader, "team" if v.leader_mode else "peer" if v.peer
                                        else "members" if v.member_box else "mail")
     elif v.person and not v.readonly:
         c["member_tabs"] = member_tabs(v.person, "me" if v.member_box else "team")
-    c["simex_js"] = {"base": v.base, "readonly": v.readonly, "book": address_book(v), "team": v.team.name,
+    c["simex_js"] = {"base": v.base, "readonly": v.readonly, "book": address_book(v), "team": c["team"]["name"]
+                     if v.desk else v.team.name, "desk": v.desk,
                      "maxMb": int(conf.get("max_upload_mb") or 10), "folder": c.get("folder", ""),
                      "unread": c["inbox_unread"], "leader": bool(v.leader), "fromDefault": c["from_default"],
                      # A team leader's device subscribes for their own mailbox from any of their tabs.
-                     "vapid": "" if v.readonly and not v.leader else push.public_key(),
+                     "vapid": "" if (v.readonly and not v.leader) or (v.desk and not v.person) else push.public_key(),
                      "pushBase": "/inbox" if v.leader or v.member_box else v.base,
                      "labels": [{"id": lab["id"], "name": lab["name"]} for lab in c["labels"]]}
     return c
@@ -575,7 +674,7 @@ def _ctx(v, **extra):
 def _folder(v, request):
     default = "replies" if v.leader_mode else "inbox"
     folder = request.GET.get("folder", default)
-    if folder not in dict(v.folders) and (v.leader_mode or not label_of(v, folder)):
+    if folder not in dict(v.folders) and (v.leader_mode or not label_of(v, folder)) and not desk_filter(v, folder):
         folder = default
     return folder
 
@@ -638,13 +737,15 @@ def thread_view(request, v, thread):
     qs = v.mails().filter(thread=thread).exclude(folder="drafts")
     if folder != "trash":
         qs = qs.filter(trashed_at__isnull=True)
-    mails = list(qs.select_related("author", "to_person", "in_reply_to").prefetch_related(FILES).order_by("created_at", "id"))
+    mails = list(qs.select_related("author", "to_person", "in_reply_to", *(["message"] if v.desk else []))
+                 .prefetch_related(FILES).order_by("created_at", "id"))
     if not mails:
         raise Http404
     if not v.readonly:
         v.mails().filter(id__in=[m.id for m in mails], folder="inbox", read_at__isnull=True).update(read_at=timezone.now())
-        inbound.record_read([m for m in mails if m.folder == "inbox" and m.message_id], v.person,
-                            request.META.get("HTTP_USER_AGENT", ""))
+        if not v.desk:  # the desk reading isn't a team reading
+            inbound.record_read([m for m in mails if m.folder == "inbox" and m.message_id], v.person,
+                                request.META.get("HTTP_USER_AGENT", ""))
     if v.leader_mode:
         _team_notes(mails)
         _seen(v)
@@ -671,19 +772,49 @@ def thread_view(request, v, thread):
         own = {b["key"] for b in address_book(v)}
         reply_to, reply_all = [k for k in reply_to if k in own], [k for k in reply_all if k in own]
         can_reply = bool(reply_to)
+    desk_js = {}
+    if v.desk:  # the team on the other side, as the persona of the message
+        teams = [f"t:{m.desk_team_id}" for m in mails if m.desk_team_id]
+        reply_to = [f"t:{last_in.desk_team_id}"] if last_in and last_in.desk_team_id else teams[-1:]
+        reply_all = list(dict.fromkeys(teams))
+        can_reply = bool(reply_to)
+        desk_js = _desk_thread(mails)
     subject = mails[0].subject
     thread_js = {"subject": subject, "thread": thread, "last": last.id,
                  "reply": [k for k in reply_to if k], "replyAll": [k for k in reply_all if k],
                  "msgs": {str(m.id): {"from": m.from_name, "addr": m.from_addr, "body": m.body, "subject": m.subject,
                                       "date": timezone.localtime(m.created_at).strftime("%a, %b %-d, %Y at %H:%M"),
-                                      "to": m.to_label, "reply": [_key_for_sender(m)] if m.folder == "inbox"
-                                      else list(m.recipients.get("to", []))} for m in mails}}
+                                      "to": m.to_label,
+                                      "reply": ([f"t:{m.desk_team_id}"] if m.desk_team_id else []) if v.desk
+                                      else [_key_for_sender(m)] if m.folder == "inbox"
+                                      else list(m.recipients.get("to", [])),
+                                      **({"as": m.desk_as} if v.desk else {})} for m in mails},
+                 **desk_js}
     return render(request, "ops/mail/thread.html", _ctx(
         v, folder=folder, mails=mails, subject=subject, thread=thread, prev_t=prev_t, next_t=next_t,
         pos=i + 1, total=len(keys), last=last, thread_js=thread_js, can_reply=can_reply,
+        desk_chips=desk_chips(mails, {}, dict(Team.objects.values_list("id", "name"))) if v.desk else None,
         in_inbox=any(m.folder == "inbox" and not m.archived for m in mails), starred=any(m.starred for m in mails),
         thread_labels=[_label_dict(tl.label) for tl in ThreadLabel.objects.filter(label__in=v.labels(), thread=thread)
                        .select_related("label").order_by("label__name")]))
+
+
+def _desk_thread(mails):
+    """The persona desk reading a conversation: each message's persona chip, team, who on the
+    desk (or which AI persona) wrote it, and the From each one is answered as (desk_as, the
+    Sender's "p:<username>", {team} unfilled); the conversation's default From and its presence URL."""
+    memo, choices = {}, {f["key"] for f in desk_from_choices()}
+    for m in mails:
+        m.desk_chip = desk.describe(m.persona, m.desk_team, memo) if m.persona else None
+        s, _ = rnd.sender_by_local(m.persona) if m.persona else (None, None)
+        m.desk_as = f"p:{s.local_part}" if s and f"p:{s.local_part}" in choices else ""
+        msg = m.message if m.folder == "sent" and m.message_id else None
+        m.desk_by = "" if not msg else ("Written by the AI persona" if msg.npc else f"Sent by {m.author.name}"
+                                        if m.author else "Inject" if msg.kind in ("live", "test", "oneoff")
+                                        else "Follow-up (ExCon)" if msg.kind == "followup" else "Sent by ExCon")
+    last_in = next((m for m in reversed(mails) if m.folder == "inbox" and m.desk_as), None)
+    default = (last_in or next((m for m in reversed(mails) if m.desk_as), None))
+    return {"from": default.desk_as if default else "", "presence": "/inbox/desk/presence/"}
 
 
 def _key_for_sender(mail):
@@ -706,7 +837,8 @@ def setup(request, v):
 @mailbox_view
 def guide(request, v):
     from . import docs
-    name = "LEADER_GUIDE.md" if v.leader or v.leader_box else "PARTICIPANT_GUIDE.md"
+    name = ("DESK_GUIDE.md" if v.desk or v.desk_person else "LEADER_GUIDE.md" if v.leader or v.leader_box
+            else "PARTICIPANT_GUIDE.md")
     return render(request, "ops/mail/guide.html", _ctx(v, folder="", guide=docs.html(name)))
 
 
@@ -852,7 +984,7 @@ def draft_save(request, v):
         d = Mail(**v.box, folder="drafts", author=v.person, from_name=name, from_addr=addr)
     parent = v.mails().filter(pk=_id(P.get("in_reply_to"))).first()
     d.recipients = {"to": _keys(P.get("to")), "cc": _keys(P.get("cc")), "bcc": _keys(P.get("bcc"))}
-    if P.get("from") in ("team", "me") and from_choices(v):
+    if P.get("from") in {f["key"] for f in from_choices(v)}:
         d.recipients["from"] = P["from"]
     d.to_label = _label(_resolve(d.recipients["to"], address_book(v), v))
     d.subject, d.body = P.get("subject") or "", (P.get("body") or "").replace("\r\n", "\n")
@@ -910,6 +1042,8 @@ def send(request, v):
         return fail(f"Attachments are over {limit // (1024 * 1024)} MB.")
     parent = v.mails().filter(pk=_id(P.get("in_reply_to"))).first()
     fwd = v.mails().filter(pk=_id(P.get("forward_of"))).first()
+    if v.desk:
+        return _send_desk(request, v, P, to + cc + bcc, subject, body, files, parent, fwd, fail, ajax)
     w = sender_box(v, P.get("from"))  # a member chooses which address it goes from
     if not v.leader_box and not w.member_box and not [e for e in to + cc + bcc if e["key"] != f"t:{v.team.id}"]:
         return fail(f"That is {v.team.name}'s own address: send it from your own address, or add someone else.")
@@ -940,8 +1074,47 @@ def send(request, v):
     return redirect(url)
 
 
+def _send_desk(request, v, P, entries, subject, body, files, parent, fwd, fail, ajax):
+    """The persona desk writes as a persona to one or more teams (desk.send). Each team's
+    message goes on its own: one not armed or not deliverable doesn't stop the others."""
+    uploads = [(re.sub(r"[\r\n]+", " ", f.name) or "file", f.content_type or "application/octet-stream", f.read())
+               for f in files]
+    docs = []
+    for a in (fwd.files.all() if fwd else []):  # forwarded: inject documents by reference, other files copied
+        if a.attachment_id:
+            docs.append(a.attachment)
+        elif a.data is not None:
+            uploads.append((a.filename, a.content_type, bytes(a.data)))
+    try:
+        msgs, errors = desk.send(v.person, request.user.get_username(), P.get("from"), entries, subject, body,
+                                 uploads, docs, parent)
+    except desk.DeskError as e:
+        return fail(str(e))
+    v.mails().filter(pk=_id(P.get("draft_id")), folder="drafts").delete()
+    sent = v.mails().filter(message__in=msgs, folder="sent").order_by("id").first()
+    url = f"{v.base}/t/{sent.thread}/?folder=sent" if sent else f"{v.base}/?folder=sent"
+    warning = f"Not sent to {'; '.join(errors)}" if errors else ""
+    if ajax:
+        return JsonResponse({"ok": True, "thread": sent.thread if sent else "", "url": url, "warning": warning})
+    messages.success(request, f"Message sent. {warning}".strip())
+    return redirect(url)
+
+
+def desk_from_choices():
+    """The personas the desk writes as, each with its colour."""
+    out = []
+    for s in desk.personas():
+        bg, fg = desk.colour(s)
+        out.append({"key": f"p:{s.local_part}", "name": s.display_name or s.local_part, "addr": s.inapp_address,
+                    "colour": bg, "fg": fg})
+    return out
+
+
 def from_choices(v):
-    """The addresses a member may send from (the team's and their own), or [] for anyone else."""
+    """The addresses a member may send from (the team's and their own), the personas on the
+    persona desk, or [] for anyone else."""
+    if v.desk:
+        return desk_from_choices()
     if v.readonly or v.leader_box or not v.person or v.person.is_leader or not conf.flag("personal_mailboxes"):
         return []
     return [{"key": "team", "name": f"{v.person.name} ({v.team.name})", "addr": team_address(v.team)},
@@ -1088,6 +1261,53 @@ def _peer_thread(team, sender_team, parent):
     return ""
 
 
+# --- the persona desk's other pages ------------------------------------------------------------------
+
+def _desk_page(view):
+    @login_required_any
+    def wrapper(request, *args, **kwargs):
+        if not (desk_of(request.user) or is_excon(request.user)):
+            raise PermissionDenied("Persona desk only.")
+        return view(request, *args, **kwargs)
+    wrapper.__name__ = view.__name__
+    return wrapper
+
+
+@_desk_page
+def desk_teams(request):
+    """The persona desk's Teams tab: every team's inbox, team leader's and (with personal
+    mailboxes) members' mailboxes, read-only, with what is waiting on the desk from each."""
+    person = desk_of(request.user)
+    tabs = desk_tabs(person, "teams")
+    personal = conf.flag("personal_mailboxes")
+    desk_unread = {r["desk_team_id"]: r["n"] for r in Mail.objects.filter(
+        team=None, owner=None, folder="inbox", read_at__isnull=True, trashed_at__isnull=True)
+        .order_by().values("desk_team_id").annotate(n=Count("thread", distinct=True))}
+    for t in tabs["teams"]:
+        t.unread = _unread(t, None)
+        t.desk_unread = desk_unread.get(t.id, 0)
+        t.members = list(team_members(t).filter(active=True)) if personal else []
+        t.last_in = (Mail.objects.filter(team=None, owner=None, folder="inbox", desk_team=t)
+                     .order_by("-created_at").values_list("created_at", flat=True).first())
+    return render(request, "ops/mail/desk_teams.html", {
+        "team": DESK, "me": person, "base": "/inbox/desk", "readonly": True, "desk_tabs": tabs, "teams": tabs["teams"],
+        "personal": personal, "v": None, "back_url": "/inbox/desk/teams/",
+        "simex_js": {"base": "/inbox/desk", "readonly": True, "book": [], "team": DESK["name"], "leader": False,
+                     "folder": "", "unread": 0, "vapid": "", "pushBase": "/inbox/desk", "labels": []}})
+
+
+@_desk_page
+@require_POST
+def desk_presence(request):
+    """A desk member has a conversation open (replying: writing in it): who else has it now."""
+    thread = (request.POST.get("thread") or "")[:60]
+    if not Mail.objects.filter(team=None, owner=None, thread=thread).exists():
+        raise Http404
+    person = desk_of(request.user)
+    name = person.name if person else (request.user.get_full_name() or request.user.get_username())
+    return JsonResponse({"others": desk.presence(thread, request.user.id, name, request.POST.get("replying") == "1")})
+
+
 # --- polling & files ------------------------------------------------------------------------------
 
 @login_required_any
@@ -1106,7 +1326,8 @@ def poll(request, as_team=None, box="", pid=None):
             "url": f"{v.base}/t/{m.thread}/"}
            for m in (qs.filter(id__gt=since).order_by("-id")[:5] if "since" in request.GET else [])]
     latest_id = latest.id if latest else 0
-    if v.person and not v.readonly and not v.member_box and not v.leader and conf.flag("personal_mailboxes"):
+    if v.person and not v.readonly and not v.member_box and not v.leader and not v.desk \
+            and conf.flag("personal_mailboxes"):
         # In the team inbox, a member is told of mail to them personally too (a copy of the team's
         # mail is in both, and announced once, from here).
         mine = Mail.objects.filter(team=v.team, owner=v.person, folder="inbox", trashed_at__isnull=True)
@@ -1124,8 +1345,10 @@ def poll(request, as_team=None, box="", pid=None):
     if v.leader:  # the tab bar's badges
         tabs = leader_tabs(v.leader, "")
         out.update(mail_unread=tabs["mail_unread"], team_new=tabs["team_new"])
-    elif v.person and not v.readonly and conf.flag("personal_mailboxes"):
+    elif v.person and not v.readonly and not v.desk and conf.flag("personal_mailboxes"):
         out.update(me_unread=_unread(v.team, v.person), team_unread=_unread(v.team, None))
+    if v.desk_person:  # the desk tab's badge
+        out.update(desk_unread=_unread(None, None))
     return JsonResponse(out)
 
 
@@ -1140,6 +1363,8 @@ PUSH_HOSTS = (".push.apple.com", "fcm.googleapis.com", ".push.services.mozilla.c
 def push_subscribe(request, v):
     """Save this device's push subscription for the signed-in participant ("off": remove it)."""
     P = request.POST
+    if not v.person:  # ExCon staff on the persona desk: no person to alert
+        return JsonResponse({"error": "Alerts are for team and desk accounts."}, status=400)
     endpoint = (P.get("endpoint") or "").strip()
     host = endpoint.split("://", 1)[-1].split("/")[0].lower()
     if not endpoint.startswith("https://") or not any(host == h.lstrip(".") or host.endswith(h) for h in PUSH_HOSTS):
@@ -1189,7 +1414,7 @@ def mail_file(request, fid, as_team=None, box="", pid=None):
     team_view = leader and mail.team_id == leader.team_id and (mail.owner_id is None or not mail.owner.is_leader)
     peer = leader and mail.owner_id and peer_teams(leader).filter(pk=mail.team_id).first()
     peer_view = peer and mail.owner_id == getattr(peer.leader(), "id", None)  # another leader's mailbox, read-only
-    if not (mine or team_view or peer_view or is_excon(request.user)):
+    if not (mine or team_view or peer_view or is_excon(request.user) or desk_of(request.user)):
         raise Http404
     data = a.content()
     if data is None:

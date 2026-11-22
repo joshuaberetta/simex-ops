@@ -6,13 +6,13 @@ Web app for UNDAC SIMEX exercise control at **https://ops.simex.kobolabs.dev**: 
 - **Email (Resend)**, the main flow. Personas send from and receive at `@simex.kobolabs.dev`.
 - **SIMEX Mail**, the backup if email has problems: in-app team mailboxes with a webmail-style client and participant logins. No mail server is involved.
 
-Each team has **team members** (the participants, sharing one team mailbox) and **one team leader** from ExCon, who plays the team leader persona in SIMEX Mail: their own mailbox (what is sent as that persona is in their Sent, the team's mail to it in their Inbox, plus injects marked "also to team leaders"), a read-only view of the team's inbox with Claude's reading of each reply, and the team's Dashboard. Teams never see or write to each other. With personal mailboxes on, each member also has their own mailbox with a copy of the team's mail.
+Each team has **team members** (the participants, sharing one team mailbox) and **one team leader** from ExCon, who plays the team leader persona in SIMEX Mail: their own mailbox (what is sent as that persona is in their Sent, the team's mail to it in their Inbox, plus injects marked "also to team leaders"), a read-only view of the team's inbox with Claude's reading of each reply, and the team's Dashboard. Teams never see or write to each other. With personal mailboxes on, each member also has their own mailbox with a copy of the team's mail. The **persona desk** (ExCon role-players, SIMEX Mail only) shares one mailbox where the teams' messages to the personas arrive, answers or writes as any persona but the team leader one, and reads every team's mailbox read-only.
 
 Also in the Django app: Claude's reading of the replies and a Dashboard, a review of each unsent inject, Draft with AI, AI personas that answer the teams in character (off by default), end-of-exercise reports per team and for ExCon, ExCon's Notifications panel, push notifications and QR-code sign-in for SIMEX Mail.
 
 | Where | What |
 |---|---|
-| `web/` | **The app in production** (Django): both channels, participant logins, "view as team", scheduler worker. Read `web/README.md`; the operator manual is `web/docs/MANUAL.md` (in the app under Help), the participant guide `web/docs/PARTICIPANT_GUIDE.md`, the team leaders' `web/docs/LEADER_GUIDE.md`. Spec: `.do/app.yaml` (web + scheduler worker). |
+| `web/` | **The app in production** (Django): both channels, participant logins, "view as team", scheduler worker. Read `web/README.md`; the operator manual is `web/docs/MANUAL.md` (in the app under Help), the participant guide `web/docs/PARTICIPANT_GUIDE.md`, the team leaders' `web/docs/LEADER_GUIDE.md`, the persona desk's `web/docs/DESK_GUIDE.md`. Spec: `.do/app.yaml` (web + scheduler worker). |
 | `app/` | The first version (FastAPI, email only), kept for rollback. Spec: `.do/app-fastapi.yaml`; its manual is `docs/MANUAL.md`. Its backup file can be loaded into the Django app (Settings → Restore merges it in). |
 
 Exercise content never goes into this repo; it reaches the app only through the import page.

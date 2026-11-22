@@ -65,7 +65,7 @@ The <b>Test team</b> receives test runs and test sends; give yourself a login in
 <h2>People</h2>
 <p class="muted small">Every login slip has a QR code: scanning it with a phone's camera signs that person in and walks them through alerts (and, on an iPhone, adding SIMEX Mail to the home screen). <a href="/people/slips/" target="_blank">Sign-in slips for everyone</a> (QR code and username, passwords unchanged); a team's or one person's from their row. A code works on any number of devices for {{ SIGNIN_DAYS }} days, or until that password is reset.</p>
 <table class="list">
-  <thead><tr><th colspan="7">Name · email · team · role (team member: participant; team leader: ExCon, one per team) · team role (members) · active · login</th></tr></thead>
+  <thead><tr><th colspan="7">Name · email · team · role (team member: participant; team leader: ExCon, one per team; persona desk: ExCon, no team, writes as the personas in SIMEX Mail) · team role (members) · active · login</th></tr></thead>
   {% for p in people %}
   <tr><td colspan="7"><form method="post" action="/people/save/" class="rowform">{% csrf_token %}
     <input type="hidden" name="id" value="{{ p.id }}">
@@ -98,7 +98,7 @@ The <b>Test team</b> receives test runs and test sends; give yourself a login in
 <section class="col-side">
 <form method="post" action="/people/bulk/" class="card form">{% csrf_token %}
   <h3>Paste a roster</h3>
-  <p class="small">CSV lines: <code>name,email,team code,role</code> (email optional; role <code>tl</code> for the team's leader, from ExCon, one per team; empty for team members, or a member's team role, e.g. <code>Deputy Team Leader</code>, added to Team roles if new). Unknown team codes create a team. Existing people (same email) are updated.</p>
+  <p class="small">CSV lines: <code>name,email,team code,role</code> (email optional; role <code>tl</code> for the team's leader, from ExCon, one per team; <code>desk</code> for the persona desk, no team code; empty for team members, or a member's team role, e.g. <code>Deputy Team Leader</code>, added to Team roles if new). Unknown team codes create a team. Existing people (same email) are updated.</p>
   <textarea name="csv" rows="10" placeholder="Jane Doe,jane@example.org,a,tl&#10;John Roe,,a,Deputy Team Leader&#10;Ann Poe,,a"></textarea>
   <label class="chk"><input type="checkbox" name="accounts" value="1" checked> create logins for people without one</label>
   <label class="chk"><input type="checkbox" name="replace_placeholders" value="1" checked> remove the placeholder people</label>

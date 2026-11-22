@@ -10,7 +10,8 @@ from . import views_report as rp
 # The participant mail client, mounted on a mailbox: /inbox/ for the logged-in member (their
 # team's inbox) or team leader (their own mailbox), /inbox/me/ for a member's own mailbox,
 # /inbox/as/<team id>/ for ExCon's read-only "view as team", /inbox/as/<team id>/leader/ for that
-# team leader's mailbox and /inbox/as/<team id>/member/<person id>/ for a member's own.
+# team leader's mailbox and /inbox/as/<team id>/member/<person id>/ for a member's own (also the
+# persona desk's), /inbox/desk/ for the persona desk's shared mailbox.
 mail_patterns = [
     path("", p.inbox),
     path("t/<str:thread>/", p.thread_view),
@@ -57,6 +58,9 @@ urlpatterns = [
     path("inbox/personas/", lead.npcs),
     path("inbox/members/<int:pid>/", include(team_patterns), {"box": "member"}),
     path("inbox/me/", include(mail_patterns), {"box": "me"}),
+    path("inbox/desk/teams/", p.desk_teams),
+    path("inbox/desk/presence/", p.desk_presence),
+    path("inbox/desk/", include(mail_patterns), {"box": "desk"}),
     path("inbox/", include(mail_patterns)),
     # ExCon
     path("injects/", x.injects),

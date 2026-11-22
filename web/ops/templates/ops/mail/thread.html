@@ -30,23 +30,26 @@
   <h2 class="gm-thread-subject">{{ subject|default:"(no subject)" }}
     {% if in_inbox %}<span class="gm-label">Inbox</span>{% endif %}
     {% for l in thread_labels %}<span class="gm-label"{% if l.colour %} style="background: {{ l.colour }}; color: {{ l.fg }}"{% endif %}>{{ l.name }}{% if not readonly %}<button type="button" class="gm-label-x" data-unlabel="{{ l.id }}" title="Remove this label" aria-label="Remove label {{ l.name }}">×</button>{% endif %}</span>{% endfor %}
+    {% if desk_chips %}{% for p in desk_chips.personas %}<span class="gm-label gm-persona" style="background: {{ p.colour }}; color: {{ p.fg }}" title="{{ p.addr }}">{{ p.name }}</span>{% endfor %}{% for t in desk_chips.teams %}<span class="gm-label gm-teamchip">{{ t }}</span>{% endfor %}{% endif %}
     {% if mails.0.is_test %}<span class="gm-label test">Test</span>{% endif %}</h2>
+  {% if v.desk %}<div class="gm-presence" data-presence hidden></div>{% endif %}
   {% for m in mails %}
-  <article class="gm-msg {% if forloop.last %}open{% else %}closed{% endif %}" data-msg="{{ m.id }}">
-    <div class="gm-avatar" style="background: {{ m.from_name|default:m.from_addr|avatar_colour }}">{{ m.from_name|default:m.from_addr|initial }}</div>
+  <article class="gm-msg {% if forloop.last %}open{% else %}closed{% endif %}{% if m.desk_chip %} desk-{{ m.folder }}{% endif %}" data-msg="{{ m.id }}"{% if m.desk_chip %} style="--persona: {{ m.desk_chip.colour }}"{% endif %}>
+    <div class="gm-avatar" style="background: {% if m.desk_chip and m.folder == 'sent' %}{{ m.desk_chip.colour }}{% else %}{{ m.from_name|default:m.from_addr|avatar_colour }}{% endif %}">{{ m.from_name|default:m.from_addr|initial }}</div>
     <div class="gm-msg-main">
       <div class="gm-msg-head" data-toggle-msg>
         <div class="gm-msg-who">
           <span class="gm-msg-name">{{ m.from_name|default:m.from_addr }}</span>
           <span class="gm-msg-addr">&lt;{{ m.from_addr }}&gt;</span>
+          {% if m.desk_chip %}<span class="gm-label gm-persona" style="background: {{ m.desk_chip.colour }}; color: {{ m.desk_chip.fg }}">{% if m.folder == 'inbox' %}to {% endif %}{{ m.desk_chip.name }}</span>{% endif %}{% if m.desk_by %}<span class="gm-desk-by">{{ m.desk_by }}</span>{% endif %}
           <div class="gm-msg-to">
             <span class="gm-closed-only gm-msg-snip">{{ m.body|snippet:120 }}</span>
             <span class="gm-open-only">
-              <button type="button" class="gm-to-btn" data-details>{% if m.folder == 'inbox' %}to {% if m.to_person %}{{ m.to_person.name }}{% else %}me{% endif %}{% if m.cc_label %}, {{ m.cc_label|name_only }}{% endif %}{% else %}to {{ m.to_label|name_only|default:"—" }}{% endif %} {% icon "drop" 18 %}</button>
+              <button type="button" class="gm-to-btn" data-details>{% if v.desk %}to {{ m.to_label|name_only|default:"—" }}{% elif m.folder == 'inbox' %}to {% if m.to_person %}{{ m.to_person.name }}{% else %}me{% endif %}{% if m.cc_label %}, {{ m.cc_label|name_only }}{% endif %}{% else %}to {{ m.to_label|name_only|default:"—" }}{% endif %} {% icon "drop" 18 %}</button>
               <div class="gm-details" hidden>
                 <table>
                   <tr><th>from:</th><td><b>{{ m.from_name }}</b> &lt;{{ m.from_addr }}&gt;</td></tr>
-                  <tr><th>to:</th><td>{% if m.folder == 'inbox' %}{% if m.to_label %}{{ m.to_label }}{% else %}{{ team.name }}{% endif %}{% else %}{{ m.to_label }}{% endif %}</td></tr>
+                  <tr><th>to:</th><td>{% if m.folder == 'inbox' and not v.desk %}{% if m.to_label %}{{ m.to_label }}{% else %}{{ team.name }}{% endif %}{% else %}{{ m.to_label }}{% endif %}</td></tr>
                   {% if m.cc_label %}<tr><th>cc:</th><td>{{ m.cc_label }}</td></tr>{% endif %}
                   <tr><th>date:</th><td>{{ m.created_at|date:"M j, Y, H:i" }}</td></tr>
                   <tr><th>subject:</th><td>{{ m.subject }}</td></tr>

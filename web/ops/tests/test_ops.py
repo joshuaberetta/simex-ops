@@ -154,7 +154,9 @@ def test_all_bcc_inapp_copies_every_team(excon):
     do_import(excon, SAMPLE)
     arm()
     deliver_now("3-13")
-    assert sorted(Mail.objects.filter(owner=None).values_list("team__code", flat=True)) == ["a", "b", "c", "d"]
+    assert sorted(Mail.objects.filter(owner=None, team__isnull=False).values_list("team__code", flat=True)) == ["a", "b", "c", "d"]
+    # and in the persona desk's Sent, one per team
+    assert sorted(Mail.objects.filter(team=None, folder="sent").values_list("desk_team__code", flat=True)) == ["a", "b", "c", "d"]
 
 
 def test_participant_sees_only_own_team(excon):
@@ -277,7 +279,7 @@ def test_test_run_inapp_goes_to_test_team(excon):
     assert r.status_code == 302
     TestRunItem.objects.update(due_at=timezone.now() - timedelta(seconds=1))
     delivery.tick()
-    assert set(Mail.objects.values_list("team__code", flat=True)) == {"test"}
+    assert set(Mail.objects.exclude(team=None).values_list("team__code", flat=True)) == {"test"}
     m = Mail.objects.filter(owner=None, subject__contains="Update for Team B").first()
     assert m.subject.startswith("[TEST R1]") and "Team B" in m.banner
     assert Inject.objects.get(mel_id="1-15").status == "scheduled"
@@ -908,7 +910,7 @@ def test_test_run_channel_overrides_the_delivery_setting(excon):
     n = len(mailer.get().sent)
     delivery.tick()
     assert len(mailer.get().sent) == n
-    assert set(Mail.objects.values_list("team__code", flat=True)) == {"test"} and Mail.objects.count() == 4
+    assert set(Mail.objects.exclude(team=None).values_list("team__code", flat=True)) == {"test"} and Mail.objects.count() == 4
     assert "SIMEX Mail" in excon.get(f"/tests/{TestRun.objects.get().id}/").content.decode()
     # By email, a test address pattern is required.
     excon.post("/tests/", {"name": "R3", "scope": "ids", "ids": "1-15", "timing": "interval", "channel": "email",

@@ -1,7 +1,8 @@
 """Who may see what. ExCon (staff or group "excon") sees everything; a participant (team
 member) sees only their own team's inbox; a team leader sees their own mailbox, their team's
-inbox read-only and their team's Dashboard, never another team. Every ExCon view is wrapped
-in excon_required, every leader-only view in leader_required."""
+inbox read-only and their team's Dashboard, never another team; the persona desk (ExCon
+role-players) has its shared mailbox and reads every team's mail, in SIMEX Mail only. Every ExCon
+view is wrapped in excon_required, every leader-only view in leader_required."""
 
 from functools import wraps
 
@@ -29,6 +30,15 @@ def leader_of(user):
         return None
     person = getattr(user, "person", None)
     return person if person and person.active and person.team_id and person.role == "tl" else None
+
+
+def desk_of(user):
+    """The persona desk member (a Person, role desk) behind a login, or None. Not ExCon staff:
+    a desk login reaches SIMEX Mail only."""
+    if not user.is_authenticated:
+        return None
+    person = getattr(user, "person", None)
+    return person if person and person.active and person.role == "desk" else None
 
 
 def excon_required(view):

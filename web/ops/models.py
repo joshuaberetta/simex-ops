@@ -28,7 +28,10 @@ IMPORT_FIELDS = ["seq", "method", "mailbox", "scenario_dt", "send_at", "sender_l
 # A team member is a participant: one of the few people sharing the team's SIMEX Mail inbox.
 # The team leader is the ExCon person who monitors the team (one per team): never a
 # participant, with their own mailbox, a read-only view of the team's and the team Dashboard.
-ROLES = {"member": "Team member", "tl": "Team leader (ExCon)"}
+# The persona desk (ExCon, no team) shares one mailbox in SIMEX Mail where the teams' mail to
+# the personas arrives and from which it writes as any persona (Senders tab); it reads every
+# team's inbox and team leader's mailbox read-only, and has no access to the ExCon screens.
+ROLES = {"member": "Team member", "tl": "Team leader (ExCon)", "desk": "Persona desk (ExCon)"}
 # Within a team, members may also hold a team role (TeamRole: Deputy Team Leader, Logistics...),
 # set by ExCon on People & logins, so the Dashboard and reports can break behaviour down by it.
 
@@ -77,7 +80,7 @@ class Person(models.Model):
     name = models.CharField(max_length=200)
     email = models.CharField(max_length=320, blank=True, default="")
     team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.SET_NULL, related_name="people")
-    role = models.CharField(max_length=20, default="member")  # member | tl (see ROLES)
+    role = models.CharField(max_length=20, default="member")  # member | tl | desk (see ROLES)
     team_role = models.ForeignKey(TeamRole, null=True, blank=True, on_delete=models.SET_NULL,
                                   related_name="people")  # members only
     active = models.BooleanField(default=True)
@@ -93,6 +96,10 @@ class Person(models.Model):
     @property
     def is_leader(self):
         return self.role == "tl"
+
+    @property
+    def is_desk(self):
+        return self.role == "desk"
 
     def __str__(self):
         return self.name
@@ -116,6 +123,8 @@ class Sender(models.Model):
     # The team leader persona (e.g. undac-{team}-tl): played by each team's leader in SIMEX Mail.
     # What is sent as it shows in the leader's Sent; what members write to it, in their Inbox.
     team_leader = models.BooleanField(default=False)
+    # Its colour on the persona desk (one of views_inbox.LABEL_COLOURS; empty = one picked from its username).
+    colour = models.CharField(max_length=7, blank=True, default="")
 
     class Meta:
         ordering = ["local_part"]
@@ -223,7 +232,7 @@ class Message(models.Model):
     """One delivery: an email handed to Resend, or a Mail put in an in-app inbox."""
     inject = models.ForeignKey(Inject, null=True, blank=True, on_delete=models.SET_NULL)
     run = models.ForeignKey(TestRun, null=True, blank=True, on_delete=models.SET_NULL)
-    kind = models.CharField(max_length=10)  # live | test | oneoff | reply | followup | leader
+    kind = models.CharField(max_length=10)  # live | test | oneoff | reply | followup | leader | desk
     channel = models.CharField(max_length=10, default="inapp")
     target = models.CharField(max_length=200, blank=True, default="")
     idem_key = models.CharField(max_length=200, unique=True)
@@ -306,8 +315,10 @@ class Event(models.Model):
 class Mail(models.Model):
     """An item in a mailbox (folder inbox, sent, drafts). A mailbox is (team, owner): owner None
     is the team's shared inbox, owner set is that team leader's own mailbox. A conversation
-    between a team and its leader has the same thread id in both."""
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="mails")
+    between a team and its leader has the same thread id in both. Team None (and owner None) is
+    the persona desk's shared mailbox (ops/desk.py): a copy of what each team writes to the
+    personas (Inbox) and of what the personas send (Sent), desk_team being the team on the other side."""
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.CASCADE, related_name="mails")
     owner = models.ForeignKey(Person, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
     folder = models.CharField(max_length=10, default="inbox")  # inbox | sent
     thread = models.CharField(max_length=40, default="")
@@ -337,6 +348,9 @@ class Mail(models.Model):
     # kept on drafts and sent items.
     recipients = models.JSONField(default=dict, blank=True)
     forward_of = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    # The persona desk's copies: the team on the other side, and for what a team wrote, its Response.
+    desk_team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    desk_response = models.ForeignKey("Response", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
 
     class Meta:
         ordering = ["-created_at", "-id"]
@@ -351,7 +365,7 @@ class Mail(models.Model):
 class MailLabel(models.Model):
     """A mailbox's own label in SIMEX Mail (Gmail's "folders"): applied to whole conversations, which
     may carry several. "Move to" a label = label it and take it out of the Inbox."""
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="mail_labels")
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.CASCADE, related_name="mail_labels")  # None: the desk
     owner = models.ForeignKey(Person, null=True, blank=True, on_delete=models.CASCADE, related_name="+")  # as Mail.owner
     name = models.CharField(max_length=60)
     colour = models.CharField(max_length=7, blank=True, default="")  # one of views_inbox.LABEL_COLOURS

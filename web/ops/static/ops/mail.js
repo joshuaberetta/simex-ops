@@ -150,13 +150,21 @@
       for (const f of ["to", "cc", "bcc"]) { this.keys[f] = []; (d[f] || []).forEach((k) => this.add(f, k)); this.renderChips(f); }
       this.form.elements.subject.value = d.subject || "";
       this.form.elements.body.value = d.body || "";
-      if (this.form.elements.from) { this.form.elements.from.value = d.from || CFG.fromDefault || "team"; this.paintFrom(); }
+      if (this.form.elements.from) {
+        const sel = this.form.elements.from;
+        sel.value = d.from || CFG.fromDefault || "team";
+        if (!sel.value) sel.value = CFG.fromDefault || "team";  // a persona no longer on the list
+        this.paintFrom();
+      }
       this.files = []; this.renderFiles();
       this.dirty = false;
     }
-    paintFrom() {  // which address it goes from, plain to see: the team's or the member's own
+    paintFrom() {  // which address it goes from, plain to see: the team's or the member's own (the desk: the persona's colour)
       const sel = this.form.elements.from;
-      if (sel) sel.closest(".gm-from-field").classList.toggle("own", sel.value === "me");
+      if (!sel) return;
+      const field = sel.closest(".gm-from-field"), opt = sel.selectedOptions && sel.selectedOptions[0];
+      field.classList.toggle("own", sel.value === "me");
+      field.style.setProperty("--from-colour", (opt && opt.dataset.colour) || "transparent");
     }
     data(withFiles) {
       const fd = new FormData();
@@ -204,7 +212,7 @@
       const j = r ? await r.json().catch(() => ({})) : {};
       if (!r || !r.ok || !j.ok) { this.sending = false; snack(j.error || "Sending failed. Check your connection and try again."); return; }
       clearInterval(this.timer);
-      sessionStorage.setItem("simex-snack", "Message sent");
+      sessionStorage.setItem("simex-snack", j.warning ? `Message sent. ${j.warning}` : "Message sent");
       if (this.opts.onSent) this.opts.onSent(j);
       location.reload();
     }
@@ -469,11 +477,12 @@
         const m = tdata.msgs[id] || tdata.msgs[tdata.last];
         let d;
         if (mode === "forward") {
-          d = { to: [], subject: fw(m.subject), forward_of: id,
+          d = { to: [], subject: fw(m.subject), forward_of: id, from: m.as || tdata.from,
             body: `\n\n---------- Forwarded message ---------\nFrom: ${m.from} <${m.addr}>\nDate: ${m.date}\nSubject: ${m.subject}\nTo: ${m.to}\n\n${m.body}` };
         } else {
           // The conversation above is the context, so (as in webmail) the quote is not pasted in.
-          d = { to: mode === "all" ? tdata.replyAll : (m.reply && m.reply.length ? m.reply : tdata.reply), subject: re(m.subject), in_reply_to: id, body: "" };
+          d = { to: mode === "all" ? tdata.replyAll : (m.reply && m.reply.length ? m.reply : tdata.reply), subject: re(m.subject), in_reply_to: id, body: "",
+                from: m.as || tdata.from };  // the persona desk answers as the persona written to
         }
         inline.load(d);
         $(".gm-inline-form", box).dataset.mode = mode;
@@ -487,6 +496,27 @@
       $$("[data-reply-all]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); openInline("all", b.dataset.replyAll); });
       $$("[data-forward]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); openInline("forward", b.dataset.forward); });
       window.simexReply = (mode) => openInline(mode, String(tdata.last));
+    }
+    // The persona desk: who else on the desk has this conversation open, or is answering it.
+    const pres = $("[data-presence]");
+    if (pres && tdata.presence) {
+      const ping = async () => {
+        if (document.hidden) return;
+        const replying = !!(box && !box.hidden && inline && !inline.empty());
+        try {
+          const r = await post(tdata.presence, { thread: tdata.thread, replying: replying ? "1" : "0" });
+          if (!r.ok) return;
+          const others = (await r.json()).others || [];
+          const busy = others.filter((o) => o.replying), names = (l) => l.map((o) => o.name).join(", ");
+          pres.hidden = !others.length;
+          pres.classList.toggle("replying", busy.length > 0);
+          pres.textContent = busy.length ? `${names(busy)} ${busy.length > 1 ? "are" : "is"} writing an answer in this conversation.`
+            : `${names(others)} also ${others.length > 1 ? "have" : "has"} this conversation open.`;
+        } catch (e) { /* offline: next time */ }
+      };
+      ping();
+      setInterval(ping, 15000);
+      if (box) box.addEventListener("input", () => { if (!ping.sent) { ping.sent = true; ping(); } });
     }
   }
 
@@ -653,6 +683,9 @@
       if (j.me_unread !== undefined) {  // a member's tab bar: the team inbox and their own mailbox
         $$("[data-tab-me]").forEach((el) => el.textContent = j.me_unread && !BASE.endsWith("/me") ? j.me_unread : "");
         $$("[data-tab-teambox]").forEach((el) => el.textContent = j.team_unread && BASE.endsWith("/me") ? j.team_unread : "");
+      }
+      if (j.desk_unread !== undefined) {  // the persona desk's tab bar
+        $$("[data-tab-desk]").forEach((el) => el.textContent = j.desk_unread && !BASE.startsWith("/inbox/desk") ? j.desk_unread : "");
       }
             if (j.mail_unread !== undefined) {  // a team leader's tab bar
         $$("[data-tab-mail]").forEach((el) => el.textContent = j.mail_unread ? j.mail_unread : "");
