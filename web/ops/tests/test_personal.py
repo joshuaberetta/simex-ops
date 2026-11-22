@@ -46,8 +46,8 @@ def test_answer_from_own_mailbox_is_the_teams_cc_reaches_a_teammate(excon):
     ta = Team.objects.get(code="a")
     deliver_now("1-15")
     mine = Mail.objects.get(owner=pa.person, folder="inbox")
-    book = {b["key"]: b for b in pa.get("/inbox/me/").context["simex_js"]["book"]}
-    assert f"m:{po.person.id}" in book and f"m:{pa.person.id}" not in book and f"t:{ta.id}" in book
+    reach = lambda k: pa.get(f"/inbox/me/lookup/?key={k}").status_code == 200  # noqa: E731 (the book grows with use)
+    assert reach(f"m:{po.person.id}") and not reach(f"m:{pa.person.id}") and reach(f"t:{ta.id}")
     send(pa, to="p:undac-a-tl", cc=f"m:{po.person.id}", subject="Re: Update", body="Plan by 15:00", in_reply_to=mine.id)
     resp = Response.objects.get()
     team_copy = resp.mail

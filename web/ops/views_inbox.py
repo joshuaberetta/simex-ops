@@ -299,6 +299,42 @@ def address_book(v):
     return book
 
 
+CONTACT_SCAN = 3000  # the latest mails of a mailbox read for its contacts
+
+
+def growing(v):
+    """Whether the viewer's address book is the one it has built (a team inbox or a member's own
+    mailbox, as in any webmail), rather than everyone it may write to (a team leader, the desk)."""
+    return not (v.leader_box or v.desk or v.peer or v.leader_mode)
+
+
+def contacts(v, book=None):
+    """The address book shown: those the mailbox has written to or heard from, latest first.
+    It starts empty; anyone else in address_book(v) is reached by typing their exact address
+    (lookup). A member's contacts are their own mailbox's and the team inbox's."""
+    book = address_book(v) if book is None else book
+    if not growing(v):
+        return book
+    boxes = Q(team=v.team, owner=None)
+    if v.member_box or (v.person and not v.person.is_leader):
+        me = v.owner if v.member_box else v.person
+        boxes |= Q(team=v.team, owner=me)
+    last, memo = {}, {}
+    rows = (Mail.objects.filter(boxes).exclude(folder="draft").order_by("-id")
+            .values("folder", "from_addr", "persona", "recipients", "created_at")[:CONTACT_SCAN])
+    for m in rows:
+        keys = []
+        if m["folder"] == "inbox":
+            keys.append(_key_for_sender(Mail(from_addr=m["from_addr"], persona=m["persona"]), memo))
+        r = m["recipients"] or {}
+        keys += list(r.get("to", [])) + list(r.get("cc", [])) + (list(r.get("bcc", [])) if m["folder"] == "sent" else [])
+        for k in keys:
+            if k and k not in last:
+                last[k] = m["created_at"]
+    known = [b for b in book if b["key"] in last]
+    return sorted(known, key=lambda b: last[b["key"]], reverse=True)
+
+
 def team_address(t):
     return addresses.team_address(t)
 
@@ -639,7 +675,7 @@ def _ctx(v, **extra):
                                        else "members" if v.member_box else "mail")
     elif v.person and not v.readonly:
         c["member_tabs"] = member_tabs(v.person, "me" if v.member_box else "team")
-    c["simex_js"] = {"base": v.base, "readonly": v.readonly, "book": address_book(v), "team": c["team"]["name"]
+    c["simex_js"] = {"base": v.base, "readonly": v.readonly, "book": contacts(v), "team": c["team"]["name"]
                      if v.desk else v.team.name, "desk": v.desk,
                      "maxMb": int(conf.get("max_upload_mb") or 10), "folder": c.get("folder", ""),
                      "unread": c["inbox_unread"], "leader": bool(v.leader), "fromDefault": c["from_default"],
@@ -808,6 +844,22 @@ def _key_for_sender(mail, memo=None):
     if memo[mail.from_addr]:
         return memo[mail.from_addr]
     return f"p:{mail.persona or mail.from_addr.split('@')[0]}"
+
+
+@mailbox_view
+def lookup(request, v):
+    """An address typed in To, Cc or Bcc: who has it, among those the mailbox may write to
+    (exactly that address: the list of personas is never shown), or 404. key=: the name and
+    address behind a key already on a draft or a reply."""
+    q, key = (request.GET.get("q") or "").strip().lower(), (request.GET.get("key") or "").strip()
+    book = address_book(v)
+    if key:  # a recipient already on a draft or a reply: only its name and address
+        hit = (_resolve([key], book, v) or [None])[0]
+    else:
+        hit = next((b for b in book if q and b["addr"].lower() == q), None) if not v.readonly else None
+    if not hit:
+        return JsonResponse({"error": "No one in SIMEX Mail has this address."}, status=404)
+    return JsonResponse(hit)
 
 
 @mailbox_view

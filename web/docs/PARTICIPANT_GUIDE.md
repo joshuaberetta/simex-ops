@@ -39,7 +39,7 @@ SIMEX Mail is your team's mailbox for the exercise. Everything here is **exercis
 
 ## Writing a new message
 - Click **Compose** (top left; on a phone, the button at the bottom right). A *New Message* window opens at the bottom right; you can minimise it or make it full screen.
-- **To:** start typing a name (e.g. "CCDPR", "OCHA", "CNN") and pick from the list. Only the scenario's organisations (and, if ExCon allows it, other teams) can be reached. **Cc / Bcc** add more recipients.
+- **To:** your address book fills up as you go, as in any webmail: everyone who has written to you or whom you have written to, the most recent first. Start typing a name or an address and pick from the list. To write to someone for the first time, type their **full address** (e.g. from a document or a signature) and press Enter: if they are in the exercise, they are added, and stay in your address book. An address shown in red isn't in SIMEX Mail: check it. **Cc / Bcc** add more recipients.
 - **Your team leader** is in the list too (e.g. "UNDAC Team A TL"): write to them, or copy them in, like anyone else. Their answers arrive in your Inbox.
 - Add a **subject** and your message, attach files if needed, and click **Send**.
 - Drafts are saved automatically every few seconds; find them under **Drafts** and click one to continue.

@@ -34,7 +34,7 @@ The tabs come in two groups: what you use while the exercise runs (**Injects**, 
 | **Dashboard** | The exercise at a glance: per team, replies, response times, scores, sentiment over time and a funnel; the rubric heatmap; flags, possibly AI-written replies, what teams ask for and commit to; an AI-written exercise summary (5.7). **End-of-exercise reports** for each team and for ExCon (6.1). |
 | **Log** | Every delivery the app made, with content and status, plus the activity log of every action. |
 | **People & logins** | Teams, participants, and their logins (create, reset password, disable, printable credential sheet). |
-| **Senders** | The personas: username (`cnn`), display name ("CNN Breaking News"). They are also the participants' address book. |
+| **Senders** | The personas: username (`cnn`), display name ("CNN Breaking News"). Participants write to them (their address book grows with use). |
 | **AI personas** | Only while Settings → AI personas is on: personas that answer the teams on their own, in character (5.9). |
 | **Test runs** | Replays injects on a fast clock into the **Test team** mailbox (and, for email injects, to a test address). |
 | **Settings** | **Delivery channel**, footer, subject prefix and inject code in the subject, **AI analysis** and **AI instructions**, team-to-team messaging, attachment limit, email options, grace period, **live sending switch**, backup and restore. |
@@ -93,7 +93,7 @@ Only participant-facing fields are imported. Expected outcomes, story, theme, ke
 ### 3.3 Personas (Senders)
 One row per persona, created from the MEL's sender aliases. Fix display names (e.g. `CCDPR` → "CCDPR Deputy Director"); **rename in injects** keeps injects in step when a username changes. Add personas the MEL lacks (e.g. `cnn` / "CNN Breaking News").
 
-Active senders are the participants' **address book**: they can write to any of them. Untick **active** to hide one.
+Active senders are who participants can write to. Their **address book** starts empty and grows with use, as in a webmail: whoever wrote to their mailbox or was written to (a member's book is their own mailbox's and the team inbox's), latest first. To write to a persona first, a team types its full SIMEX Mail address (from an inject, a document, a signature): SIMEX Mail never lists the personas they haven't been in touch with. Teammates' and the team's addresses are found the same way. Team leaders' and the persona desk's books are full lists, as before. Untick **active** to make a persona unreachable.
 
 **The team leader persona.** Tick **team leader** on the persona each team's leader plays (`undac-{team}-tl`; the import ticks it for you). Then, for each team:
 - what is sent as it (injects, follow-ups, your **Answer as** on the Replies tab, and what the leader writes) lands in the team's inbox as usual **and** in the leader's **Sent**, in the same conversation;

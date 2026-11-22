@@ -240,6 +240,7 @@ body.side-collapsed .gm-labels-head, body.side-collapsed .gm-lmore { display: no
 .gm-chip .gm-avatar { width: 20px; height: 20px; font-size: 11px; }
 .gm-chip button { border: 0; background: none; cursor: pointer; padding: 0 2px; display: inline-flex; color: var(--muted); }
 .gm-chip-input { flex: 1; min-width: 120px; border: 0; outline: none; font: 14px var(--font); height: 28px; }
+.gm-chip-input.bad { color: #c5221f; text-decoration: underline wavy #c5221f; }
 .gm-cc-toggles button { border: 0; background: none; color: var(--ink2); cursor: pointer; padding: 0 4px; }
 .gm-cc-toggles button:hover { text-decoration: underline; }
 .gm-suggest { position: absolute; top: 100%; left: 30px; right: 0; background: #fff; box-shadow: var(--shadow); border-radius: 4px; z-index: 50;

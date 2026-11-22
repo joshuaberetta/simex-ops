@@ -32,8 +32,7 @@ def test_configured_addresses_everywhere(excon):
     assert mine[pb.person.id] == f"jane.doe.{pb.person.id}@epeigonia.org"
     choices = pa.get("/inbox/").context["from_choices"]
     assert [c["addr"] for c in choices] == ["undac-a@epeigonia.org", "jane.doe@epeigonia.org"]
-    book = {b["key"]: b["addr"] for b in po.get("/inbox/").context["simex_js"]["book"]}
-    assert book[f"m:{pa.person.id}"] == "jane.doe@epeigonia.org"
+    assert po.get("/inbox/lookup/?q=jane.doe@epeigonia.org").json()["key"] == f"m:{pa.person.id}"
     # Mail sent from them carries the address, and an answer goes back to the right mailbox.
     deliver_now("1-15")
     send(pa, base="/inbox/me", **{"from": "me"}, to=f"m:{po.person.id}", subject="Hi", body="x")

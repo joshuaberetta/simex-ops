@@ -20,6 +20,7 @@ mail_patterns = [
     path("draft/", p.draft_save),
     path("draft/<int:mid>/", p.draft_get),
     path("send/", p.send),
+    path("lookup/", p.lookup),
     path("poll/", p.poll),
     path("file/<int:fid>/", p.mail_file),
     path("help/", p.guide),

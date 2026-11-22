@@ -91,28 +91,58 @@
         box.innerHTML = items.map((b, i) => `<div data-i="${i}" class="${i === idx ? "on" : ""}"><span class="gm-avatar" style="background:${colour(b.name)}">${esc((b.name || "?")[0].toUpperCase())}</span><span>${esc(b.name)}<small>${esc(b.addr)}${b.kind === "team" ? " · team" : b.kind === "member" ? " · team member" : ""}</small></span></div>`).join("");
         box.hidden = false;
       };
-      input.addEventListener("input", () => { idx = 0; show(); });
+      input.addEventListener("input", () => { idx = 0; input.classList.remove("bad"); input.title = ""; show(); });
       input.addEventListener("focus", show);
       input.addEventListener("blur", () => setTimeout(() => { box.hidden = true; this.commitTyped(field, input); }, 150));
       input.addEventListener("keydown", (e) => {
         if (e.key === "ArrowDown") { idx = Math.min(idx + 1, items.length - 1); show(); e.preventDefault(); }
         else if (e.key === "ArrowUp") { idx = Math.max(idx - 1, 0); show(); e.preventDefault(); }
         else if ((e.key === "Enter" || e.key === "Tab" || e.key === ",") && !box.hidden && items[idx]) { e.preventDefault(); this.add(field, items[idx].key); input.value = ""; show(); }
+        else if ((e.key === "Enter" || e.key === "," || e.key === ";" || (e.key === "Tab" && input.value.trim())) && input.value.trim()) { e.preventDefault(); this.commitTyped(field, input); }
         else if (e.key === "Backspace" && !input.value && this.keys[field].length) { this.remove(field, this.keys[field].at(-1)); }
       });
       box.addEventListener("mousedown", (e) => { const d = e.target.closest("[data-i]"); if (d) { e.preventDefault(); this.add(field, items[+d.dataset.i].key); input.value = ""; show(); } });
       $(`[data-chips="${field}"]`, this.form).addEventListener("click", () => input.focus());
     }
-    commitTyped(field, input) {
-      const v = input.value.trim().toLowerCase();
+    // An address typed in full: from the address book, else anyone the mailbox may write to who
+    // has exactly that address (the server says; then they're in the book from now on).
+    async commitTyped(field, input) {
+      const v = input.value.trim().replace(/[,;]+$/, "").replace(/^.*<([^>]+)>$/, "$1").trim().toLowerCase();
       if (!v) return;
       const hit = BOOK.find((b) => b.addr.toLowerCase() === v || b.name.toLowerCase() === v);
-      if (hit) { this.add(field, hit.key); input.value = ""; }
+      if (hit) { this.add(field, hit.key); input.value = ""; return; }
+      try {
+        const r = await fetch(`${BASE}/lookup/?q=${encodeURIComponent(v)}`, { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } });
+        if (r.ok) {
+          const b = await r.json();
+          if (!byKey[b.key]) { BOOK.unshift(b); byKey[b.key] = b; }
+          if (input.value.trim().toLowerCase().replace(/[,;]+$/, "").endsWith(v)) input.value = "";
+          this.add(field, b.key);
+          return;
+        }
+      } catch (e) { /* offline: left as typed */ }
+      input.classList.add("bad");
+      input.title = "No one in SIMEX Mail has this address: check it.";
+    }
+    async commitAll() {
+      for (const f of ["to", "cc", "bcc"]) {
+        const input = $(`[data-chip-input="${f}"]`, this.form);
+        if (input && input.value.trim()) await this.commitTyped(f, input);
+      }
+    }
+    async lookupName(key) {  // a recipient outside the book (a draft's, a reply's): its name and address
+      try {
+        const r = await fetch(`${BASE}/lookup/?key=${encodeURIComponent(key)}`, { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } });
+        if (r.ok) { byKey[key] = await r.json(); ["to", "cc", "bcc"].forEach((f) => this.keys[f].includes(key) && this.renderChips(f)); }
+      } catch (e) { /* the key stays shown */ }
     }
     add(field, key) {
       if (!key || this.keys[field].includes(key)) return;
       this.keys[field].push(key);
-      if (!byKey[key] && key.startsWith("p:")) byKey[key] = { key, name: key.slice(2), addr: key.slice(2) + "@…", kind: "persona" };
+      if (!byKey[key]) {
+        if (key.startsWith("p:")) byKey[key] = { key, name: key.slice(2), addr: key.slice(2) + "@…", kind: "persona" };
+        this.lookupName(key);
+      }
       this.renderChips(field); this.touch();
     }
     remove(field, key) { this.keys[field] = this.keys[field].filter((k) => k !== key); this.renderChips(field); this.touch(); }
@@ -195,6 +225,8 @@
       const btn = $(".gm-send", this.form);
       const mb = this.files.reduce((s, f) => s + f.size, 0) / 1048576;
       if (mb > CFG.maxMb) { snack(`Attachments are over ${CFG.maxMb} MB.`); return; }
+      await this.commitAll();  // an address still being typed
+      if ($$(".gm-chip-input.bad", this.form).length) { snack("Check the addresses: one of them isn't in SIMEX Mail."); return; }
       if (!this.keys.to.length && !this.keys.cc.length && !this.keys.bcc.length) { snack("Please specify at least one recipient."); return; }
       btn.disabled = true;
       // No autosave while sending: a save landing after the send would leave a copy in Drafts.
