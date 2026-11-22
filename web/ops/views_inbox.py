@@ -274,13 +274,13 @@ def address_book(v):
     the other teams. In a team leader's mailbox: their own team and its members only. On the
     persona desk: every active team."""
     if v.desk:
-        return [{"key": f"t:{t.id}", "name": t.name, "addr": team_address(t), "kind": "team"}
-                for t in Team.objects.filter(active=True)]
+        teams = list(Team.objects.filter(active=True))
+        return [{"key": f"t:{t.id}", "name": t.name, "addr": team_address(t), "kind": "team"} for t in teams] + desk_members(teams)
     team = v.team
     mates = []
     if conf.flag("personal_mailboxes"):
         locs = member_locals(team)
-        mates = [{"key": f"m:{p.id}", "name": p.name, "addr": member_address(p, locs), "kind": "member"}
+        mates = [{"key": f"m:{p.id}", "name": addresses.member_name(p, team), "addr": member_address(p, locs), "kind": "member"}
                  for p in team_members(team).filter(active=True) if p not in (v.owner, v.person)]
     if v.leader_box:
         return [{"key": f"t:{team.id}", "name": team.name, "addr": team_address(team), "kind": "team"}] + mates
@@ -297,6 +297,18 @@ def address_book(v):
         for t in Team.objects.filter(active=True, is_test=False).exclude(pk=team.pk):
             book.append({"key": f"t:{t.id}", "name": t.name, "addr": team_address(t), "kind": "team"})
     return book
+
+
+def desk_members(teams):
+    """The persona desk writes to members one by one too: every active member of those teams,
+    at their own SIMEX Mail address (with personal mailboxes; else their team inbox has it, for
+    them) or, when injects go by email, their own email."""
+    by_email = conf.get("channel_mode") == "email"
+    locs = member_locals() if not by_email else {}
+    people = (Person.objects.participants().filter(active=True, team__in=teams).select_related("team")
+              .order_by("team__name", "name"))
+    return [{"key": f"m:{p.id}", "name": addresses.member_name(p), "kind": "member",
+             "addr": (p.email or "no email address") if by_email else member_address(p, locs)} for p in people]
 
 
 CONTACT_SCAN = 3000  # the latest mails of a mailbox read for its contacts
@@ -377,8 +389,8 @@ def my_identity(v):
         lp = rnd.leader_persona(v.team)
         return (lp["name"], lp["addr"]) if lp else (v.owner.name, team_address(v.team))
     if v.member_box:
-        return v.owner.name, member_address(v.owner)
-    return (f"{v.person.name} ({v.team.name})" if v.person else v.team.name), team_address(v.team)
+        return addresses.member_name(v.owner, v.team), member_address(v.owner)
+    return (addresses.member_name(v.person, v.team) if v.person else v.team.name), team_address(v.team)
 
 
 def _resolve(keys, book, v):
@@ -1152,8 +1164,9 @@ def from_choices(v):
         return desk_from_choices()
     if v.readonly or v.leader_box or not v.person or v.person.is_leader or not conf.flag("personal_mailboxes"):
         return []
-    return [{"key": "team", "name": f"{v.person.name} ({v.team.name})", "addr": team_address(v.team)},
-            {"key": "me", "name": v.person.name, "addr": member_address(v.person)}]
+    name = addresses.member_name(v.person, v.team)
+    return [{"key": "team", "name": name, "addr": team_address(v.team)},
+            {"key": "me", "name": name, "addr": member_address(v.person)}]
 
 
 def sender_box(v, choice):

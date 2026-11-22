@@ -249,3 +249,52 @@ def test_presence():
         {"name": "Anna Desk", "replying": False}]
     assert a.post("/inbox/desk/presence/", {"thread": "t1"}).json()["others"] == [{"name": "Ben Desk", "replying": True}]
     assert a.post("/inbox/desk/presence/", {"thread": "nope"}).status_code == 404
+
+
+def test_desk_writes_to_one_member(excon):
+    setup(excon)
+    ta = Team.objects.get(code="a")
+    pa = participant("a")
+    d = desk_client()
+    book = d.get("/inbox/desk/").context["simex_js"]["book"]
+    entry = next(b for b in book if b["key"] == f"m:{pa.person.id}")
+    assert entry["name"] == "Team A (Person A)" and entry["kind"] == "member"
+    j = d.post("/inbox/desk/send/", {"from": "p:cnn", "to": f"m:{pa.person.id}", "subject": "A word",
+                                     "body": "Just you: a comment?"}, headers=FETCH).json()
+    assert j["ok"], j
+    m = Message.objects.get(kind="desk")
+    assert (m.inbox_owner, m.person, m.target) == (pa.person, pa.person, "Team A (Person A)")
+    got = Mail.objects.get(team=ta, owner=pa.person, folder="inbox", message=m)
+    assert got.to_label == "Team A (Person A)"
+    assert not Mail.objects.filter(team=ta, owner=None, message=m).exists()  # not the team's inbox
+    assert Mail.objects.filter(team=None, folder="sent", message=m, desk_team=ta).exists()
+    # They answer from their own mailbox, as "Team A (Person A)"; the desk has it and answers in kind.
+    r = pa.post("/inbox/me/send/", {"to": "p:cnn", "from": "me", "subject": "Re: A word", "body": "No comment.",
+                                    "in_reply_to": got.id})
+    assert r.status_code == 302
+    resp = Response.objects.get(persona="cnn")
+    assert (resp.person, resp.message) == (pa.person, m)
+    box = Mail.objects.get(team=None, folder="inbox", desk_response=resp)
+    assert box.from_name == "Team A (Person A)" and box.thread == got.thread
+    j = d.post("/inbox/desk/send/", {"from": "p:cnn", "to": f"m:{pa.person.id}", "subject": "Re: A word",
+                                     "body": "Understood.", "in_reply_to": box.id}, headers=FETCH).json()
+    assert j["ok"], j
+    ans = Message.objects.get(kind="reply")
+    assert ans.response == resp and ans.inbox_owner == pa.person
+    assert Mail.objects.filter(team=ta, owner=pa.person, folder="inbox", message=ans, thread=got.thread).exists()
+    assert not Mail.objects.filter(team=ta, owner=None, folder="inbox", message=ans).exists()
+
+
+def test_desk_emails_one_member(excon):
+    setup(excon)
+    conf.put("channel_mode", "email")
+    pa = participant("a")
+    participant("a", "other")
+    d = desk_client()
+    book = d.get("/inbox/desk/").context["simex_js"]["book"]
+    assert next(b for b in book if b["key"] == f"m:{pa.person.id}")["addr"] == pa.person.email
+    j = d.post("/inbox/desk/send/", {"from": "p:cnn", "to": f"m:{pa.person.id}", "subject": "A word",
+                                     "body": "Just you."}, headers=FETCH).json()
+    assert j["ok"], j
+    m = Message.objects.get(kind="desk")
+    assert m.channel == "email" and m.to == [pa.person.email] and m.person == pa.person

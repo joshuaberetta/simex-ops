@@ -19,7 +19,7 @@ from django.db import IntegrityError, connection, transaction
 from django.db.models import F
 from django.utils import timezone
 
-from . import conf, mailer, notices, push, render
+from . import addresses, conf, mailer, notices, push, render
 from .models import (Attachment, Inject, Mail, MailAttachment, Message, MessageAttachment, Person, Team, TestRun,
                      TestRunItem, audit)
 
@@ -413,15 +413,20 @@ def answer(response, body, user="", files=(), attachments=(), ai_draft=None, ide
     from_addr = f'"{name}" <{render.persona_address(sender, persona, ctx, response.channel)}>'
     if response.channel == "inapp":
         team = response.team
+        thread = response.mail.thread if response.mail else ""
+        # A conversation the persona began in the member's own mailbox (the persona desk) goes on there.
+        own = response.person if (response.person_id and thread and Mail.objects.filter(
+            team=team, owner=response.person, thread=thread, message__inbox_owner=response.person).exists()) else None
         d = render.Draft(target=team.name if team else "", from_addr=from_addr, reply_to=None, to=[], cc=[], bcc=[],
                          subject=subject, body=body, footer=cfg.get("footer", ""),
                          attachment_ids=[a.id for a in attachments],
                          team_id=response.team_id, person_id=response.person_id, reply_local=persona,
-                         channel="inapp", inbox_team_id=response.team_id,
-                         to_label=(response.person.name if response.person else (team.name if team else "")))
+                         channel="inapp", inbox_team_id=response.team_id, inbox_owner_id=own.id if own else None,
+                         to_label=(addresses.member_name(response.person, team) if response.person
+                                   else (team.name if team else "")))
         m = new_message(response.inject, d, "reply", idem_key)
         m.response = response
-        m.thread = response.mail.thread if response.mail else ""
+        m.thread = thread
     else:
         quoted = "\n".join("> " + line for line in (response.text or "").splitlines()[:60])
         local_time = timezone.localtime(response.received_at).strftime("%a %d %b %H:%M")

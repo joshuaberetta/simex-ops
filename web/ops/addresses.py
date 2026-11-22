@@ -38,6 +38,12 @@ def slug(text):
     return re.sub(r"[^a-z0-9]+", ".", s).strip(".")
 
 
+def member_name(p, team=None):
+    """How a team member is named in SIMEX Mail (From, To, the address book): "Team A (Jane Doe)"."""
+    team = team or p.team
+    return f"{team.name} ({p.name})" if team else p.name
+
+
 def team_address(t, pats=None):
     pats = pats or patterns()
     ctx = {"team": t.code}

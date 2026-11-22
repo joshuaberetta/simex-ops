@@ -55,7 +55,7 @@ def test_answer_from_own_mailbox_is_the_teams_cc_reaches_a_teammate(excon):
     assert resp.message == mine.message and resp.match == "exact" and resp.person == pa.person
     assert Mail.objects.filter(owner=pa.person, folder="sent", thread=mine.thread).exists()
     omar = Mail.objects.get(owner=po.person, folder="inbox", body="Plan by 15:00")
-    assert omar.from_addr == "jane@a.teams.simex.kobolabs.dev" and omar.cc_label.startswith("Omar")
+    assert omar.from_addr == "jane@a.teams.simex.kobolabs.dev" and omar.cc_label.startswith("Team A (Omar)")
     # Omar's reply all: Jane and the leader persona, not himself.
     page = po.get(f"/inbox/me/t/{omar.thread}/")
     assert set(page.context["thread_js"]["replyAll"]) == {f"m:{pa.person.id}", "p:undac-a-tl"}

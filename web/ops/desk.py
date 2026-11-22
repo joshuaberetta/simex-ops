@@ -1,7 +1,7 @@
 """The persona desk: ExCon role-players (People & logins, role desk; ExCon staff may open it
 too) sharing one SIMEX Mail mailbox (Mail team None, owner None; Viewer box "desk",
 /inbox/desk/) from which they write as any persona of the Senders tab but the team leader
-persona, which the leaders play.
+persona, which the leaders play, to teams or to members one by one.
 
 Its Inbox is a copy of every team message to a persona (on_response: in-app from
 inbound.from_mail, by email once fetched), its Sent a copy of every delivery from a persona
@@ -25,7 +25,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from . import conf, inbound, push, render
-from .models import Mail, MailAttachment, MessageAttachment, NpcReply, Response, Sender, Team, audit
+from .addresses import member_name
+from .models import Mail, MailAttachment, MessageAttachment, NpcReply, Person, Response, Sender, Team, audit
 
 log = logging.getLogger("simex.desk")
 
@@ -119,7 +120,7 @@ def on_delivered(m, mail=None):
 
 
 def _on_delivered(m, mail):
-    if (m.kind == "leader" or m.inbox_owner_id or not m.persona or (m.person_id and m.person.is_leader)
+    if (m.kind == "leader" or (m.inbox_owner_id and m.inbox_owner.is_leader) or not m.persona or (m.person_id and m.person.is_leader)
             or is_leader_persona(m.persona) or Mail.objects.filter(team=None, message=m).exists()):
         return None
     name, addr = email.utils.parseaddr(m.from_addr)
@@ -225,58 +226,75 @@ def send(person, user, from_key, entries, subject, body, files=(), docs=(), pare
         raise DeskError("Choose the persona it goes from.")
     if conf.flag("paused"):
         raise DeskError("Sending is paused (ExCon, Settings).")
-    teams = []
+    targets = []  # (team, member or None): a team's inbox, or one of its members
     for e in entries:
         if e.get("kind") == "team":
             t = Team.objects.filter(pk=int(e["key"][2:]), active=True).first()
-            if t and t not in teams:
-                teams.append(t)
-    if not teams:
-        raise DeskError("Write to one or more teams.")
+            if t and (t, None) not in targets:
+                targets.append((t, None))
+        elif e.get("kind") == "member":
+            p = (Person.objects.participants().filter(pk=int(e["key"][2:]), active=True, team__active=True)
+                 .select_related("team").first())
+            if p and (p.team, p) not in targets:
+                targets.append((p.team, p))
+    if not targets:
+        raise DeskError("Write to one or more teams or team members.")
     who = person.name if person else user
     msgs, errors = [], []
     from . import delivery
-    for t in teams:
+    for t, member in targets:
+        label = member_name(member) if member else t.name
         ctx = render.team_ctx(t)
         local = render.fill(s.local_part, ctx).lower()
         response = answering(parent, t)
+        if response is not None and member and response.person_id != member.id:
+            response = None  # another member's message: this one is written to them afresh
         if response is not None and (response.persona or "") == local and (response.channel == "email" or response.team_id):
             m = delivery.answer(response, body, user=user, files=files, attachments=docs, author=person)
         elif not conf.flag("live_armed") and not t.is_test:
-            errors.append(f"{t.name}: live sending is not armed (ExCon, Settings).")
+            errors.append(f"{label}: live sending is not armed (ExCon, Settings).")
             continue
         else:
-            m, err = _new(s, local, ctx, t, subject, body, files, docs, parent, response, person, user)
+            m, err = _new(s, local, ctx, t, subject, body, files, docs, parent, response, person, user, member)
             if err:
-                errors.append(f"{t.name}: {err}")
+                errors.append(f"{label}: {err}")
                 continue
         if response is not None:
             skip_ai(response, s, who)
         if m.status == "failed":
-            errors.append(f"{t.name}: {m.error or 'not delivered'}")
+            errors.append(f"{label}: {m.error or 'not delivered'}")
         msgs.append(m)
     if not [m for m in msgs if m.status != "failed"]:
         raise DeskError("; ".join(errors) or "Nothing was sent.")
     return msgs, errors
 
 
-def _new(s, local, ctx, team, subject, body, files, docs, parent, response, person, user):
-    """A new message from the persona to a team (kind desk), delivered now. Returns (Message, error)."""
+def _new(s, local, ctx, team, subject, body, files, docs, parent, response, person, user, member=None):
+    """A new message from the persona to a team or one of its members (kind desk), delivered
+    now. In-app, a member's goes to their own mailbox only (personal mailboxes; else to the team
+    inbox, for them). Returns (Message, error)."""
     from . import delivery
     cfg = conf.get_all()
     name = (render.fill(s.display_name, ctx) or local).replace('"', "'")
     channel = response.channel if response is not None else (
         "email" if conf.get("channel_mode") == "email" else "inapp")
-    common = dict(target=team.name, subject=subject, body=body, footer=cfg.get("footer", ""),
-                  attachment_ids=[a.id for a in docs], team_id=team.id, reply_local=local)
+    label = member_name(member) if member else team.name
+    common = dict(target=label, subject=subject, body=body, footer=cfg.get("footer", ""),
+                  attachment_ids=[a.id for a in docs], team_id=team.id, reply_local=local,
+                  person_id=member.id if member else None)
     thread = ""
     if channel == "inapp":
-        if parent is not None and Mail.objects.filter(team=team, owner=None, thread=parent.thread).exists():
-            thread = parent.thread  # the team's own conversation goes on
+        own = member if member and conf.flag("personal_mailboxes") else None
+        if parent is not None and Mail.objects.filter(team=team, owner=own, thread=parent.thread).exists():
+            thread = parent.thread  # the conversation goes on
         d = render.Draft(**common, from_addr=f'"{name}" <{render.persona_address(s, local, ctx)}>', reply_to=None,
-                         to=[], cc=[], bcc=[], channel="inapp", inbox_team_id=team.id, to_label=team.name)
+                         to=[], cc=[], bcc=[], channel="inapp", inbox_team_id=team.id, to_label=label,
+                         inbox_owner_id=own.id if own else None)
     else:
-        to = [team.email] if team.email else [p.email for p in delivery.people_of(team) if p.email]
+        if member:
+            to = [member.email] if member.email else []
+        else:
+            to = [team.email] if team.email else [p.email for p in delivery.people_of(team) if p.email]
         to = [a for a in to if not render.PLACEHOLDER_DOMAIN.search(a)]
         if not to:
             return None, "no email address (People & logins)."

@@ -288,7 +288,7 @@ def build_inapp(inj, cfg):
                 warnings.append(f"{t.name} has no participants.")
             for p in people:
                 targets.append((f"{p.name} ({t.name})", {"team": t.code, "team_name": t.name, "name": p.name,
-                                                          "first_name": p.first_name}, t, p, p.name))
+                                                          "first_name": p.first_name}, t, p, f"{t.name} ({p.name})"))
         elif inj.delivery == "each_team":
             targets.append((t.name, {"team": t.code, "team_name": t.name, "name": t.name, "first_name": t.name},
                             t, None, t.name))
