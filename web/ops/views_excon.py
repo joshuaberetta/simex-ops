@@ -21,7 +21,7 @@ from django.utils import timezone
 from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_POST
 
-from . import (ai, legacy_import, backup, checks, conf, delivery, desk, documents, importer, inbound, logins, mailer,
+from . import (addresses, ai, legacy_import, backup, checks, conf, delivery, desk, documents, importer, inbound, logins, mailer,
                notices, render as rnd, roster, signin)
 from .access import excon_required
 from .models import (CHANNELS, DELIVERY_MODES, ROLES, STATUSES, AiGrade, Attachment, AttachmentImport, Audit, Grade,
@@ -536,6 +536,11 @@ def senders_page(request):
         if clash:
             messages.error(request, f"{x.inapp_address} is already the SIMEX Mail address of {clash.local_part}.")
             return redirect("/senders/")
+        team_clash = next((t for t in Team.objects.all() if addresses.team_address(t) == rnd.persona_address(
+            x, rnd.fill(x.local_part, rnd.team_ctx(t)).lower(), rnd.team_ctx(t))), None)
+        if team_clash:
+            messages.error(request, f"{addresses.team_address(team_clash)} is {team_clash.name}'s address in SIMEX Mail.")
+            return redirect("/senders/")
         x.active = P.get("active") == "1" or not sid
         x.team_leader = P.get("team_leader") == "1"
         x.save()
@@ -552,7 +557,34 @@ def senders_page(request):
     for x in senders:
         x.usage = usage.get(x.local_part, 0)
         x.desk_colour = desk.colour(x)[0]
-    return render(request, "ops/senders.html", {"tab": "senders", "senders": senders, "colours": LABEL_COLOURS})
+    cfg = conf.get_all()
+    teams = list(Team.objects.filter(active=True))
+    members = addresses.member_addresses()
+    examples = [{"team": t, "addr": addresses.team_address(t),
+                 "members": [(p.name, members.get(p.id)) for p in Person.objects.participants().filter(team=t)[:3]]}
+                for t in teams]
+    return render(request, "ops/senders.html", {"tab": "senders", "senders": senders, "colours": LABEL_COLOURS,
+                                                "addr": {k: cfg.get(f"addr_{k}", "") for k in addresses.KEYS},
+                                                "addr_defaults": addresses.defaults(), "addr_examples": examples})
+
+
+@excon_required
+@require_POST
+def team_addresses(request):
+    """The SIMEX Mail addresses of the teams and members' own mailboxes (ops/addresses.py)."""
+    vals = {k: re.sub(r"\s+", "", (request.POST.get(k) or "").strip().lower().lstrip("@")) for k in addresses.KEYS}
+    vals = {k: re.sub(r"@.*$", "", v) if k.endswith("local") else v for k, v in vals.items()}
+    d = addresses.defaults()
+    errors = addresses.check({k: vals[k] or d[k] for k in addresses.KEYS})
+    if errors:
+        messages.error(request, " ".join(errors))
+        return redirect("/senders/#team-addresses")
+    for k in addresses.KEYS:
+        conf.put(f"addr_{k}", "" if vals[k] == d[k] else vals[k])
+    audit("team_addresses", ", ".join(f"{k}={vals[k] or 'default'}" for k in addresses.KEYS), _u(request))
+    messages.success(request, "Team and member addresses saved: SIMEX Mail uses them from now on (mail already "
+                              "sent keeps its address).")
+    return redirect("/senders/#team-addresses")
 
 
 @excon_required

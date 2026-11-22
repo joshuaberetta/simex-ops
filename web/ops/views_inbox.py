@@ -20,7 +20,6 @@ read-only views of every team.
 import copy
 import json
 import re
-import unicodedata
 import uuid
 from datetime import timedelta
 
@@ -39,7 +38,7 @@ from django.utils.http import content_disposition_header
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import conf, delivery, desk, inbound, push, render as rnd, signin
+from . import addresses, conf, delivery, desk, inbound, push, render as rnd, signin
 from .access import desk_of, is_excon, leader_of, login_required_any, participant_of
 from .models import (Mail, MailAction, MailAttachment, MailLabel, MessageAttachment, Person, PushSubscription, Response,
                      Sender, Team, ThreadLabel, audit)
@@ -301,40 +300,20 @@ def address_book(v):
 
 
 def team_address(t):
-    return f"{t.code}@teams.{settings.MAIL_DOMAIN}"
+    return addresses.team_address(t)
 
 
-def _slug(name):
-    ascii_name = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode().lower()
-    return re.sub(r"[^a-z0-9]+", ".", ascii_name).strip(".") or "member"
-
-
-def member_locals(team):
-    """{person id: the local part of their own address}: their name (jane.doe), with their id
-    after it when a teammate has the same name."""
-    out, taken = {}, set()
-    for p in sorted(team_members(team), key=lambda p: p.id):
-        local = _slug(p.name)
-        out[p.id] = f"{local}.{p.id}" if local in taken else local
-        taken.add(local)
-    return out
+def member_locals(team=None):
+    """{person id: their own address} (addresses.member_addresses: the Senders tab's pattern)."""
+    return addresses.member_addresses()
 
 
 def member_address(p, locs=None):
-    """A member's own address, e.g. jane.doe@a.teams.<MAIL_DOMAIN>."""
-    local = (locs or member_locals(p.team)).get(p.id) or f"member.{p.id}"
-    return f"{local}@{p.team.code}.teams.{settings.MAIL_DOMAIN}"
+    """A member's own address, e.g. jane.doe@a.teams.<MAIL_DOMAIN> (Senders tab)."""
+    return (locs or member_locals()).get(p.id) or f"member.{p.id}@{settings.MAIL_DOMAIN}"
 
 
-def member_by_address(addr):
-    """The member whose own address this is, or None."""
-    local, _, domain = (addr or "").lower().partition("@")
-    suffix = f".teams.{settings.MAIL_DOMAIN}".lower()
-    team = Team.objects.filter(code=domain[:-len(suffix)]).first() if domain.endswith(suffix) else None
-    if not team:
-        return None
-    pid = next((pid for pid, lp in member_locals(team).items() if lp == local), None)
-    return team_members(team).filter(pk=pid).first() if pid else None
+member_by_address = addresses.member_by_address
 
 
 # What participants do in their mailbox, kept with its time for the end-of-exercise reports
@@ -780,13 +759,14 @@ def thread_view(request, v, thread):
         can_reply = bool(reply_to)
         desk_js = _desk_thread(mails)
     subject = mails[0].subject
+    memo = {}
     thread_js = {"subject": subject, "thread": thread, "last": last.id,
                  "reply": [k for k in reply_to if k], "replyAll": [k for k in reply_all if k],
                  "msgs": {str(m.id): {"from": m.from_name, "addr": m.from_addr, "body": m.body, "subject": m.subject,
                                       "date": timezone.localtime(m.created_at).strftime("%a, %b %-d, %Y at %H:%M"),
                                       "to": m.to_label,
                                       "reply": ([f"t:{m.desk_team_id}"] if m.desk_team_id else []) if v.desk
-                                      else [_key_for_sender(m)] if m.folder == "inbox"
+                                      else [_key_for_sender(m, memo)] if m.folder == "inbox"
                                       else list(m.recipients.get("to", [])),
                                       **({"as": m.desk_as} if v.desk else {})} for m in mails},
                  **desk_js}
@@ -817,13 +797,16 @@ def _desk_thread(mails):
     return {"from": default.desk_as if default else "", "presence": "/inbox/desk/presence/"}
 
 
-def _key_for_sender(mail):
-    if mail.from_addr.endswith(f".teams.{settings.MAIL_DOMAIN}"):  # a member's own address
-        p = member_by_address(mail.from_addr)
-        return f"m:{p.id}" if p else ""
-    if mail.from_addr.endswith(f"@teams.{settings.MAIL_DOMAIN}"):
-        t = Team.objects.filter(code=mail.from_addr.split("@")[0]).first()
-        return f"t:{t.id}" if t else ""
+def _key_for_sender(mail, memo=None):
+    """The address-book key of who sent mail: a team, a member's own address or a persona.
+    memo: a dict kept over one page's messages."""
+    memo = {} if memo is None else memo
+    if mail.from_addr not in memo:
+        t = addresses.team_by_address(mail.from_addr)
+        p = None if t else member_by_address(mail.from_addr)
+        memo[mail.from_addr] = f"t:{t.id}" if t else f"m:{p.id}" if p else None
+    if memo[mail.from_addr]:
+        return memo[mail.from_addr]
     return f"p:{mail.persona or mail.from_addr.split('@')[0]}"
 
 

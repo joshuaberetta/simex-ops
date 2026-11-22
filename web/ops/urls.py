@@ -86,6 +86,7 @@ urlpatterns = [
     path("import/attachments/", x.import_attachments),
     path("import/clear/", x.injects_clear),
     path("senders/", x.senders_page),
+    path("senders/addresses/", x.team_addresses),
     path("senders/<int:sid>/delete/", x.sender_delete),
     path("npcs/", npc.npcs_page),
     path("npcs/<int:pid>/", npc.npc_page),

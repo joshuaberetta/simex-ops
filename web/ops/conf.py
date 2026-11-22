@@ -18,6 +18,12 @@ DEFAULTS = {
     # Each team member also has their own mailbox (besides the team's shared inbox), which gets a
     # copy of the team's mail, and members and their leader write to each other there.
     "personal_mailboxes": "1",
+    # SIMEX Mail addresses of the teams and members' own mailboxes (ops/addresses.py; Senders tab):
+    # empty = the defaults, <team>@teams.<MAIL_DOMAIN> and <name>@<team>.teams.<MAIL_DOMAIN>.
+    "addr_team_local": "",
+    "addr_team_domain": "",
+    "addr_member_local": "",
+    "addr_member_domain": "",
     "max_upload_mb": "10",  # participants' attachments
     # How injects are delivered: "email" (Resend, the main flow), "inapp" (SIMEX Mail, the
     # backup if email has problems) or "per_inject" (each inject's own channel field).

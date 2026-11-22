@@ -36,4 +36,17 @@ The <b>team leader</b> persona (e.g. <code>undac-{team}-tl</code>) is played by 
   <input name="reply_to" placeholder="reply-to (optional)">
   <button class="btn small primary">Add sender</button>
 </form>
+
+<h2 id="team-addresses">Team and member addresses</h2>
+<p class="muted small">The addresses the teams and their members have in SIMEX Mail, as the personas have theirs: the team's shared inbox, and each member's own mailbox (My mail). <code>{team}</code> is the team code; for members, <code>{name}</code> is their full name (<code>jane.doe</code>), <code>{first}</code> and <code>{last}</code> their first and last names. A member whose address is taken already (a namesake, a team, a persona) gets their number after it. Empty parts use the defaults shown. SIMEX Mail only: nothing is emailed to these addresses, and mail already sent keeps the address it had.</p>
+<form method="post" action="/senders/addresses/" class="card rowform">{% csrf_token %}
+  <b>Team</b> <span class="addr"><input name="team_local" value="{{ addr.team_local }}" placeholder="{{ addr_defaults.team_local }}" title="username, e.g. undac-{team}"><span>@</span><input name="team_domain" value="{{ addr.team_domain }}" placeholder="{{ addr_defaults.team_domain }}" title="domain, e.g. epeigonia.org"></span>
+  <b>Member</b> <span class="addr"><input name="member_local" value="{{ addr.member_local }}" placeholder="{{ addr_defaults.member_local }}" title="username, e.g. {first}.{last}"><span>@</span><input name="member_domain" value="{{ addr.member_domain }}" placeholder="{{ addr_defaults.member_domain }}" title="domain, e.g. epeigonia.org"></span>
+  <button class="btn small primary">Save addresses</button>
+</form>
+{% if addr_examples %}<table class="list small">
+  <thead><tr><th>Team</th><th>Team address</th><th>Members' own addresses (first three)</th></tr></thead>
+  {% for e in addr_examples %}<tr><td>{{ e.team.name }}</td><td><code>{{ e.addr }}</code></td>
+    <td>{% for name, a in e.members %}{{ name }} <code>{{ a }}</code>{% if not forloop.last %} · {% endif %}{% empty %}<span class="muted">no members</span>{% endfor %}</td></tr>{% endfor %}
+</table>{% endif %}
 {% endblock %}
