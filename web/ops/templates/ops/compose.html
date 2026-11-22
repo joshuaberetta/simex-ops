@@ -1,0 +1,38 @@
+{% extends "ops/base.html" %}
+{% block title %}Compose · SIMEX ops{% endblock %}
+{% block body %}
+<h1>Compose</h1>
+<p class="muted">Write as any persona to teams or team members, now, without making an inject: the same as <b>Write as a persona</b> on the <a href="/inbox/desk/">persona desk</a>.
+One message per team or member ticked, in SIMEX Mail or by email as the delivery channel is (Settings). It is logged as kind <i>desk</i>: out of the injects' figures, but the teams' replies to it are matched like any other.</p>
+<form method="post" action="/compose/" enctype="multipart/form-data" class="card form live-card" style="max-width:760px">{% csrf_token %}
+  <label>From <span class="hint">every active persona but the team leader persona (the leaders play it)</span>
+    <select name="from" required><option value="">Choose a persona…</option>
+      {% for p in personas %}<option value="{{ p.key }}" {% if form.from == p.key %}selected{% endif %}>{{ p.name }} &lt;{{ p.addr }}&gt;</option>{% endfor %}
+    </select></label>
+  <fieldset><legend>To</legend>
+    {% for g in by_team %}<div>
+      <label class="chk"><input type="checkbox" name="to" value="{{ g.key }}" {% if g.key in form.to %}checked{% endif %}> <b>{{ g.team.name }}</b>{% if g.team.is_test %} <span class="muted small">test</span>{% endif %} <span class="muted small">team inbox</span></label>
+      {% for e in g.members %}<label class="chk"><input type="checkbox" name="to" value="{{ e.key }}" {% if e.key in form.to %}checked{% endif %}> {{ e.name }} <span class="muted small">{{ e.addr }}</span></label>{% endfor %}
+    </div>{% empty %}<p class="muted small">No active teams (People &amp; logins).</p>{% endfor %}
+    <p class="hint">A member's message goes to their own mailbox only (with personal mailboxes off, to the team inbox, for them; by email, to their own email address).</p>
+  </fieldset>
+  <label>Subject <input name="subject" value="{{ form.subject }}"></label>
+  <label>Message <textarea name="body" rows="8">{{ form.body }}</textarea></label>
+  <label>Files <span class="hint">max {{ max_mb }} MB in all</span> <input type="file" name="files" multiple></label>
+  {% if cfg.paused == '1' %}<p class="muted small">Sending is paused (Settings).</p>
+  {% elif cfg.live_armed != '1' %}<p class="muted small">Live sending is disarmed (Settings): only the Test team can be written to.</p>{% endif %}
+  <button class="btn danger" {% if cfg.paused == '1' %}disabled{% endif %}>Send now</button>
+</form>
+
+<h3>Sent from the desk and here</h3>
+{% if recent %}
+<table class="list">
+  <thead><tr><th>Sent</th><th>From</th><th>To</th><th>Subject</th><th>By</th><th>Status</th></tr></thead>
+  {% for m in recent %}
+  <tr><td class="small">{{ m.sent_at|default:m.created_at|date:"D H:i" }}</td><td>{{ m.persona }}</td><td>{{ m.target }}</td>
+    <td><a href="/log/{{ m.id }}/">{{ m.subject|default:"(no subject)" }}</a></td><td class="small">{% if m.author %}{{ m.author.name }}{% else %}ExCon{% endif %}</td>
+    <td class="small">{{ m.status }}{% if m.error %} <span class="muted">{{ m.error }}</span>{% endif %}</td></tr>
+  {% endfor %}
+</table>
+{% else %}<p class="muted">Nothing yet.</p>{% endif %}
+{% endblock %}

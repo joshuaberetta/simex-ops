@@ -24,13 +24,14 @@ SIMEX ops and SIMEX Mail are open source under the GNU AGPL-3.0: every page of b
 
 ## 2. The tabs
 
-The tabs come in two groups: what you use while the exercise runs (**Injects**, **Replies**, **Team inboxes**, **Dashboard**, **Log**), then, after the divider, setting it up (**People & logins**, **Senders**, **Test runs**, **Settings**).
+The tabs come in two groups: what you use while the exercise runs (**Injects**, **Replies**, **Team inboxes**, **Compose**, **Dashboard**, **Log**), then, after the divider, setting it up (**People & logins**, **Senders**, **Test runs**, **Settings**).
 
 | Tab | What it is for |
 |---|---|
 | **Injects** | The schedule, grouped by day (click a day to fold it; each shows its count, time span, statuses, files and how many need attention). Filter by day, status or **Needs attention**; open an inject to edit, preview, test or send it; change the channel in bulk. Import from the MEL is here too, and **Draft with AI** (5.8). |
 | **Replies** | Everything participants sent: team summary, inject × team grid, **Read / opens & clicks**, the inbox, and grading. |
 | **Team inboxes** | Each team's mailbox at a glance (received, unread, sent, last sign-in), **View as team**, the team leader's and each member's own mailbox, **Open the persona desk** (5.10), and **Clear a team's mailbox** after testing (section 6). |
+| **Compose** | Write as any persona (but the team leader persona) to teams or team members, now, without making an inject: the persona desk's **Write as a persona** on these screens (5.3), with what was sent from here and the desk below. |
 | **Dashboard** | The exercise at a glance: per team, replies, response times, scores, sentiment over time and a funnel; the rubric heatmap; flags, possibly AI-written replies, what teams ask for and commit to; an AI-written exercise summary (5.7). **End-of-exercise reports** for each team and for ExCon (6.1). |
 | **Log** | Every delivery the app made, with content and status, plus the activity log of every action. |
 | **People & logins** | Teams, participants, and their logins (create, reset password, disable, printable credential sheet). |
@@ -185,6 +186,7 @@ To rehearse the whole loop, sign in as your Test team login (another browser or 
 - **Send now:** on the inject, type its id under **Send live now**. In-app messages land at once.
 - **Hold:** **Back to draft** or **Cancel inject**. **Edit:** change and **Save** — what is saved at the send time is what goes out.
 - **Ad-hoc inject:** **Injects → New inject**: any persona to any teams, participants or (email) addresses. It starts a new conversation; use it for new information, not to correct one already sent.
+- **Just a message:** **Compose** writes as any persona but the team leader persona to the teams and members you tick, at once, with no inject (as **Write as a persona** on the persona desk, 5.10): one message each, in SIMEX Mail or by email as the delivery channel is, logged as kind *desk* (kept out of the injects' figures; the teams' replies to it are matched like any other). A member's goes to their own mailbox only. Live sending must be armed (but for the Test team) and sending not paused. Below the form: everything sent from Compose and the desk, with who sent it. Its conversations show on the persona desk, where you answer the teams' replies.
 - **Follow-up / correction** (a document or link was missing, a figure was wrong): on the delivered inject, **Send a follow-up**. Tick who gets it (every recipient of the inject is ticked; untick the teams that don't need it), keep the subject `Re: {subject}` ({subject} is the original subject, so mail clients group it with the original), write the message (placeholders {team} {team_name} {name} {first_name} work), tick attachments of the inject or add new files (they are also added to the inject), type the inject id and **Send follow-up**. It comes from the inject's persona in the team's existing conversation (in-app, delivered at once) or as a reply in the email thread (email, sent by the scheduler within seconds, quoting the original). It is a live send: live sending must be armed and sending not paused. Teams' replies to it count as replies to the inject, and it shows in the conversation on the reply page and in the Log (kind *followup*).
 - **Let Claude write it:** a new inject, a follow-up or a persona's answer can be drafted with AI first (5.8); you still send it here.
 - **Not sent yet?** Just fix the inject (add the attachment, edit the body) and **Save**; no follow-up needed.

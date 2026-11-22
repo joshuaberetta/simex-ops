@@ -298,3 +298,33 @@ def test_desk_emails_one_member(excon):
     assert j["ok"], j
     m = Message.objects.get(kind="desk")
     assert m.channel == "email" and m.to == [pa.person.email] and m.person == pa.person
+
+
+def test_excon_compose_tab(excon):
+    setup(excon)
+    ta, tb = Team.objects.get(code="a"), Team.objects.get(code="b")
+    conf.put("personal_mailboxes", "1")
+    member = Person.objects.participants().filter(team=tb, active=True).first()
+    page = excon.get("/compose/")
+    assert page.status_code == 200 and page.context["tab"] == "compose"
+    assert "p:undac-{team}-tl" not in [p["key"] for p in page.context["personas"]]
+    group = next(g for g in page.context["by_team"] if g["team"] == tb)
+    assert f"m:{member.id}" in [e["key"] for e in group["members"]]
+    r = excon.post("/compose/", {"from": "p:cnn", "to": [f"t:{ta.id}", f"m:{member.id}"], "subject": "Breaking",
+                                 "body": "A statement?"})
+    assert r.status_code == 302 and r.url == "/compose/"
+    msgs = Message.objects.filter(kind="desk")
+    assert msgs.count() == 2 and all(m.author is None and m.inject is None and m.status == "sent" for m in msgs)
+    assert Mail.objects.filter(team=ta, owner=None, folder="inbox", subject="Breaking").exists()
+    assert Mail.objects.filter(team=tb, owner=member, folder="inbox", subject="Breaking").exists()
+    assert not Mail.objects.filter(team=tb, owner=None, folder="inbox", subject="Breaking").exists()
+    assert Mail.objects.filter(team=None, folder="sent", subject="Breaking").count() == 2
+    assert len(excon.get("/compose/").context["recent"]) == 2
+    # Never as the team leader persona, with no recipient, or while paused; and ExCon only.
+    for data in ({"from": "p:undac-{team}-tl", "to": f"t:{ta.id}", "body": "x"}, {"from": "p:cnn", "body": "x"}):
+        r = excon.post("/compose/", data)
+        assert r.status_code == 200 and Message.objects.filter(kind="desk").count() == 2
+    conf.put("paused", "1")
+    excon.post("/compose/", {"from": "p:cnn", "to": f"t:{ta.id}", "body": "x"})
+    assert Message.objects.filter(kind="desk").count() == 2
+    assert desk_client().get("/compose/").status_code == 403 and participant("a").get("/compose/").status_code == 403

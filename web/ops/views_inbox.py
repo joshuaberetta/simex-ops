@@ -307,7 +307,7 @@ def desk_members(teams):
     locs = member_locals() if not by_email else {}
     people = (Person.objects.participants().filter(active=True, team__in=teams).select_related("team")
               .order_by("team__name", "name"))
-    return [{"key": f"m:{p.id}", "name": addresses.member_name(p), "kind": "member",
+    return [{"key": f"m:{p.id}", "name": addresses.member_name(p), "kind": "member", "team": p.team_id,
              "addr": (p.email or "no email address") if by_email else member_address(p, locs)} for p in people]
 
 

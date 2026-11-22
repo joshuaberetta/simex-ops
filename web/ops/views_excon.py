@@ -29,7 +29,7 @@ from .models import (CHANNELS, DELIVERY_MODES, ROLES, STATUSES, AiGrade, Attachm
                      MessageAttachment, Notice, Person, PushSubscription, ReplyAnalysis, Response,
                      ResponseAttachment, RubricCriterion, Sender, Team, TeamRole, TestRun, TestRunItem, audit)
 
-from .views_inbox import LABEL_COLOURS  # noqa: E402
+from .views_inbox import LABEL_COLOURS, desk_from_choices, desk_members  # noqa: E402
 
 MAX_ATTACHMENT = documents.MAX_ATTACHMENT
 User = get_user_model()
@@ -1070,6 +1070,50 @@ def inboxes(request):
                         .order_by("-last_login").values_list("last_login", flat=True).first())
         t.lead = t.leader()
     return render(request, "ops/inboxes.html", {"tab": "inboxes", "teams": teams})
+
+
+# --- compose: write as any persona to teams or members, outside the injects ----------------------------
+
+@excon_required
+def compose(request):
+    """A message from a persona to teams or team members, now, as on the persona desk (desk.send:
+    a Message of kind desk, no inject), without opening SIMEX Mail."""
+    teams = list(Team.objects.filter(active=True))
+    members = desk_members(teams)
+    if request.method == "POST":
+        P = request.POST
+        keys = set(P.getlist("to"))
+        entries = ([{"kind": "team", "key": f"t:{t.id}"} for t in teams if f"t:{t.id}" in keys]
+                   + [e for e in members if e["key"] in keys])
+        uploads = request.FILES.getlist("files")
+        body = (P.get("body") or "").replace("\r\n", "\n").rstrip()
+        if not body and not uploads:
+            messages.error(request, "Write a message first.")
+        elif sum(f.size for f in uploads) > delivery.EMAIL_FILES_MAX:
+            messages.error(request, f"Attachments are over {delivery.EMAIL_FILES_MAX // (1024 * 1024)} MB.")
+        else:
+            files = [(re.sub(r"[\r\n]+", " ", PurePosixPath(f.name.replace("\\", "/")).name) or "file",
+                      f.content_type or "application/octet-stream", f.read()) for f in uploads]
+            try:
+                msgs, errors = desk.send(None, _u(request), P.get("from"), entries,
+                                         (P.get("subject") or "").strip() or "(no subject)", body, files)
+            except desk.DeskError as e:
+                messages.error(request, str(e))
+            else:
+                sent = [m for m in msgs if m.status != "failed"]
+                messages.success(request, f"Sent to {', '.join(m.target for m in sent)}.")
+                if errors:
+                    messages.error(request, f"Not sent to {'; '.join(errors)}")
+                return redirect("/compose/")
+        form = {"from": P.get("from"), "to": keys, "subject": P.get("subject", ""), "body": body}
+    else:
+        form = {"from": "", "to": set(), "subject": "", "body": ""}
+    by_team = [{"team": t, "key": f"t:{t.id}",
+                "members": [e for e in members if e["team"] == t.id]} for t in teams]
+    recent = Message.objects.filter(kind="desk").select_related("author").order_by("-id")[:30]
+    return render(request, "ops/compose.html", {
+        "tab": "compose", "personas": desk_from_choices(), "by_team": by_team, "form": form, "recent": recent,
+        "max_mb": delivery.EMAIL_FILES_MAX // (1024 * 1024)})
 
 
 @excon_required
