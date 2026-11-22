@@ -651,6 +651,39 @@ def _seen(v):
 DESK = {"name": "Persona desk", "id": None}  # what the templates show as the desk's "team"
 
 
+# The kind of mailbox, for the strip in the top bar and its colours (mail.css body.box-<kind>), so
+# nobody mistakes whose mail they are reading or writing from.
+BOX_COLOURS = {"team": "#eef3fd", "me": "#edf7ef", "leader": "#f4effb", "desk": "#ecf6f5", "excon": "#fbf4e4"}
+
+
+def box_theme(v=None, kind="", title="", sub=""):
+    """{kind, title, sub, search, colour}: a viewer's mailbox, or one given (the leader's and the
+    desk's other tabs)."""
+    if v is not None:
+        team = v.team.name if v.team else ""
+        what = (f"{team}'s team leader mailbox" if v.leader_box else f"{v.owner.name}'s own mailbox ({team})"
+                if v.member_box else f"{team} inbox")
+        if v.desk:
+            kind, title, sub = "desk", "Persona desk", "Exercise Control: you write as the personas"
+        elif v.desk_person:
+            kind, title, sub = "desk", "Persona desk", f"Viewing {what} · read-only"
+        elif v.leader:
+            kind = "leader"
+            if v.readonly:
+                title, sub = "Team leader", f"Viewing {what} · read-only"
+            else:
+                title, sub = "Team leader mailbox", f"{team} · Exercise Control"
+        elif v.readonly:
+            kind, title, sub = "excon", "ExCon view", f"{what} · read-only"
+        elif v.member_box:
+            kind, title, sub = "me", "My mail", f"{v.owner.name} · your own, in {team}"
+        else:
+            kind, title, sub = "team", f"{team} inbox", f"Shared by everyone in {team}"
+    search = {"team": title, "me": "My mail", "leader": "mail", "desk": "the desk", "excon": "mail"}.get(kind, "mail")
+    return {"kind": kind, "title": title, "sub": sub, "search": search, "colour": BOX_COLOURS.get(kind, "#f6f8fc")}
+
+
+
 def _ctx(v, **extra):
     choices = from_choices(v)
     c = {"v": v, "team": DESK if v.desk else v.team, "base": v.base, "readonly": v.readonly, "folders": v.folders,
@@ -658,6 +691,7 @@ def _ctx(v, **extra):
          "from_choices": choices,
          "from_default": choices[0]["key"] if v.desk and choices else "me" if v.member_box else "team"}
     c.update(extra)
+    c["box"] = box_theme(v)
     c["labels"] = [] if v.leader_mode else labels(v)
     folder = c.get("folder", "")
     c["folder_name"] = dict(v.folders).get(folder) or next((lab["name"] for lab in c["labels"] if lab["key"] == folder), "")
@@ -1326,6 +1360,7 @@ def desk_teams(request):
                      .order_by("-created_at").values_list("created_at", flat=True).first())
     return render(request, "ops/mail/desk_teams.html", {
         "team": DESK, "me": person, "base": "/inbox/desk", "readonly": True, "desk_tabs": tabs, "teams": tabs["teams"],
+        "box": box_theme(kind="desk", title="Persona desk", sub="Teams & team leaders · read-only"),
         "personal": personal, "v": None, "back_url": "/inbox/desk/teams/",
         "simex_js": {"base": "/inbox/desk", "readonly": True, "book": [], "team": DESK["name"], "leader": False,
                      "folder": "", "unread": 0, "vapid": "", "pushBase": "/inbox/desk", "labels": []}})

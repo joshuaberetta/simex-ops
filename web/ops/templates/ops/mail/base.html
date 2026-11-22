@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="{% static 'ops/icon-180.png' %}">
 <meta name="apple-mobile-web-app-title" content="SIMEX Mail">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#f6f8fc">
+<meta name="theme-color" content="{{ box.colour|default:'#f6f8fc' }}">
 {% block head %}{% endblock %}
 <script>
 // iPhone home-screen app: 100% height there is the whole screen, status bar included, which pushed
@@ -20,20 +20,21 @@
 })();
 </script>
 </head>
-<body class="gm{% if readonly %} readonly{% endif %}{% if leader_tabs or member_tabs or desk_tabs %} has-tabs{% endif %}{% if v.desk %} desk{% endif %}">
+<body class="gm{% if readonly %} readonly{% endif %}{% if leader_tabs or member_tabs or desk_tabs %} has-tabs{% endif %}{% if v.desk %} desk{% endif %}{% if box %} box-{{ box.kind }}{% endif %}">
 <header class="gm-top">
   <button class="gm-icon-btn" data-toggle-side title="Main menu" aria-label="Main menu">{% icon "menu" 24 %}</button>
   <a class="gm-logo" href="{{ base }}/" aria-label="SIMEX Mail">
     <svg width="34" height="26" viewBox="0 0 34 26" aria-hidden="true"><rect x="1" y="2" width="32" height="22" rx="4" fill="#0b57d0"/><path d="M3 5l14 10L31 5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linejoin="round"/></svg>
     <span>SIMEX <b>Mail</b></span>
   </a>
+  {% if box %}<div class="gm-boxname" title="{{ box.title }}: {{ box.sub }}">{% if box.kind == "leader" %}{% icon "label" 20 %}{% elif box.kind == "desk" %}{% icon "edit" 20 %}{% elif box.kind == "excon" or readonly %}{% icon "eye" 20 %}{% else %}{% icon "inbox" 20 %}{% endif %}<span><b>{{ box.title }}</b><small>{{ box.sub }}</small></span></div>{% endif %}
   {% block search %}<form class="gm-search" method="get" action="{{ base }}/" role="search">
     <button class="gm-icon-btn" aria-label="Search">{% icon "search" 24 %}</button>
-    <input name="q" value="{{ q|default:'' }}" placeholder="Search mail" autocomplete="off" data-search>
+    <input name="q" value="{{ q|default:'' }}" placeholder="Search {{ box.search|default:'mail' }}" autocomplete="off" data-search>
     {% if q %}<a class="gm-icon-btn" href="{{ base }}/?folder={{ folder }}" aria-label="Clear search">{% icon "close" 22 %}</a>{% endif %}
   </form>{% endblock %}
   <div class="gm-top-right">
-    {% if readonly and not leader_tabs and v %}<a class="gm-viewas" href="{{ back_url|default:'/inboxes/' }}" title="{% if desk_tabs %}Back to the teams{% else %}Back to ExCon{% endif %}">{% icon "eye" 18 %} Viewing {% if v.leader_box %}{{ team.name }}'s team leader{% elif v.member_box %}{{ v.owner.name }} ({{ team.name }}){% else %}as {{ team.name }}{% endif %} · read-only</a>{% endif %}
+    {% if readonly and not leader_tabs and v %}<a class="gm-viewas" href="{{ back_url|default:'/inboxes/' }}" title="{% if desk_tabs %}Back to the teams{% else %}Back to ExCon{% endif %}">{% icon "eye" 18 %} {% if box %}{% if desk_tabs %}Back to the teams{% else %}Back to ExCon{% endif %}{% else %}Viewing {% if v.leader_box %}{{ team.name }}'s team leader{% elif v.member_box %}{{ v.owner.name }} ({{ team.name }}){% else %}as {{ team.name }}{% endif %} · read-only{% endif %}</a>{% endif %}
     <a class="gm-icon-btn" href="{{ base }}/help/" title="Help" aria-label="Help">{% icon "help" 22 %}</a>
     <button class="gm-icon-btn" data-sound title="Notification sound" aria-label="Notification sound">{% icon "bell" 22 %}</button>
     <div class="gm-account">

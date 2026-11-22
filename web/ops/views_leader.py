@@ -14,7 +14,7 @@ from . import ai, conf, npc, push
 from .access import leader_required, leader_of
 from .models import Event, Mail, NpcProfile, PushSubscription, Response
 from .views_ai import dashboard_data
-from .views_inbox import ai_band, leader_tabs, member_address, member_locals, peer_teams, team_members
+from .views_inbox import ai_band, box_theme, leader_tabs, member_address, member_locals, peer_teams, team_members
 
 
 @leader_required
@@ -47,6 +47,7 @@ def dashboard(request):
     ai_list = sorted([r for r in analysed if r.band], key=lambda r: -(r.ai.ai_written or 0))[:30]
     return render(request, "ops/mail/dashboard.html", {
         "team": team, "me": lead, "base": "/inbox", "readonly": True, "leader_tabs": leader_tabs(lead, "dashboard"),
+        "box": box_theme(kind="leader", title="Team leader", sub=f"{lead.name} · {team.name} · Dashboard"),
         "tile": tile, "reps": reps, "members": [(name, role, n) for (name, role), n in by_member.most_common()],
         "by_role": data["by_role"], "hours": hours,
         "analysed": len(analysed), "likely": likely, "possibly": possibly,
@@ -77,6 +78,7 @@ def members(request):
     people.sort(key=lambda p: (not p.active, p.team_role.sort if p.team_role else 1_000_000, p.name))
     return render(request, "ops/mail/members.html", {
         "team": team, "me": lead, "base": "/inbox", "readonly": True, "leader_tabs": leader_tabs(lead, "members"),
+        "box": box_theme(kind="leader", title="Team leader", sub=f"{lead.name} · {team.name} · Team members"),
         "people": people, "personal": conf.flag("personal_mailboxes"),
         "simex_js": {"base": "/inbox", "readonly": True, "book": [], "team": team.name, "leader": True,
                      "folder": "", "unread": 0, "vapid": push.public_key(), "pushBase": "/inbox", "labels": []}})
@@ -101,6 +103,7 @@ def npcs(request):
         p.timing_text = npc.timing_text(p)
     return render(request, "ops/mail/npcs.html", {
         "team": team, "me": lead, "base": "/inbox", "readonly": True, "leader_tabs": leader_tabs(lead, "npcs"),
+        "box": box_theme(kind="leader", title="Team leader", sub=f"{lead.name} · {team.name} · AI personas · read-only"),
         "personas": personas, "convs": npc.team_conversations(team), "now": timezone.now(),
         "simex_js": {"base": "/inbox", "readonly": True, "book": [], "team": team.name, "leader": True,
                      "folder": "", "unread": 0, "vapid": push.public_key(), "pushBase": "/inbox", "labels": []}})
