@@ -30,7 +30,7 @@ The tabs come in two groups: what you use while the exercise runs (**Injects**, 
 |---|---|
 | **Injects** | The schedule, grouped by day (click a day to fold it; each shows its count, time span, statuses, files and how many need attention). Filter by day, status or **Needs attention**; open an inject to edit, preview, test or send it; change the channel in bulk. Import from the MEL is here too, and **Draft with AI** (5.8). |
 | **Replies** | Everything participants sent: team summary, inject × team grid, **Read / opens & clicks**, the inbox, and grading. |
-| **Team inboxes** | Each team's mailbox at a glance (received, unread, sent, last sign-in), **View as team**, the team leader's and each member's own mailbox, **Open the persona desk** (5.10), and **Clear a team's mailbox** after testing (section 6). |
+| **Team inboxes** | Each team's mailbox at a glance (received, unread, sent, last sign-in), **View as team**, the team leader's and each member's own mailbox, **Open the persona desk** (5.10), and **Clear mailboxes** after testing (6.2). |
 | **Compose** | Write as any persona (but the team leader persona) to teams or team members, now, without making an inject: the persona desk's **Write as a persona** on these screens (5.3), with what was sent from here and the desk below. |
 | **Dashboard** | The exercise at a glance: per team, replies, response times, scores, sentiment over time and a funnel; the rubric heatmap; flags, possibly AI-written replies, what teams ask for and commit to; an AI-written exercise summary (5.7). **End-of-exercise reports** for each team and for ExCon (6.1). |
 | **Log** | Every delivery the app made, with content and status, plus the activity log of every action. |
@@ -38,7 +38,7 @@ The tabs come in two groups: what you use while the exercise runs (**Injects**, 
 | **Senders** | The personas: username (`cnn`), display name ("CNN Breaking News"). Participants write to them (their address book grows with use). |
 | **AI personas** | Only while Settings → AI personas is on: personas that answer the teams on their own, in character (5.9). |
 | **Test runs** | Replays injects on a fast clock into the **Test team** mailbox (and, for email injects, to a test address). |
-| **Settings** | **Delivery channel**, footer, subject prefix and inject code in the subject, **AI analysis** and **AI instructions**, team-to-team messaging, attachment limit, email options, grace period, **live sending switch**, backup and restore. |
+| **Settings** | **Delivery channel**, footer, subject prefix and inject code in the subject, **AI analysis** and **AI instructions**, team-to-team messaging, attachment limit, email options, grace period, **live sending switch**, backup and restore, and **Start afresh** before going live (6.2). |
 | **Help** | This manual (top right, next to your name). |
 
 The status bar under the tabs shows the Nairobi clock, **Live disarmed** (green) or **LIVE ARMED** (red), **ALL SENDING PAUSED** when paused, when the scheduler last ran (red if it stopped), the next inject due, counts of overdue and failed injects, and the **Pause all sending** button.
@@ -146,7 +146,7 @@ Even if you plan to use email, make SIMEX Mail ready so you can switch in a minu
 4. Hand out the slips and have everyone **scan the QR code** with their phone: it signs them in and walks them through alerts, including, on an iPhone, adding SIMEX Mail to the home screen (only then do iPhones get notifications with SIMEX Mail closed). On a laptop they sign in with the username and password and click **Turn on alerts**.
 
 ### 3.7 Rehearse (at least once) — section 4.
-End the rehearsal as you will end the exercise: grade the Test team's replies, then compile its report (**Dashboard → End-of-exercise reports → Test team**, 6.1) to check the figures and see what the write-up looks like. Clear the Test team's mailbox afterwards (6.2).
+End the rehearsal as you will end the exercise: grade the Test team's replies, then compile its report (**Dashboard → End-of-exercise reports → Test team**, 6.1) to check the figures and see what the write-up looks like. Clear the Test team's mailboxes afterwards (6.2); when every rehearsal is done, **Settings → Start afresh** (6.2) so the exercise starts with empty mailboxes, Dashboard and Log.
 
 ### 3.8 Take a backup
 **Settings → Download backup.** One file with everything: injects, attachments, mailboxes, logins, grades.
@@ -289,7 +289,7 @@ A shared mailbox in SIMEX Mail for the people playing the personas, so answering
 - **Who else is on it**: a conversation shows who else on the desk has it open, and who is writing an answer.
 - **Teams & team leaders** (tab): every team's inbox, its leader's mailbox and members' own mailboxes, read-only, as **View as team**; nothing is marked read for them. The desk never sees injects that aren't sent, rubrics, grades or Claude's reading of the replies.
 - Desk members turn on alerts like participants: each new message to a persona is pushed to their devices. Their guide is under **?** in SIMEX Mail.
-- Reading on the desk is never counted as the team reading. **Clear a team's mailbox** also clears the desk's copies of that team's mail.
+- Reading on the desk is never counted as the team reading. **Clear mailboxes** (every mailbox) also clears the desk's copies of that team's mail.
 
 ## 6. After the exercise
 In this order:
@@ -309,8 +309,15 @@ In this order:
 - **Check and edit:** open each report. Every section has **Edit** (Markdown: `**bold**`, `- ` list items, `> ` quotes) and **Reset to Claude's**; edited sections are marked. **Write it again** redoes one report from the same figures and replaces your edits to it (write ExCon's again after editing the team reports, so it reads your text). If a write-up fails, the figures are still there.
 - **Print:** **Print** on a report, or on the compile **Print the team reports** / **Print all**, opens a printable page: use the browser's Print → Save as PDF. Each report starts on a new page. Give each team only its own report; the ExCon report is not for participants.
 
-### 6.2 Clearing a team's mailbox
-After testing: **Team inboxes → Clear a team's mailbox**, pick the team, type `CLEAR`. It deletes everything in that team's mailbox (received, sent, drafts, and the team's labels), its replies on the Replies tab with their AI analysis, the persona answers to them and the team's grades. Deliveries stay in the Log. It can't be undone, so download a backup first.
+### 6.2 Clearing mailboxes and starting afresh
+**One team, or all teams, after a test: Team inboxes → Clear mailboxes.** Pick the team (or **All teams**) and the mailboxes, type `CLEAR`:
+- **Every mailbox** deletes everything in the team inbox, the team leader's mailbox and each member's own (received, sent, drafts, labels, and what was done in them), the team's replies on the Replies tab with their AI analysis, the persona answers to them, the team's grades and the persona desk's copies of its mail.
+- **Members' own mailboxes only** empties just the members' My mail; the team inbox and its replies stay.
+- Deliveries stay in the Log, and in the Dashboard's Delivered and Read, unless you tick **Also delete the deliveries to them**.
+
+**Before going live: Settings → Start afresh.** Type `START AFRESH`. For every team it deletes every mailbox (team inboxes, leaders', members' own, the persona desk), replies, persona answers, grades, AI analyses, the exercise summary and reports, test runs, notifications and every delivery in the Log with its read and download figures: the Dashboard, Replies and Log start from zero. Injects, documents, rubrics, personas, people, logins (and login emails), settings and the audit trail stay, and live sending stays armed or disarmed as it was. With **Put injects already sent back on the schedule** (ticked), injects sent, failed or overdue during testing are scheduled again at their send time (those whose time has passed go overdue: send them by hand or change their time). Received email from before the reset is never synced back.
+
+Neither can be undone: download a backup first.
 
 ---
 

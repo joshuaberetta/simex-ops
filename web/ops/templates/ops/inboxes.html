@@ -16,11 +16,16 @@
   {% endfor %}
 </table>
 <form method="post" action="/inboxes/clear/" class="card form danger-zone" style="max-width:640px;margin-top:18px">{% csrf_token %}
-  <h3>Clear a team's mailbox</h3>
-  <p class="small">After testing: deletes everything in the team's mailbox (received, sent, drafts), its replies on the Replies tab with their AI analysis,
-  the persona answers to them and its grades. Deliveries stay in the Log. This can't be undone: download a backup first (Settings).</p>
-  <label>Team <select name="team">{% for t in teams %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}</select></label>
+  <h3>Clear mailboxes</h3>
+  <p class="small">After testing. <b>Every mailbox</b> deletes everything in the team's inbox, its leader's mailbox and each member's own (received, sent, drafts, labels),
+  its replies on the Replies tab with their AI analysis, the persona answers to them, its grades and the persona desk's copies.
+  <b>Members' own mailboxes only</b> empties just the members' My mail, leaving the team inbox and its replies.
+  Deliveries stay in the Log, and count on the Dashboard, unless you tick the box. To clear the whole exercise before going live (every team, the Dashboard, reports, test runs, Log), use <a href="/settings/#afresh">Settings → Start afresh</a>.
+  This can't be undone: download a backup first (Settings).</p>
+  <label>Team <select name="team"><option value="all">All teams</option>{% for t in teams %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}</select></label>
+  <label>Mailboxes <select name="scope"><option value="all">Every mailbox: team inbox, leader's and members' own</option><option value="members">Members' own mailboxes only</option></select></label>
+  <label class="check"><input type="checkbox" name="deliveries" value="1"> Also delete the deliveries to them in the Log, with their read and download figures (the Dashboard's Delivered and Read start from zero)</label>
   <label>Type <b>CLEAR</b> <input name="confirm" autocomplete="off"></label>
-  <button class="btn danger">Clear mailbox</button>
+  <button class="btn danger">Clear mailboxes</button>
 </form>
 {% endblock %}

@@ -153,5 +153,6 @@ urlpatterns = [
     path("settings/npc/", npc.settings_npc),
     path("settings/domain/", x.settings_domain),
     path("settings/backup/", x.settings_backup),
+    path("settings/afresh/", x.settings_afresh),
     path("settings/restore/", x.settings_restore),
 ]

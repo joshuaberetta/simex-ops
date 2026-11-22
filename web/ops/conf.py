@@ -38,6 +38,7 @@ DEFAULTS = {
     # only ("test") until ExCon widens it to every team ("all").
     "npc_enabled": "0",
     "npc_scope": "test",
+    "reset_at": "",  # Settings → Start afresh (ops/reset.py): received email from before it is not synced back
 }
 CHANNEL_MODES = {"email": "Email (Resend)", "inapp": "SIMEX Mail (in-app inboxes)", "per_inject": "Per inject"}
 

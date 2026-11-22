@@ -21,7 +21,7 @@ from django.utils import timezone
 from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_POST
 
-from . import (addresses, ai, legacy_import, backup, checks, conf, delivery, desk, documents, importer, inbound, logins, mailer,
+from . import (addresses, ai, legacy_import, backup, checks, reset, conf, delivery, desk, documents, importer, inbound, logins, mailer,
                notices, render as rnd, roster, signin)
 from .access import excon_required
 from .models import (CHANNELS, DELIVERY_MODES, ROLES, STATUSES, AiGrade, Attachment, AttachmentImport, Audit, Grade,
@@ -1154,26 +1154,48 @@ def notice_action(request, nid=None, action=""):
 @excon_required
 @require_POST
 def inbox_clear(request):
-    """Empty a team's mailbox after testing: its mails, its replies (with their AI analysis),
-    ExCon's answers to them, and its grades. Inject deliveries stay in the Log."""
-    team = get_object_or_404(Team, pk=int(request.POST.get("team") or 0))
-    if (request.POST.get("confirm") or "").strip() != "CLEAR":
-        messages.error(request, "Type CLEAR to empty the mailbox.")
+    """Empty a team's mailboxes (or every team's) after testing: see reset.clear_team."""
+    P = request.POST
+    if (P.get("confirm") or "").strip() != "CLEAR":
+        messages.error(request, "Type CLEAR to empty the mailboxes.")
         return redirect("/inboxes/")
-    with transaction.atomic():
-        reps = Response.objects.filter(team=team)
-        n_answers = Message.objects.filter(kind="reply", response__in=reps).delete()[0]
-        n_reps = reps.count()
-        reps.delete()
-        n_mails = Mail.objects.filter(team=team).count()
-        Mail.objects.filter(team=team).delete()
-        Mail.objects.filter(team=None, desk_team=team).delete()  # the persona desk's copies of its mail
-        MailLabel.objects.filter(team=team).delete()
-        n_grades = Grade.objects.filter(team=team).delete()[0] + AiGrade.objects.filter(team=team).delete()[0]
-    detail = f"{team.name}: {n_mails} mails, {n_reps} replies, {n_answers} answers, {n_grades} grades"
-    audit("inbox_clear", detail, _u(request))
-    messages.success(request, f"Cleared {detail}.")
+    scope = P.get("scope") if P.get("scope") in reset.SCOPES else "all"
+    teams = (list(Team.objects.all()) if P.get("team") == "all"
+             else [get_object_or_404(Team, pk=int(P.get("team") or 0))])
+    if Inject.objects.filter(status="sending").exists():
+        messages.error(request, "An inject is being sent; try again when it has finished.")
+        return redirect("/inboxes/")
+    deliveries = P.get("deliveries") == "1"
+    done = []
+    for team in teams:
+        n = reset.clear_team(team, scope, deliveries)
+        what = "members' own mailboxes" if scope == "members" else "all mailboxes"
+        detail = (f"{team.name} ({what}): {n['mails']} mails"
+                  + ("" if scope == "members" else f", {n['replies']} replies, {n['answers']} answers, {n['grades']} grades")
+                  + (f", {n['deliveries']} deliveries" if deliveries else ""))
+        audit("inbox_clear", detail, _u(request))
+        done.append(detail)
+    messages.success(request, f"Cleared {'; '.join(done)}.")
     return redirect("/inboxes/")
+
+
+@excon_required
+@require_POST
+def settings_afresh(request):
+    """Before going live: every team's mailboxes, replies, grades, AI analyses, reports, test runs,
+    notifications and Log deliveries deleted (reset.start_afresh)."""
+    if (request.POST.get("confirm") or "").strip().upper() != "START AFRESH":
+        messages.error(request, "Type START AFRESH to clear the exercise's activity.")
+        return redirect("/settings/#afresh")
+    if Inject.objects.filter(status="sending").exists():
+        messages.error(request, "An inject is being sent; try again when it has finished.")
+        return redirect("/settings/#afresh")
+    n = reset.start_afresh(reschedule=request.POST.get("reschedule") == "1")
+    detail = (f"{n['mails']} mails, {n['replies']} replies, {n['deliveries']} deliveries, {n['grades']} grades, "
+              f"{n['test_runs']} test runs deleted; {n['injects']} injects back on the schedule")
+    audit("start_afresh", detail, _u(request))
+    messages.success(request, f"Started afresh: {detail}. The Dashboard, Replies, Log and every mailbox are empty.")
+    return redirect("/settings/#afresh")
 
 
 # --- test runs -----------------------------------------------------------------------------------

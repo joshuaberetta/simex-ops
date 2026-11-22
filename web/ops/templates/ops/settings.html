@@ -107,6 +107,17 @@
     <button class="btn small danger">Restore</button>
   </form>
 </div>
+<div class="card danger-zone" id="afresh">
+  <h3>Start afresh before going live</h3>
+  <p class="small">Clears everything the testing left behind, for every team: every mailbox (team inboxes, leaders', members' own, the persona desk), the replies with their AI analysis,
+  persona answers, grades, the exercise summary and reports, test runs, notifications, and every delivery in the Log with its read and download figures, so the Dashboard starts from zero.
+  Injects, documents, rubrics, personas, people, logins, settings and the audit trail stay; login emails stay in the Log. Live sending stays as it is. Download a backup first: this can't be undone.</p>
+  <form method="post" action="/settings/afresh/" class="form">{% csrf_token %}
+    <label class="check"><input type="checkbox" name="reschedule" value="1" checked> Put injects already sent (or failed, or overdue) back on the schedule, so they go out live at their send time (those whose time has passed go overdue; send them from the inject page or change their time)</label>
+    <label>Type <b>START AFRESH</b> <input name="confirm" autocomplete="off"></label>
+    <button class="btn small danger">Start afresh</button>
+  </form>
+</div>
 <div class="card">
   <h3>Email (Resend)</h3>
   <p class="small">Mailer: <b>{{ mailer_name }}</b>{% if not resend_configured %} (no RESEND_API_KEY: email-channel injects are logged, not sent){% endif %}. Domain: <b>{{ MAIL_DOMAIN }}</b>.</p>

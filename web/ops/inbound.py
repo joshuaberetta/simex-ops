@@ -17,7 +17,7 @@ from django.db import connection
 from django.db.models import Q
 from django.utils import timezone
 
-from . import logins, mailer, notices, render
+from . import conf, logins, mailer, notices, render
 from .models import Event, Message, Person, Response, ResponseAttachment, audit
 
 log = logging.getLogger("simex.inbound")
@@ -342,6 +342,13 @@ def sync(limit=50, since=None):
     given) and fetch the content of any not fetched yet."""
     m_ = mailer.get()
     added = 0
+    floor = conf.get("reset_at")  # Settings → Start afresh: what came before is gone for good
+    if floor:
+        try:
+            floor = datetime.fromisoformat(floor)
+            since = max(since, floor) if since else floor
+        except ValueError:
+            pass
     for item in m_.list_received(limit=limit):
         rid = item.get("id")
         if since and _when(item.get("created_at")) < since:
