@@ -16,6 +16,7 @@ LOCAL = re.compile(r"^[a-z0-9][a-z0-9._+-]*$")
 # Addresses that must never get a live email (seeded placeholders, documentation domains).
 PLACEHOLDER_DOMAIN = re.compile(r"(\.invalid|@example\.(com|org|net)|\.example)$", re.I)
 URL = re.compile(r"(https?://[^\s<>\"']+)")
+PERSONAL = " · personal email"  # ends the target of an in-app inject's email copy (also by email)
 
 
 @dataclass
@@ -162,63 +163,78 @@ def scope_teams(inj):
     return teams
 
 
-def _targets(inj, warnings):
-    """(target label, placeholder context, to-list, team id, person id) per email."""
+def _targets(inj, warnings, personal=False):
+    """(target label, placeholder context, to-list, team id, person id) per email. personal:
+    the copies of an in-app inject to people's personal emails (never a team's address, and
+    "only the addresses below" goes to everyone, as in SIMEX Mail)."""
     teams = scope_teams(inj)
+    addr = (lambda p: p.personal_email) if personal else (lambda p: p.email)
+    mode = "all_bcc" if personal and inj.delivery == "custom" else inj.delivery
 
     def members(t):
-        return [p for p in t.people.participants() if p.active and p.email]
-    if inj.delivery == "each_team":
+        return [p for p in t.people.participants() if p.active and addr(p)]
+    if personal:
+        for t in teams:
+            missing = [p.name for p in t.people.participants() if p.active and not p.personal_email]
+            if missing:
+                warnings.append(f"{t.name}: no personal email for {', '.join(missing)}.")
+    if mode == "each_team":
         if not teams:
             warnings.append("No active teams: add teams on the People tab.")
         out = []
         for t in teams:
+            if personal:  # one email per member: their addresses stay private
+                out += [(f"{t.name}: {p.name}", team_ctx(t), [addr(p)], t.id, p.id) for p in members(t)]
+                continue
             to = [t.email] if t.email else [p.email for p in members(t)]
             if not to:
                 warnings.append(f"{t.name} has no members or team email.")
                 continue
             out.append((t.name, {"team": t.code, "team_name": t.name, "name": t.name, "first_name": t.name}, to,
                         t.id, None))
-        return out + _leader_targets(inj, teams)
-    if inj.delivery == "each_person":
+        return out + _leader_targets(inj, teams, addr, personal)
+    if mode == "each_person":
         out = []
         for t in teams:
             for p in members(t):
                 first = p.name.split()[0] if p.name.split() else p.name
                 out.append((f"{p.name} ({t.name})",
-                            {"team": t.code, "team_name": t.name, "name": p.name, "first_name": first}, [p.email],
+                            {"team": t.code, "team_name": t.name, "name": p.name, "first_name": first}, [addr(p)],
                             t.id, p.id))
-        if not inj.team_ids:  # people not in a team are included when sending to everyone
+        if not inj.team_ids and not personal:  # people not in a team are included when sending to everyone
             for p in Person.objects.participants().filter(active=True, team=None).exclude(email="").order_by("name"):
                 first = p.name.split()[0] if p.name.split() else p.name
                 out.append((p.name, {"team": "", "team_name": "", "name": p.name, "first_name": first}, [p.email],
                             None, p.id))
         if not out:
             warnings.append("No active participants to send to.")
-        return out + _leader_targets(inj, teams)
-    if inj.delivery == "all_bcc":
-        people = [p.email for t in teams for p in members(t)]
-        if not inj.team_ids:
+        return out + _leader_targets(inj, teams, addr, personal)
+    if mode == "all_bcc":
+        people = [addr(p) for t in teams for p in members(t)]
+        if not inj.team_ids and not personal:
             people += [p.email for p in Person.objects.participants().filter(active=True, team=None).exclude(email="")]
         if not people:
             warnings.append("No active participants to send to.")
             return []
         return [("all participants (Bcc)", {"team": "", "team_name": "", "name": "", "first_name": ""},
-                 ["__bcc__"] + people, None, None)] + _leader_targets(inj, teams)
+                 ["__bcc__"] + people, None, None)] + _leader_targets(inj, teams, addr, personal)
     return [("custom", {"team": "", "team_name": "", "name": "", "first_name": ""}, [], None, None)]
 
 
-def _leader_targets(inj, teams):
-    """Email: an inject marked "Also to team leaders" -> one email to each team's leader."""
+def _leader_targets(inj, teams, addr=lambda p: p.email, personal=False):
+    """Email: an inject marked "Also to team leaders" -> one email to each team's leader (for
+    the personal copies, as in SIMEX Mail, not when it comes from the team leader persona)."""
     if not inj.to_leaders:
+        return []
+    if personal and (s := sender_for(inj)) and s.team_leader:
         return []
     out = []
     for t in teams:
         lead = t.leader()
-        if lead and lead.email:
+        if lead and addr(lead):
             out.append((f"{lead.name} (team leader, {t.name})", {**team_ctx(t), "name": lead.name,
                                                                  "first_name": lead.first_name},
-                        [lead.email], t.id, lead.id))
+                        [addr(lead)], t.id, lead.id))
     return out
 
 
@@ -232,8 +248,15 @@ def _sender_checks(inj, warnings):
 
 
 def build(inj, cfg):
-    """Every delivery of an inject on its channel, or [] with warnings explaining why not."""
-    return build_inapp(inj, cfg) if inj.effective_channel == "inapp" else build_email(inj, cfg)
+    """Every delivery of an inject on its channel, or [] with warnings explaining why not. In-app,
+    an inject marked "also by email" adds its email copies to people's personal emails."""
+    if inj.effective_channel != "inapp":
+        return build_email(inj, cfg)
+    drafts, warnings = build_inapp(inj, cfg)
+    if inj.also_email:
+        copies, more = build_email(inj, cfg, personal=True)
+        drafts, warnings = drafts + copies, warnings + [f"Email copy: {w}" for w in more if w not in warnings]
+    return drafts, warnings
 
 
 def subject_for(inj, cfg, ctx):
@@ -298,8 +321,9 @@ def build_inapp(inj, cfg):
     return drafts, warnings
 
 
-def build_email(inj, cfg):
-    """All emails for an inject, or [] with warnings explaining why not."""
+def build_email(inj, cfg, personal=False):
+    """All emails for an inject, or [] with warnings explaining why not. personal: the copies of
+    an in-app inject to people's personal emails (without the inject's extra To, Cc and Bcc)."""
     warnings = []
     sender = sender_for(inj)
     if not inj.sender_local:
@@ -309,10 +333,14 @@ def build_email(inj, cfg):
     reply_to = inj.reply_to or (sender.reply_to if sender else None) or cfg.get("default_reply_to") or None
     footer = footer_for(inj, cfg)
     to_extra, cc, bcc = split_addresses(inj.to_extra), split_addresses(inj.cc), split_addresses(inj.bcc)
+    if personal:
+        to_extra, cc, bcc = [], [], []
     excon = split_addresses(cfg.get("excon_bcc"))
     drafts = []
     atts = list(inj.attachments.all()) if inj.pk else []
-    for target, ctx, to, team_id, person_id in _targets(inj, warnings):
+    for target, ctx, to, team_id, person_id in _targets(inj, warnings, personal):
+        if personal:
+            target += PERSONAL
         local, name = _identity(inj, sender, ctx)
         from_addr = f'"{name}" <{local}@{config.MAIL_DOMAIN}>'
         this_bcc = list(bcc) + excon

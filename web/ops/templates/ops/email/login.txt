@@ -1,0 +1,28 @@
+{% autoescape off %}Hello {{ first_name }},
+
+Here is your login for SIMEX Mail, the email system of the UNDAC simulation exercise (SIMEX).
+{% if p.role == "tl" %}You are {{ team.name }}'s team leader (Exercise Control): you have your own mailbox, play the team leader persona, and read your team's inbox.{% elif p.role == "desk" %}You are on the persona desk (Exercise Control): you answer the teams as the exercise's personas.{% else %}During the exercise, every message to and from {{ team.name }} arrives in SIMEX Mail, not in your usual email.{% endif %}
+
+YOUR LOGIN
+Site:     {{ site }}
+Username: {{ username }}
+Password: {{ password }}
+
+GETTING STARTED
+{% if link %}1. On your phone: scan the QR code in this email with the camera (or, reading this on your phone, open this link: {{ link }} ). It signs you in and turns on alerts for new mail. On an iPhone, add SIMEX Mail to your Home Screen when it asks: alerts only work from there.
+2. On a laptop: go to {{ site }} and sign in with your username and password.
+3. Use as many devices as you like. The QR code and link work until {{ expires|date:"j F Y" }}; the password keeps working.
+{% else %}Go to {{ site }} and sign in with your username and password, on as many devices as you like.
+{% endif %}{% if p.role == "member" %}
+IN SIMEX MAIL
+- The {{ team.name }} inbox is shared with your teammates: you all see what arrives there, and what any of you sends from the team's address.
+{% if personal %}- My mail is your own mailbox, for mail to you personally. When you write, you choose to send from the team's address or your own.
+{% endif %}- Treat what arrives as you would on a real deployment, and answer from SIMEX Mail.
+{% endif %}
+Keep this email to yourself: the QR code, the link and the password all sign in as you. If you can't sign in, tell Exercise Control.
+{% if note %}
+{{ note }}
+{% endif %}
+--
+SIMEX Exercise Control
+{% endautoescape %}

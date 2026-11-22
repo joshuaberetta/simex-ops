@@ -47,6 +47,9 @@
     {% if channel_mode == 'per_inject' %}Channel: <button class="btn small" name="action" value="inapp">In-app</button>
     <button class="btn small" name="action" value="email" data-confirm="Send the selected injects by email instead?">Email</button>
     {% else %}<span class="hint">Channel: {% if channel_mode == 'inapp' %}SIMEX Mail{% else %}email{% endif %} for all injects (<a href="/settings/#channel">Settings</a>)</span>{% endif %}
+    {% if channel_mode != 'email' %}<span class="sep"></span>
+    Personal email: <button class="btn small" name="action" value="also_email" data-confirm="Also email the selected injects to people's personal addresses when they are delivered in SIMEX Mail?" title="Delivered in SIMEX Mail and also emailed to each recipient's personal email">Also email</button>
+    <button class="btn small" name="action" value="no_email">SIMEX Mail only</button>{% endif %}
     <span class="grow"></span>
     <button type="button" class="link small" data-days="open">Expand all</button> · <button type="button" class="link small" data-days="close">Collapse all</button>
   </div>
@@ -76,7 +79,7 @@
             {% if i.scenario_dt %}<div class="muted small">scenario {{ i.scenario_dt }}</div>{% endif %}
             {% if i.flags %}<div class="flags">{% for level, label, detail in i.flags %}<span class="flag {{ level }}" title="{{ detail }}">{{ label }}</span>{% endfor %}</div>{% endif %}</td>
         <td class="small">{{ i.from_display }}<div class="muted">{{ i.sender_local|default:"—" }}@</div></td>
-        <td class="small">{{ i.delivery_label }}{% if i.team_ids %} <span class="muted">({{ i.team_ids|length }} teams)</span>{% endif %}{% if i.to_leaders %} <span class="muted">+ team leaders</span>{% endif %}</td>
+        <td class="small">{{ i.delivery_label }}{% if i.team_ids %} <span class="muted">({{ i.team_ids|length }} teams)</span>{% endif %}{% if i.to_leaders %} <span class="muted">+ team leaders</span>{% endif %}{% if i.also_email and i.effective_channel == 'inapp' %} <span class="pill" title="Also emailed to personal addresses">+ email</span>{% endif %}</td>
         <td class="small">{% if i.effective_channel == 'email' %}<span class="pill warn">email</span>{% else %}in-app{% endif %}</td>
         <td class="small">{{ i.att_count }}</td>
         <td><span class="status {{ i.status }}">{{ i.status }}</span></td>

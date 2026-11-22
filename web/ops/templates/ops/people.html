@@ -65,12 +65,13 @@ The <b>Test team</b> receives test runs and test sends; give yourself a login in
 <h2>People</h2>
 <p class="muted small">Every login slip has a QR code: scanning it with a phone's camera signs that person in and walks them through alerts (and, on an iPhone, adding SIMEX Mail to the home screen). <a href="/people/slips/" target="_blank">Sign-in slips for everyone</a> (QR code and username, passwords unchanged); a team's or one person's from their row. A code works on any number of devices for {{ SIGNIN_DAYS }} days, or until that password is reset.</p>
 <table class="list">
-  <thead><tr><th colspan="7">Name · email · team · role (team member: participant; team leader: ExCon, one per team; persona desk: ExCon, no team, writes as the personas in SIMEX Mail) · team role (members) · active · login</th></tr></thead>
+  <thead><tr><th colspan="7">Name · email channel address · personal email (login emails, injects also by email) · team · role (team member: participant; team leader: ExCon, one per team; persona desk: ExCon, no team, writes as the personas in SIMEX Mail) · team role (members) · active · login</th></tr></thead>
   {% for p in people %}
   <tr><td colspan="7"><form method="post" action="/people/save/" class="rowform">{% csrf_token %}
     <input type="hidden" name="id" value="{{ p.id }}">
     <input name="name" value="{{ p.name }}" required>
-    <input name="email" value="{{ p.email }}" placeholder="email (optional)" class="{% if 'placeholder.invalid' in p.email %}placeholder{% endif %}">
+    <input name="email" value="{{ p.email }}" placeholder="email channel (optional)" class="{% if 'placeholder.invalid' in p.email %}placeholder{% endif %}">
+    <input name="personal_email" type="email" value="{{ p.personal_email }}" placeholder="personal email" title="Personal email: login emails, and in-app injects marked also by email">
     <select name="team_id"><option value="">— no team —</option>{% for t in teams %}<option value="{{ t.id }}" {% if t.id == p.team_id %}selected{% endif %}>{{ t.name }}</option>{% endfor %}</select>
     <select name="role">{% for k, label in ROLES.items %}<option value="{{ k }}" {% if p.role == k %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
     {% if team_roles and p.role == "member" %}<select name="team_role_id" title="Team role"><option value="">— no team role —</option>{% for r in team_roles %}<option value="{{ r.id }}" {% if r.id == p.team_role_id %}selected{% endif %}>{{ r.name }}</option>{% endfor %}</select>{% endif %}
@@ -81,14 +82,18 @@ The <b>Test team</b> receives test runs and test sends; give yourself a login in
     {% if p.user %}<code class="small">{{ p.user.username }}</code>{% if not p.user.is_active %} <span class="warn small">disabled</span>{% endif %}
       {% if p.user.is_active and p.team_id %}<a class="small" href="/people/slips/?person={{ p.id }}" target="_blank">slip</a>{% endif %}
       <button class="link" name="action" value="reset" data-confirm="Issue a new password for {{ p.name }}?">reset password</button>
+      {% if p.login_shared_at %}<span class="pill safe small" title="{{ p.login_shared_via }}">shared {{ p.login_shared_at|date:"j M H:i" }}{% if p.login_shared_via == "by hand" %} by hand{% else %} by email{% endif %}</span>{% if p.login_email and p.login_email.delivery and p.login_email.delivery != "delivered" %} <span class="warn small">{{ p.login_email.delivery }}</span>{% endif %}
+      {% else %}<span class="pill warn small">not shared</span>{% if p.login_email and p.login_email.status == "failed" %} <a class="warn small" href="/log/{{ p.login_email.id }}/" title="{{ p.login_email.error }}">email failed</a>{% endif %}{% endif %}
       {% if p.user.is_active %}<button class="link" name="action" value="deactivate">disable</button>{% else %}<button class="link" name="action" value="activate">enable</button>{% endif %}
     {% else %}<button class="link" name="action" value="create">create login</button>{% endif %}
   </form>
+  {% if p.user and p.user.is_active %}{% if p.personal_email %}<form method="post" action="/people/logins/email/" class="inline">{% csrf_token %}<input type="hidden" name="person" value="{{ p.id }}"><input type="hidden" name="reply_to" value="{{ login_reply_to }}"><button class="link" data-confirm="Email {{ p.name }} a new password, with the QR code, at {{ p.personal_email }}? Their current password and slips stop working.">email login</button></form>{% endif %}
+  <form method="post" action="/people/{{ p.id }}/shared/" class="inline">{% csrf_token %}{% if p.login_shared_at %}<button class="link" name="shared" value="0" title="Mark this login as not given out">unmark</button>{% else %}<button class="link" name="shared" value="1" title="The login was given out by hand (a printed slip)">mark shared</button>{% endif %}</form>{% endif %}
   <form method="post" action="/people/{{ p.id }}/delete/" class="inline">{% csrf_token %}<button class="link" data-confirm="Delete {{ p.name }} and their login?">delete</button></form></td></tr>
   {% endfor %}
 </table>
 <form method="post" action="/people/save/" class="card rowform">{% csrf_token %}<b>Add person</b>
-  <input name="name" placeholder="Name" required><input name="email" placeholder="email (optional)">
+  <input name="name" placeholder="Name" required><input name="email" placeholder="email channel (optional)"><input name="personal_email" type="email" placeholder="personal email">
   <select name="team_id"><option value="">— no team —</option>{% for t in teams %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}</select>
   <select name="role">{% for k, label in ROLES.items %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select>
   {% if team_roles %}<select name="team_role_id" title="Team role (members)"><option value="">— no team role —</option>{% for r in team_roles %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}</select>{% endif %}
@@ -96,9 +101,25 @@ The <b>Test team</b> receives test runs and test sends; give yourself a login in
   <button class="btn small primary">Add</button></form>
 </section>
 <section class="col-side">
+<form method="post" action="/people/logins/email/" class="card form" id="login-emails">{% csrf_token %}
+  <h3>Email logins</h3>
+  <p class="small">Sends each person, at their <b>personal email</b>, their username, a <b>new password</b>, the QR code and sign-in link of their slip, and how to get started in SIMEX Mail. It marks the login shared. The new password replaces the old one: printed slips stop working.</p>
+  <p class="small">{{ login_stats.shared }} shared · <b>{{ login_stats.unshared }} not shared</b>{% if login_stats.no_email %} · <span class="warn">{{ login_stats.no_email }} without a personal email</span>{% endif %} <span class="muted">(Test team left out)</span></p>
+  <label>Who <select name="team"><option value="">everyone</option>{% for t in teams %}{% if not t.is_test %}<option value="{{ t.id }}">{{ t.name }}</option>{% endif %}{% endfor %}</select></label>
+  <label class="chk"><input type="checkbox" name="again" value="1"> also those already shared (new passwords)</label>
+  <label>Answers go to <input name="reply_to" type="email" value="{{ login_reply_to }}" placeholder="optional: ExCon's address"></label>
+  <label>Note added to the email <textarea name="note" rows="3" placeholder="optional, e.g. when and where the exercise starts"></textarea></label>
+  <button class="btn primary" data-confirm="Email logins with new passwords now?">Email logins</button>
+</form>
+<form method="post" action="/people/import/" enctype="multipart/form-data" class="card form" id="import">{% csrf_token %}
+  <h3>Import a roster</h3>
+  <p class="small">A spreadsheet (.xlsx) or CSV with a header row: <code>Name</code>, <code>Email</code> (their personal email), <code>Team</code> (<code>A</code> or <code>Team A</code>), optionally <code>Role</code> (<code>tl</code>). People already here (same email, or same name) get the personal email and team; the others are added as team members. You see the plan before anything changes.</p>
+  <input type="file" name="file" accept=".xlsx,.csv" required>
+  <button class="btn">Check the roster</button>
+</form>
 <form method="post" action="/people/bulk/" class="card form">{% csrf_token %}
   <h3>Paste a roster</h3>
-  <p class="small">CSV lines: <code>name,email,team code,role</code> (email optional; role <code>tl</code> for the team's leader, from ExCon, one per team; <code>desk</code> for the persona desk, no team code; empty for team members, or a member's team role, e.g. <code>Deputy Team Leader</code>, added to Team roles if new). Unknown team codes create a team. Existing people (same email) are updated.</p>
+  <p class="small">CSV lines: <code>name,email,team code,role,personal email</code> (emails optional; role <code>tl</code> for the team's leader, from ExCon, one per team; <code>desk</code> for the persona desk, no team code; empty for team members, or a member's team role, e.g. <code>Deputy Team Leader</code>, added to Team roles if new). Unknown team codes create a team. Existing people (same email) are updated.</p>
   <textarea name="csv" rows="10" placeholder="Jane Doe,jane@example.org,a,tl&#10;John Roe,,a,Deputy Team Leader&#10;Ann Poe,,a"></textarea>
   <label class="chk"><input type="checkbox" name="accounts" value="1" checked> create logins for people without one</label>
   <label class="chk"><input type="checkbox" name="replace_placeholders" value="1" checked> remove the placeholder people</label>

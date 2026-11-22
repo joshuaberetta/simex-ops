@@ -201,7 +201,8 @@ def deliver(msgs, dry_run=False, respect_pause=True):
             rid = m_.send(mailer.payload(m, atts, m.extra_headers), m.idem_key)
             Message.objects.filter(pk=m.pk).update(status="sent", sent_at=timezone.now(), error=None, resend_id=rid)
             from . import desk
-            desk.on_delivered(m)  # the persona desk's Sent
+            if not m.target.endswith(render.PERSONAL):  # the desk has the in-app delivery of a personal copy
+                desk.on_delivered(m)  # the persona desk's Sent
         except mailer.SendError as e:
             Message.objects.filter(pk=m.pk).update(status="failed", error=str(e))
         except Exception as e:  # never leave a message half-processed
@@ -352,8 +353,9 @@ def _finish_run(run):
 
 def send_oneoff(inj, address="", all_targets=False, user=""):
     """Send test: the inject as it would go out now. In-app -> the Test team's inbox; email
-    -> one address. Synchronous."""
+    -> one address. Synchronous. An in-app inject's email copies (also by email) are left out."""
     drafts, warnings = render.build(inj, conf.get_all())
+    drafts = [d for d in drafts if d.channel == inj.effective_channel]
     if not drafts:
         return [], warnings
     drafts = drafts if all_targets else drafts[:1]

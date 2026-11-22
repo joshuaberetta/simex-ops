@@ -17,7 +17,7 @@ from django.db import connection
 from django.db.models import Q
 from django.utils import timezone
 
-from . import mailer, notices, render
+from . import logins, mailer, notices, render
 from .models import Event, Message, Person, Response, ResponseAttachment, audit
 
 log = logging.getLogger("simex.inbound")
@@ -101,7 +101,8 @@ def guess(r: Response):
 
 def match_email(r: Response):
     _, from_addr = _addr(r.from_addr)
-    person = Person.objects.participants().filter(email__iexact=from_addr).first() if from_addr else None
+    by_addr = Q(email__iexact=from_addr) | Q(personal_email__iexact=from_addr)  # also an answer to a copy sent there
+    person = Person.objects.participants().filter(by_addr).first() if from_addr else None
     if person:
         r.person, r.team_id = person, person.team_id
     m = Message.objects.filter(reply_token=r.reply_token).first() if r.reply_token else None
@@ -112,7 +113,7 @@ def match_email(r: Response):
     else:
         guess(r)
     # A team leader answering their copy of an inject: kept, never counted as the team's reply.
-    leader = Person.objects.filter(role="tl", email__iexact=from_addr).first() if from_addr and not person else None
+    leader = Person.objects.filter(by_addr, role="tl").first() if from_addr and not person else None
     if leader or (m and m.person and m.person.is_leader):
         r.match, r.status = "leader", "ignored"
         r.team_id = r.team_id or (leader.team_id if leader else None)
@@ -234,8 +235,9 @@ def _new_email(rid, data):
         received = timezone.now()
     r = Response(channel="email", resend_id=rid, from_addr=addr, from_name=name, to=to, cc=cc,
                  subject=data.get("subject") or "", persona=persona, reply_token=token, received_at=received)
-    if _ours(addr) or is_auto_reply(r.subject):
-        r.status = "ignored"  # our own all-Bcc emails arrive here too; so do out-of-office answers
+    if _ours(addr) or is_auto_reply(r.subject) or persona == logins.FROM_LOCAL:
+        # Our own all-Bcc emails arrive here too; so do out-of-office answers and answers to login emails.
+        r.status = "ignored"
     match_email(r)
     r.save()
     audit("inbound", f"{addr} -> {persona or '?'}: {r.subject[:80]}")

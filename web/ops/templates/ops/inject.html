@@ -72,6 +72,7 @@
       {% for t in teams %}{% if t.active %}<label class="chk"><input type="checkbox" name="team_ids" value="{{ t.id }}" {% if t.id in selected_teams %}checked{% endif %}> {{ t.name }}</label>{% endif %}{% endfor %}
     </fieldset>
     <label class="chk" title="A copy in each team leader's own mailbox (not when the sender is the team leader persona: the leader has it in Sent)"><input type="checkbox" name="to_leaders" value="1" {% if inj.to_leaders %}checked{% endif %}> also to team leaders</label>
+    {% if channel_mode != 'email' %}<label class="chk" title="When delivered in SIMEX Mail, also emailed (Resend) to each recipient's personal email (People &amp; logins). Replies to the email come into Replies."><input type="checkbox" name="also_email" value="1" {% if inj.also_email %}checked{% endif %}> also by email to personal addresses</label>{% endif %}
   </div>
   <details class="emailonly" {% if inj.effective_channel == 'email' %}open{% endif %}><summary class="small">Email options (reply-to, extra recipients)</summary>
   <div class="row">
@@ -199,7 +200,7 @@
 </div>
 
 <div class="card">
-  <h3>Preview <span class="muted">{{ drafts|length }} {% if inj.effective_channel == 'inapp' %}inbox item{% else %}email{% endif %}{{ drafts|length|pluralize }}</span></h3>
+  <h3>Preview <span class="muted">{{ drafts|length }} {% if inj.effective_channel == 'inapp' %}inbox item{% else %}email{% endif %}{{ drafts|length|pluralize }}{% if inj.also_email and inj.effective_channel == 'inapp' %}, with the email copies to personal addresses{% endif %}</span></h3>
   {% for w in warnings %}<p class="warn small">{{ w }}</p>{% endfor %}
   {% for d in drafts %}
   <details {% if forloop.first %}open{% endif %}>

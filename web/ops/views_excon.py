@@ -6,6 +6,7 @@ import io
 import json
 import re
 import secrets
+import unicodedata
 from datetime import datetime, timedelta
 from pathlib import PurePosixPath
 
@@ -20,8 +21,8 @@ from django.utils import timezone
 from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_POST
 
-from . import (ai, legacy_import, backup, checks, conf, delivery, desk, documents, importer, inbound, mailer,
-               notices, render as rnd, signin)
+from . import (ai, legacy_import, backup, checks, conf, delivery, desk, documents, importer, inbound, logins, mailer,
+               notices, render as rnd, roster, signin)
 from .access import excon_required
 from .models import (CHANNELS, DELIVERY_MODES, ROLES, STATUSES, AiGrade, Attachment, AttachmentImport, Audit, Grade,
                      ImportBatch, Inject, InjectDraft, InjectReview, Mail, MailAttachment, MailLabel, Message,
@@ -153,12 +154,15 @@ def injects_bulk(request):
             inj.send_at += timedelta(minutes=_num(request.POST.get("minutes")) or 0)
         elif action in ("inapp", "email") and inj.status not in importer.LOCKED:
             inj.channel = action
+        elif action in ("also_email", "no_email") and inj.status not in importer.LOCKED:
+            inj.also_email = action == "also_email"
         else:
             continue
         inj.save()
         n += 1
     audit(f"bulk_{action}", f"{n} injects", _u(request))
-    messages.success(request, f"{action.capitalize()}: {n} of {len(ids)} selected injects changed.")
+    label = {"also_email": "Also by email", "no_email": "SIMEX Mail only"}.get(action, action.capitalize())
+    messages.success(request, f"{label}: {n} of {len(ids)} selected injects changed.")
     if action in ("inapp", "email") and conf.get("channel_mode") != "per_inject":
         messages.warning(request, f"Settings → Delivery channel is '{conf.CHANNEL_MODES[conf.get('channel_mode')]}', "
                                   "which overrides each inject's channel. Choose Per inject there for this to apply.")
@@ -236,6 +240,8 @@ def _inject_save(request, inj):
     if P.get("footer_mode") in ("default", "custom", "none"):
         inj.footer_mode = P.get("footer_mode")
     inj.to_leaders = P.get("to_leaders") == "1"
+    if conf.get("channel_mode") != "email":  # the box is only on the page then
+        inj.also_email = P.get("also_email") == "1"
     team_ids = [int(x) for x in P.getlist("team_ids")]
     all_ids = list(Team.objects.filter(active=True, is_test=False).values_list("id", flat=True))
     inj.team_ids = None if not team_ids or set(all_ids) <= set(team_ids) else team_ids
@@ -568,7 +574,10 @@ def _password():
 
 
 def _username_for(person):
-    base = re.sub(r"[^a-z0-9]+", ".", person.name.lower()).strip(".")[:24] or "participant"
+    # First and last name, easy to type: "Rodrigo de Morais Oliveira (Rod)" -> rodrigo.oliveira, José -> jose
+    ascii_name = unicodedata.normalize("NFKD", re.sub(r"\(.*?\)", " ", person.name)).encode("ascii", "ignore").decode()
+    words = re.sub(r"[^a-z0-9-]+", " ", ascii_name.lower()).replace(" -", " ").replace("- ", " ").split()
+    base = ".".join(words[:1] + words[1:][-1:])[:24] or "participant"
     if person.team:
         base = f"{person.team.code}.{base}"
     name, n = base, 1
@@ -579,10 +588,14 @@ def _username_for(person):
 
 
 def ensure_account(person, reset=False):
-    """Create (or reset) the login of a participant. Returns the new password, or None."""
+    """Create (or reset) the login of a participant. Returns the new password, or None. A new
+    password is not shared yet (People & logins: email it, or mark it given by hand)."""
     if person.user and not reset:
         return None
     pw = _password()
+    person.login_shared_at, person.login_shared_via = None, ""
+    if person.pk:
+        Person.objects.filter(pk=person.pk).update(login_shared_at=None, login_shared_via="")
     if person.user:
         person.user.set_password(pw)
         person.user.is_active = True
@@ -607,10 +620,18 @@ def people_page(request):
         t.n_leaders = sum(p.role == "tl" for p in mine)
         t.n_members = sum(p.role == "member" for p in mine)
     team_roles = list(TeamRole.objects.annotate(n=Count("people", filter=Q(people__role="member"))))
+    last = logins.last_emails(people)
+    for p in people:
+        p.login_email = last.get(p.id)
+    sharable = [p for p in people if _sharable(p)]
+    login_stats = {"shared": sum(1 for p in sharable if p.user and p.login_shared_at),
+                   "unshared": sum(1 for p in sharable if not (p.user and p.login_shared_at)),
+                   "no_email": sum(1 for p in sharable if not p.personal_email)}
     return render(request, "ops/people.html", {"tab": "people", "teams": teams, "people": people, "ROLES": ROLES,
                                                "team_roles": team_roles,
                                                "has_placeholders": has_placeholders, "creds": creds,
-                                               "SIGNIN_DAYS": signin.TOKEN_DAYS,
+                                               "SIGNIN_DAYS": signin.TOKEN_DAYS, "login_stats": login_stats,
+                                               "login_reply_to": conf.get("login_reply_to"),
                                                "creds_json": json.dumps(creds or [])})
 
 
@@ -714,12 +735,15 @@ def person_save(request):
     P = request.POST
     pid = P.get("id")
     name, email = (P.get("name") or "").strip(), (P.get("email") or "").strip()
-    if not name or (email and not rnd.EMAIL.match(email)):
-        messages.error(request, "A person needs a name (and, if given, a valid email).")
+    personal = (P.get("personal_email") or "").strip()
+    if not name or any(a and not rnd.EMAIL.match(a) for a in (email, personal)):
+        messages.error(request, "A person needs a name (and, if given, valid emails).")
         return redirect("/people/")
     p = get_object_or_404(Person, pk=_int(pid)) if pid else Person()
     old_role = p.role if pid else None
     p.name, p.email = name, email
+    if "personal_email" in P:
+        p.personal_email = personal
     p.role = P.get("role") if P.get("role") in ROLES else "member"
     p.team_id = None if p.role == "desk" else _int(P.get("team_id"))  # the persona desk belongs to no team
     p.team_role = TeamRole.objects.filter(pk=_int(P.get("team_role_id"))).first() if p.role == "member" else None
@@ -784,10 +808,7 @@ def people_bulk(request):
     text = request.POST.get("csv") or ""
     added, errors, creds = 0, [], []
     if request.POST.get("replace_placeholders") == "1":
-        for p in Person.objects.filter(email__endswith="placeholder.invalid"):
-            if p.user and not p.user.is_staff:
-                p.user.delete()
-            p.delete()
+        _remove_placeholders()
     teams = {t.code: t for t in Team.objects.all()}
     for n, row in enumerate(csv.reader(io.StringIO(text)), 1):
         row = [c.strip() for c in row]
@@ -796,11 +817,13 @@ def people_bulk(request):
         name, email = row[0], row[1] if len(row) > 1 else ""
         code = re.sub(r"[^a-z0-9-]", "", row[2].lower()) if len(row) > 2 else ""
         role_cell = row[3] if len(row) > 3 else ""
+        personal = row[4].lower() if len(row) > 4 else ""
         role = ("tl" if role_cell.lower() in ("tl", "team leader", "leader")
                 else "desk" if role_cell.lower() in ("desk", "persona desk") else "member")
         team_role = role_cell if role == "member" and role_cell.lower() not in ("member", "team member") else ""
-        if email and not rnd.EMAIL.match(email):
-            errors.append(f"line {n}: bad email '{email}'")
+        bad = next((a for a in (email, personal) if a and not rnd.EMAIL.match(a)), None)
+        if bad:
+            errors.append(f"line {n}: bad email '{bad}'")
             continue
         if code and code not in teams:
             teams[code] = Team.objects.create(code=code, name=f"Team {code.upper()}",
@@ -810,6 +833,8 @@ def people_bulk(request):
         p = existing or Person()
         old_role = p.role if p.pk else None
         p.name, p.email, p.role, p.active = name, email, role, True
+        if personal:
+            p.personal_email = personal
         p.team = teams[code] if code and role != "desk" else None
         problem = _leader_problem(p)
         if problem:
@@ -831,6 +856,13 @@ def people_bulk(request):
     if creds:
         _store_creds(request, creds)
     return redirect("/people/")
+
+
+def _remove_placeholders():
+    for p in Person.objects.filter(email__endswith="placeholder.invalid"):
+        if p.user and not p.user.is_staff:
+            p.user.delete()
+        p.delete()
 
 
 def _slips(request, rows):
@@ -866,6 +898,106 @@ def signin_slips(request):
     rows = [[p.name, p.team.name + (" · team leader" if p.role == "tl" else ""), p.user.username, ""] for p in people]
     audit("signin_slips", f"{len(rows)} slip(s)", _u(request))
     return _slips(request, rows)
+
+
+def _sharable(p):
+    """Someone whose login is given out for the exercise: an active member or leader of a real
+    team, or the persona desk (the Test team's logins are ExCon's own)."""
+    return p.active and ((p.team and not p.team.is_test) or p.role == "desk")
+
+
+@excon_required
+@require_POST
+def people_login_email(request):
+    """Email logins (a new password, the QR code and how to start) to personal emails: one
+    person (person=), a team (team=) or everyone; by default only those not shared yet."""
+    P = request.POST
+    note, reply_to = (P.get("note") or "").strip()[:2000], (P.get("reply_to") or "").strip()
+    if reply_to and not rnd.EMAIL.match(reply_to):
+        messages.error(request, f"'{reply_to}' is not an email address.")
+        return redirect("/people/#login-emails")
+    conf.put("login_reply_to", reply_to)
+    people = Person.objects.select_related("team", "user").order_by("team__sort", "name")
+    if P.get("person"):
+        people = [p for p in people.filter(pk=_int(P["person"]))]
+    else:
+        people = [p for p in (people.filter(team_id=_int(P["team"])) if P.get("team") else people) if _sharable(p)]
+        if P.get("again") != "1":
+            people = [p for p in people if not (p.user and p.login_shared_at)]
+    sent, errors = 0, []
+    for p in people:
+        err = logins.send(p, note=note, reply_to=reply_to, user=_u(request))
+        if err:
+            errors.append(err)
+        else:
+            sent += 1
+    if sent:
+        messages.success(request, f"Login emailed to {sent} {'person' if sent == 1 else 'people'}.")
+    if errors:
+        messages.error(request, f"Not emailed ({len(errors)}): " + "; ".join(errors[:15]))
+    if not people:
+        messages.warning(request, "Nobody to email: every login there has been shared already.")
+    return redirect("/people/#login-emails" if not P.get("person") else "/people/")
+
+
+@excon_required
+@require_POST
+def person_login_shared(request, pid):
+    """Mark a login given out by hand (a printed slip), or not shared."""
+    p = get_object_or_404(Person, pk=pid)
+    if request.POST.get("shared") == "1" and p.user:
+        p.login_shared_at, p.login_shared_via = timezone.now(), "by hand"
+    else:
+        p.login_shared_at, p.login_shared_via = None, ""
+    p.save(update_fields=["login_shared_at", "login_shared_via"])
+    audit("login_shared" if p.login_shared_at else "login_unshared", p.name, _u(request))
+    return redirect("/people/")
+
+
+@excon_required
+def people_import(request):
+    """Import a roster (spreadsheet or CSV): POST a file to see the plan, then apply it."""
+    if request.method == "POST" and request.FILES.get("file"):
+        up = request.FILES["file"]
+        try:
+            rows = roster.read(up.name, up.read())
+        except Exception as e:  # not a spreadsheet, no header row...
+            messages.error(request, f"{up.name}: {e}")
+            return redirect("/people/#import")
+        request.session["roster_rows"] = rows
+        request.session["roster_name"] = up.name
+        return redirect("/people/import/")
+    rows = request.session.get("roster_rows")
+    if not rows:
+        return redirect("/people/#import")
+    items, warnings = roster.plan(rows)
+    counts = {a: sum(1 for i in items if i["action"] == a) for a in ("add", "update", "same", "skip")}
+    placeholders = Person.objects.filter(email__endswith="placeholder.invalid").count()
+    return render(request, "ops/people_import.html", {"tab": "people", "items": items, "warnings": warnings,
+                                                      "placeholders": placeholders,
+                                                      "counts": counts, "filename": request.session.get("roster_name")})
+
+
+@excon_required
+@require_POST
+@transaction.atomic
+def people_import_apply(request):
+    rows = request.session.pop("roster_rows", None)
+    if not rows:
+        messages.error(request, "Nothing to import: upload the roster again.")
+        return redirect("/people/#import")
+    if request.POST.get("replace_placeholders") == "1":
+        _remove_placeholders()
+    items, _ = roster.plan(rows)  # planned again: the people may have changed since
+    added, updated, creds, errors = roster.apply(items, request.POST.get("accounts") == "1", ensure_account)
+    audit("people_import", f"{request.session.get('roster_name')}: {added} added, {updated} updated, "
+                           f"{len(creds)} logins", _u(request))
+    messages.success(request, f"Roster imported: {added} added, {updated} updated, {len(creds)} new login(s).")
+    if errors:
+        messages.error(request, "; ".join(errors[:10]))
+    if creds:
+        _store_creds(request, creds)
+    return redirect("/people/")
 
 
 # --- inbox monitor (ExCon view of any team's inbox) ---------------------------------------------------
@@ -1203,7 +1335,7 @@ def replies_page(request):
         "injects_all": Inject.objects.order_by("seq").values_list("id", "mel_id"),
         "webhook_ready": bool(settings.RESEND_WEBHOOK_SECRET),
         "webhook_url": settings.PUBLIC_URL.rstrip("/") + "/webhooks/resend",
-        "uses_email": conf.get("channel_mode") != "inapp" or Inject.objects.filter(channel="email").exists(),
+        "uses_email": conf.get("channel_mode") != "inapp" or Inject.objects.filter(Q(channel="email") | Q(also_email=True)).exists(),
         "eng_rows": eng_rows, "eng_teams": eng_teams, "eng_team_sum": eng_team_sum})
 
 

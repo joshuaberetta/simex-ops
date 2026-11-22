@@ -9,6 +9,7 @@ DEFAULTS = {
     "default_reply_to": "",  # email channel: leave empty so replies are tracked
     "excon_bcc": "",  # email channel: copy of every live email
     "test_address": "",
+    "login_reply_to": "",  # login emails (People & logins): where answers to them go
     "test_redirect": "delivered+{key}@resend.dev",
     "grace_minutes": "10",
     "live_armed": "0",

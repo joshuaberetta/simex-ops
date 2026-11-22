@@ -1,0 +1,26 @@
+{% extends "ops/base.html" %}
+{% block title %}Roster check · SIMEX ops{% endblock %}
+{% block body %}
+<h1><a href="/people/" class="muted">People</a> / {{ filename }}</h1>
+<div class="card">
+  <p><b>{{ counts.add }}</b> to add · <b>{{ counts.update }}</b> to update · {{ counts.same }} unchanged{% if counts.skip %} · <span class="warn"><b>{{ counts.skip }}</b> skipped (see below)</span>{% endif %}</p>
+  {% for w in warnings %}<p class="small muted">{{ w }}</p>{% endfor %}
+  <p class="small">Check the matches: a person matched by a <b>similar name</b> keeps their name here and gets the file's personal email and team. Names, logins and the email channel address are never changed.</p>
+  <form method="post" action="/people/import/apply/">{% csrf_token %}
+    <label class="chk"><input type="checkbox" name="accounts" value="1" checked> create logins for people without one (their passwords are shown once; or email them from People &amp; logins)</label>
+    {% if placeholders %}<label class="chk"><input type="checkbox" name="replace_placeholders" value="1" checked> remove the {{ placeholders }} placeholder people (…@placeholder.invalid)</label>{% endif %}
+    <button class="btn primary">Apply</button> <a href="/people/" class="btn">Cancel</a>
+  </form>
+</div>
+<table class="list">
+  <thead><tr><th>Line</th><th>In the file</th><th>Action</th><th>Person here</th><th>Changes</th></tr></thead>
+  {% for i in items %}
+  <tr><td class="small">{{ i.row.line }}</td>
+    <td>{{ i.row.name }}<div class="small muted">{{ i.row.email|default:"no email" }}{% if i.row.team %} · {{ i.row.team|upper }}{% endif %}</div></td>
+    <td><span class="status {% if i.action == 'add' %}scheduled{% elif i.action == 'skip' %}failed{% elif i.action == 'update' %}draft{% else %}sent{% endif %}">{{ i.action }}</span>
+      {% for x in i.problems %}<div class="warn small">{{ x }}</div>{% endfor %}</td>
+    <td>{% if i.person %}{{ i.person.name }} <span class="small muted">({{ i.how }}{% if i.person.user %}, login {{ i.person.user.username }}{% endif %})</span>{% else %}<span class="muted">new team member</span>{% endif %}</td>
+    <td class="small">{% for f, old, new in i.changes %}<div><b>{{ f }}</b>: <span class="old">{{ old|default:'—' }}</span> → <span class="new">{{ new }}</span></div>{% endfor %}</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

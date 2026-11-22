@@ -76,9 +76,14 @@ class PersonQuerySet(models.QuerySet):
 
 class Person(models.Model):
     """A team member (participant) or the team's leader (ExCon), see ROLES. Has a login (user)
-    for SIMEX Mail, an email for the email channel."""
+    for SIMEX Mail, an email for the email channel and a personal email outside the exercise."""
     name = models.CharField(max_length=200)
     email = models.CharField(max_length=320, blank=True, default="")
+    # Their own address: login emails (ops/logins.py) and the email copies of in-app injects
+    # marked "also by email" (Inject.also_email). `email` stays the email channel's address.
+    personal_email = models.CharField(max_length=320, blank=True, default="")
+    login_shared_at = models.DateTimeField(null=True, blank=True)  # their current password was given out
+    login_shared_via = models.CharField(max_length=320, blank=True, default="")  # the address emailed, or "by hand"
     team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.SET_NULL, related_name="people")
     role = models.CharField(max_length=20, default="member")  # member | tl | desk (see ROLES)
     team_role = models.ForeignKey(TeamRole, null=True, blank=True, on_delete=models.SET_NULL,
@@ -168,6 +173,8 @@ class Inject(models.Model):
     expects_reply = models.BooleanField(default=False)
     critical = models.BooleanField(default=False)  # ExCon's key inject: no reply in time is a critical miss (reports)
     to_leaders = models.BooleanField(default=False)  # also a copy to each team's leader
+    # In-app: also emailed (Resend) to each recipient's personal email (Person.personal_email).
+    also_email = models.BooleanField(default=False)
     reply_due_minutes = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -232,7 +239,7 @@ class Message(models.Model):
     """One delivery: an email handed to Resend, or a Mail put in an in-app inbox."""
     inject = models.ForeignKey(Inject, null=True, blank=True, on_delete=models.SET_NULL)
     run = models.ForeignKey(TestRun, null=True, blank=True, on_delete=models.SET_NULL)
-    kind = models.CharField(max_length=10)  # live | test | oneoff | reply | followup | leader | desk
+    kind = models.CharField(max_length=10)  # live | test | oneoff | reply | followup | leader | desk | login
     channel = models.CharField(max_length=10, default="inapp")
     target = models.CharField(max_length=200, blank=True, default="")
     idem_key = models.CharField(max_length=200, unique=True)
