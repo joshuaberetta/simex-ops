@@ -659,7 +659,23 @@ def people_page(request):
     login_stats = {"shared": sum(1 for p in sharable if p.user and p.login_shared_at),
                    "unshared": sum(1 for p in sharable if not (p.user and p.login_shared_at)),
                    "no_email": sum(1 for p in sharable if not p.personal_email)}
+    groups = []  # People, by team (in team order), then the persona desk and those without a team
+    for key, label, team, mine in ([(f"team-{t.id}", t.name, t, [p for p in people if p.team_id == t.id]) for t in teams]
+                                   + [("desk", "Persona desk", None, [p for p in people if p.role == "desk"]),
+                                      ("none", "No team", None, [p for p in people if not p.team_id and p.role != "desk"])]):
+        if not mine and not team:
+            continue
+        mine.sort(key=lambda p: (p.role != "tl", not p.active, p.name.lower()))
+        live = [p for p in mine if p.active]
+        groups.append({"key": key, "label": label, "team": team, "people": mine,
+                       "leader": next((p for p in live if p.role == "tl"), None),
+                       "n_members": sum(p.role == "member" for p in live),
+                       "shared": sum(1 for p in live if p.user and p.login_shared_at),
+                       "unshared": sum(1 for p in live if not (p.user and p.login_shared_at)),
+                       "no_email": sum(1 for p in live if not p.personal_email),
+                       "no_login": sum(1 for p in live if not p.user)})
     return render(request, "ops/people.html", {"tab": "people", "teams": teams, "people": people, "ROLES": ROLES,
+                                               "groups": groups,
                                                "team_roles": team_roles,
                                                "has_placeholders": has_placeholders, "creds": creds,
                                                "SIGNIN_DAYS": signin.TOKEN_DAYS, "login_stats": login_stats,

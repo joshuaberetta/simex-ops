@@ -62,7 +62,7 @@ Only participant-facing fields are imported. Expected outcomes, story, theme, ke
 - Injects that are **no longer in the file** are listed under *Not in this file*. They are still sent unless you tick **Cancel the … unsent inject(s) that are no longer in this file** before applying. Injects you created here (not imported) and injects already sent are never cancelled.
 
 ### 3.2 Teams, participants and logins
-**People & logins.** A new app has placeholder teams A–D (with placeholder people, no logins) and the **Test team**.
+**People & logins.** A new app has placeholder teams A–D (with placeholder people, no logins) and the **Test team**. **People** comes first, grouped by team (then the persona desk and anyone without a team): each team's heading shows its members, its leader, how many logins are shared or not, who has no personal email or no login, its sign-in slips, and **Email logins not shared yet** for that team. Click a heading to fold the team (remembered in your browser); **Expand all / Collapse all** above. Teams and Team roles are below.
 
 **Team members and team leaders.** Each team has **team members**, the participants (its focal point, or a few people sharing the team's one mailbox), and **one team leader**: an ExCon person who monitors the team, is not part of it, and plays the team leader persona (3.3). A team can't have two leaders, and a leader needs a team.
 

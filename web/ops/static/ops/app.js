@@ -17,7 +17,7 @@ document.querySelectorAll("[data-select-all]").forEach((box) => {
 // Injects: collapsible days, remembered in this browser.
 const dayGroups = document.querySelectorAll("details.day[data-day]");
 if (dayGroups.length) {
-  const KEY = "simex.injects.closed";
+  const KEY = dayGroups[0].dataset.store || "simex.injects.closed";  // People: the teams folded
   const closed = new Set(JSON.parse(localStorage.getItem(KEY) || "[]"));
   const save = () => localStorage.setItem(KEY, JSON.stringify([...closed]));
   dayGroups.forEach((d) => {
