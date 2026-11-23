@@ -361,3 +361,36 @@ def test_compose_and_desk_write_to_team_leaders(excon):
     lead.active = False
     lead.save()
     assert key not in {b["key"] for b in d.get("/inbox/desk/").context["simex_js"]["book"]}
+
+
+def test_withdraw_a_delivery_sent_by_mistake(excon):
+    from ops import delivery
+    from ops.tests.test_ops import deliver_now
+    setup(excon)
+    conf.put("personal_mailboxes", "1")
+    ta, tb = Team.objects.get(code="a"), Team.objects.get(code="b")
+    pa = participant("a")
+    lead = Person.objects.get(team=ta, role="tl")
+    from ops.models import Inject
+    Inject.objects.filter(mel_id="3-13").update(to_leaders=True)
+    deliver_now("3-13")
+    m = Message.objects.get(kind="live", inbox_team=ta, inbox_owner=None)
+    assert Mail.objects.filter(team=ta, owner=pa.person, message=m).exists()  # the member's copy
+    assert Mail.objects.filter(team=ta, owner=lead, folder="inbox").exists()  # the leader's (its own Message)
+    assert Mail.objects.filter(team=None, desk_team=ta, message=m).exists()  # the desk's
+    got, r = team_writes(pa, ta)  # Team A already answered it
+    page = excon.get(f"/log/{m.id}/")
+    assert [c["team"] for c in page.context["copies"]] == [ta]
+    assert excon.post(f"/log/{m.id}/withdraw/", {"team": ta.id, "confirm": "no"}).status_code == 302
+    assert Mail.objects.filter(message=m).exists()  # not confirmed: nothing goes
+    excon.post(f"/log/{m.id}/withdraw/", {"team": ta.id, "confirm": "withdraw"})
+    assert not Mail.objects.filter(message=m).exists()
+    assert not Mail.objects.filter(team=ta, owner=lead, subject="News").exists()  # the leader's copy went too
+    m.refresh_from_db()
+    assert m.status == "withdrawn" and Message.objects.filter(inbox_owner=lead).get().status == "withdrawn"
+    assert Mail.objects.filter(team=tb, owner=None, folder="inbox", subject="News").exists()  # other teams keep it
+    r.refresh_from_db()
+    assert r.mail is not None and Mail.objects.filter(pk=r.mail_id).exists()  # the team's reply stays
+    assert pa.get("/inbox/").status_code == 200 and pa.get(f"/inbox/t/{r.mail.thread}/").status_code == 200
+    assert delivery.withdraw(m, [ta.id]) == 0
+    assert "Withdrawn from SIMEX Mail" in excon.get(f"/log/{m.id}/").content.decode()

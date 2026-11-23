@@ -10,6 +10,7 @@ and a resumed email send is deduplicated by Resend.
 
 import email.utils
 import logging
+import re
 import secrets
 import uuid
 from datetime import timedelta
@@ -609,3 +610,46 @@ def _guarded(fn, arg):
 
 def people_of(team):
     return Person.objects.participants().filter(team=team, active=True)
+
+
+# --- withdrawing a delivery ---------------------------------------------------------------------
+
+def _with_leader_copies(m):
+    """m and, for an inject's delivery to a team, the copies of the same send to that team's
+    leader ("also to team leaders": Messages of their own, Message.inbox_owner)."""
+    out = [m.pk]
+    pre = re.match(r"^live-\d+-a\d+-", m.idem_key or "")
+    team_id = m.inbox_team_id or m.team_id
+    if pre and team_id and not m.inbox_owner_id:
+        out += list(Message.objects.filter(idem_key__startswith=pre.group(0), inbox_owner__role="tl",
+                                           inbox_owner__team_id=team_id).values_list("pk", flat=True))
+    return out
+
+
+def withdrawable(m):
+    """The SIMEX Mail copies of Message m, by team: [(team, [Mail...])] (the persona desk's copy
+    goes with the team it went to). Teams' own replies to it are never among them."""
+    by = {}
+    for mail in Mail.objects.filter(message__in=_with_leader_copies(m)).select_related("team", "desk_team", "owner").order_by("id"):
+        team = mail.team or mail.desk_team
+        by.setdefault(team.id if team else None, (team, []))[1].append(mail)
+    return list(by.values())
+
+
+def withdraw(m, team_ids, user=""):
+    """Take a delivery back out of SIMEX Mail (sent by mistake): every copy of Message m in the
+    mailboxes of those teams (team inbox, members' and leader's own, the persona desk's) is
+    deleted. Once no copy is left the Message is "withdrawn": out of the delivery and read
+    figures, never followed up. An email can't be recalled; teams' replies stay. Returns the
+    number of copies deleted."""
+    team_ids = set(team_ids)
+    with transaction.atomic():
+        mails = [x for t, ms in withdrawable(m) if t and t.id in team_ids for x in ms]
+        n = Mail.objects.filter(pk__in=[x.pk for x in mails]).delete()[1].get("ops.Mail", 0) if mails else 0
+        for x in {x.message_id for x in mails}:
+            if not Mail.objects.filter(message_id=x).exists():
+                Message.objects.filter(pk=x).update(status="withdrawn")
+    if n:
+        teams = ", ".join(sorted({(x.team or x.desk_team).name for x in mails}))
+        audit("withdraw", f"delivery {m.pk} ({(m.subject or '')[:80]}) from {teams}: {n} copies", user)
+    return n

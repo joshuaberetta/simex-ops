@@ -253,7 +253,7 @@ class Message(models.Model):
     text = models.TextField(default="")
     html = models.TextField(default="")
     attachment_ids = models.JSONField(default=list)
-    status = models.CharField(max_length=10, default="pending")  # pending | sent | failed | dry
+    status = models.CharField(max_length=10, default="pending")  # pending | sent | failed | dry | withdrawn
     resend_id = models.CharField(max_length=100, blank=True, null=True)
     error = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(default=timezone.now)

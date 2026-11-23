@@ -22,4 +22,13 @@
 </dl>
 <iframe class="mail tall" sandbox srcdoc="{{ m.html }}"></iframe>
 </div>
+{% if copies %}
+<form method="post" action="/log/{{ m.id }}/withdraw/" class="card form danger-zone">{% csrf_token %}
+  <h3>Withdraw from SIMEX Mail</h3>
+  <p class="hint">Sent by mistake? This deletes the message from the mailboxes of the teams you tick, as if it had never arrived: the team inbox, members' and the leader's own copies, and the persona desk's. Teams' replies to it stay. Anyone who has already read it, or had a notification on their phone, has seen it. {% if m.channel == 'email' %}An email that went out can't be recalled; only the copies in SIMEX Mail go.{% endif %}</p>
+  {% for c in copies %}<label class="chk"><input type="checkbox" name="team" value="{{ c.team.id }}" checked> <b>{{ c.team.name }}</b> <span class="muted small">{{ c.n }} cop{{ c.n|pluralize:"y,ies" }}: {{ c.boxes|join:", " }}</span></label>{% endfor %}
+  <label>Type <b>WITHDRAW</b> <input name="confirm" autocomplete="off"></label>
+  <button class="btn small danger">Withdraw</button>
+</form>
+{% elif m.status == 'withdrawn' %}<p class="muted">Withdrawn from SIMEX Mail.</p>{% endif %}
 {% endblock %}

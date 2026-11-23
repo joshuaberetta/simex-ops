@@ -1813,7 +1813,32 @@ def log_page(request):
 def message_page(request, mid):
     m = get_object_or_404(Message.objects.select_related("inject"), pk=mid)
     atts = file_links("a", Attachment.objects.filter(id__in=m.attachment_ids or [])) + file_links("x", m.files.all())
-    return render(request, "ops/message.html", {"tab": "log", "m": m, "atts": atts})
+    copies = [{"team": t, "n": len(ms), "boxes": sorted({_box_name(x) for x in ms})} for t, ms in delivery.withdrawable(m) if t]
+    return render(request, "ops/message.html", {"tab": "log", "m": m, "atts": atts, "copies": copies})
+
+
+def _box_name(mail):
+    if mail.team_id is None:
+        return "persona desk"
+    if mail.owner_id is None:
+        return "team inbox"
+    return f"{mail.owner.name}{' (leader)' if mail.owner.is_leader else ''}"
+
+
+@excon_required
+@require_POST
+def message_withdraw(request, mid):
+    """Take a delivery sent by mistake back out of the chosen teams' SIMEX Mail."""
+    m = get_object_or_404(Message, pk=mid)
+    if request.POST.get("confirm", "").strip().upper() != "WITHDRAW":
+        messages.error(request, "Type WITHDRAW to confirm.")
+    else:
+        n = delivery.withdraw(m, [int(x) for x in request.POST.getlist("team") if x.isdigit()], _u(request))
+        if n:
+            messages.success(request, f"Withdrawn: {n} cop{'y' if n == 1 else 'ies'} deleted from SIMEX Mail.")
+        else:
+            messages.warning(request, "Nothing withdrawn: tick the teams to take it back from.")
+    return redirect(f"/log/{mid}/")
 
 
 EDITABLE = ["footer", "subject_prefix", "default_reply_to", "excon_bcc", "test_address", "test_redirect",

@@ -145,7 +145,7 @@ tr.st-cancelled td a { color: var(--muted); text-decoration: line-through; }
 .status.sent, .status.done, .status.dry { background: #e5f3eb; color: var(--ok); }
 .status.partial, .status.overdue, .status.paused { background: #fde7c6; color: #7a4100; }
 .status.failed { background: #fbe1df; color: var(--err); }
-.status.cancelled { background: #f1f1f1; color: #888; }
+.status.cancelled, .status.withdrawn { background: #f1f1f1; color: #888; }
 
 details { border-top: 1px solid var(--line); padding: 8px 0; }
 summary { cursor: pointer; font-weight: 600; }

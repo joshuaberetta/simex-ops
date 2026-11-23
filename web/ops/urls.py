@@ -146,6 +146,7 @@ urlpatterns = [
     path("help/", x.help_page),
     path("log/", x.log_page),
     path("log/<int:mid>/", x.message_page),
+    path("log/<int:mid>/withdraw/", x.message_withdraw),
     path("settings/", x.settings_page),
     path("settings/arm/", x.settings_arm),
     path("settings/pause/", x.settings_pause),
