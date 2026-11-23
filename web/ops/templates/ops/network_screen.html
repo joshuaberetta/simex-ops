@@ -1,0 +1,19 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comms network · SIMEX ops</title>
+<link rel="stylesheet" href="{% static 'ops/app.css' %}">
+<link rel="stylesheet" href="{% static 'ops/network.css' %}">
+</head>
+<body class="net-screen">
+<header class="net-head">
+  <b>SIMEX <span>comms network</span>{% if kind == "test" %} · Test team{% endif %}</b>
+  <span class="net-clocks"><span data-net-real></span><span data-net-sim hidden></span></span>
+  <a href="/dashboard/network/?kind={{ kind }}" class="net-back">Back to the Dashboard</a>
+</header>
+{% include "ops/_network.html" %}
+<footer class="foot net-foot">SIMEX ops is open source under the AGPL-3.0. <a href="{{ SOURCE_URL }}" target="_blank" rel="noopener">Source code on GitHub</a></footer>
+</body>
+</html>

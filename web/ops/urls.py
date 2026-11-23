@@ -4,6 +4,7 @@ from . import views_ai as a
 from . import views_excon as x
 from . import views_inbox as p
 from . import views_leader as lead
+from . import views_network as net
 from . import views_npc as npc
 from . import views_report as rp
 from . import views_roleplay as rpx
@@ -147,6 +148,9 @@ urlpatterns = [
     path("grades/<int:iid>/<int:tid>/analyse/", a.grade_analyse),
     path("dashboard/", a.dashboard),
     path("dashboard/summary/", a.dashboard_summary),
+    path("dashboard/network/", net.network_page),
+    path("dashboard/network/data/", net.network_data),
+    path("dashboard/network/poll/", net.network_poll),
     path("reports/", rp.reports),
     path("reports/compile/", rp.reports_compile),
     path("reports/<int:eid>/", rp.exercise_report),

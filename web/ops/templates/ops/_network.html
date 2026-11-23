@@ -1,0 +1,38 @@
+{% load static %}<div class="net{% if screen %} dark{% endif %}" data-net>
+  <div class="net-controls" role="group" aria-label="What the map shows">
+    <div class="seg small" role="group" aria-label="Detail">
+      <button type="button" data-net-view="teams" class="on" title="Members folded into their team; click a team to open it up">Teams</button><button type="button" data-net-view="people" title="Every member on their own">People</button>
+    </div>
+    <label>Time <select data-net-win>
+      <option value="15">Last 15 min</option><option value="60">Last hour</option><option value="today">Today</option><option value="all" selected>Whole exercise</option>
+    </select></label>
+    <label class="check"><input type="checkbox" data-net-injects checked> Injects</label>
+    <label>Lines from <input type="number" min="1" max="50" value="1" data-net-minline> msg</label>
+    <label>Personas from <input type="number" min="1" max="50" value="1" data-net-minpersona> msg</label>
+    <span class="net-buttons">
+      <button type="button" class="btn small" data-net-fit title="Fit the whole map in view">Fit</button>
+      <button type="button" class="btn small" data-net-unpin title="Let every dot you dragged move again">Unpin all</button>
+      <button type="button" class="btn small" data-net-reset title="Forget the saved positions and lay the map out afresh">New layout</button>
+    </span>
+  </div>
+  <div class="net-main">
+    <div class="net-stage" data-net-stage>
+      <canvas data-net-canvas aria-label="Map of who writes to whom" role="img"></canvas>
+      <div class="net-tip" data-net-tip hidden></div>
+      <p class="net-empty" data-net-empty hidden>Nothing sent yet{% if kind == "test" %} to the Test team{% endif %}. Each message appears here as it goes.</p>
+      <p class="net-status" data-net-status hidden></p>
+      <div class="net-legend" aria-label="Legend">
+        <span><i class="lg team"></i>Team</span><span><i class="lg leader"></i>Team leader</span><span><i class="lg member"></i>Member</span><span><i class="lg persona"></i>Persona</span><span><i class="lg ai"></i>AI persona</span>
+        <span><i class="lg line"></i>Thicker = more messages, bright end = who wrote</span><span><i class="lg dot"></i>A message on its way</span>
+      </div>
+    </div>
+    <aside class="net-side">
+      <div class="net-stats" data-net-stats></div>
+      <div class="net-detail" data-net-detail><p class="muted small">Point at a dot to see its figures, click it to keep them here. Click a team to open it up into its members; drag a dot to pin it.</p></div>
+      <h3>Latest</h3>
+      <ol class="net-feed" data-net-feed></ol>
+    </aside>
+  </div>
+</div>
+{{ cfg_js|json_script:"net-cfg" }}
+<script src="{% static 'ops/network.js' %}"></script>

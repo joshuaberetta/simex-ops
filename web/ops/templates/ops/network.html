@@ -1,0 +1,19 @@
+{% extends "ops/base.html" %}{% load static %}
+{% block title %}Network · Dashboard · SIMEX ops{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'ops/network.css' %}">{% endblock %}
+{% block body %}
+<div class="bar">
+  <h1>Dashboard</h1>
+  <nav class="seg">
+    <a href="/dashboard/?kind={{ kind }}">Figures</a>
+    <a href="/dashboard/network/?kind={{ kind }}" class="on">Network</a>
+  </nav>
+  <nav class="seg">
+    <a href="/dashboard/network/?kind=live" class="{% if kind == 'live' %}on{% endif %}">Exercise</a>
+    <a href="/dashboard/network/?kind=test" class="{% if kind != 'live' %}on{% endif %}">Test team</a>
+  </nav>
+  <a href="/dashboard/network/?kind={{ kind }}&screen=1" class="btn" target="_blank" rel="noopener" title="Full screen, dark, without the menus: to leave open on a wall screen">Wall screen</a>
+</div>
+<p class="small muted">Who writes to whom: the teams, their members and leaders, the personas. A dot grows with the mail it sent and received, a line with the messages one way (each direction is its own line, bright where it starts). New messages travel along the lines as they go. Updates every few seconds.</p>
+{% include "ops/_network.html" %}
+{% endblock %}

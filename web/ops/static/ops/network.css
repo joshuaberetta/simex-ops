@@ -1,0 +1,89 @@
+/* Dashboard → Network (network.js). Light on the ExCon page, dark on the wall screen. */
+.net {
+  --net-surface: #fcfcfb; --net-ink: #0b0b0b; --net-ink-2: #52514e; --net-muted: #6b7280; --net-line: #e5e7eb;
+  --net-persona: #8b8a85; --net-excon: #2a2b2e; --net-halo: rgba(252,252,251,.92); --net-glow: #0b0b0b;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
+}
+.net.dark {
+  color-scheme: dark;
+  --net-surface: #1a1a19; --net-ink: #f0efec; --net-ink-2: #c3c2b7; --net-muted: #9b9a92; --net-line: #34332f;
+  --net-persona: #8f8e87; --net-excon: #d6d5cf; --net-halo: rgba(26,26,25,.9); --net-glow: #ffffff;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+}
+.net-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 10px; font-size: 13px; color: var(--net-ink-2); }
+.net-controls label { display: inline-flex; align-items: center; gap: 6px; }
+.net-controls select, .net-controls input[type=number] { font: inherit; padding: 3px 6px; border: 1px solid var(--line-strong); border-radius: 6px; background: #fff; color: var(--ink); }
+.net-controls input[type=number] { width: 54px; }
+.net-buttons { display: inline-flex; gap: 6px; margin-left: auto; }
+.seg button { font: inherit; border: 0; background: none; padding: 4px 12px; color: #4b5563; border-radius: 6px; font-weight: 500; cursor: pointer; }
+.seg button.on { background: #fff; color: var(--ink); box-shadow: var(--shadow-md); }
+.seg.small button { padding: 2px 10px; font-size: 12px; }
+
+.net-main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; }
+.net-stage { position: relative; height: calc(100vh - 290px); min-height: 460px; background: var(--net-surface); border: 1px solid var(--net-line); border-radius: 10px; overflow: hidden; }
+.net-stage canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+.net-stage canvas.drag { cursor: grabbing; }
+.net-stage canvas.over { cursor: pointer; }
+.net-tip { position: absolute; pointer-events: none; z-index: 2; max-width: 260px; padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.4;
+  background: var(--net-surface); color: var(--net-ink); border: 1px solid var(--net-line); box-shadow: 0 4px 14px rgba(0,0,0,.14); }
+.net-tip b { display: block; font-size: 13px; }
+.net-tip .muted { color: var(--net-muted); }
+.net-empty, .net-status { position: absolute; left: 0; right: 0; text-align: center; color: var(--net-muted); font-size: 14px; margin: 0; }
+.net-empty { top: 45%; }
+.net-status { top: 12px; font-size: 12px; }
+.net-legend { position: absolute; left: 10px; bottom: 8px; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--net-ink-2);
+  background: var(--net-halo); padding: 4px 8px; border-radius: 6px; max-width: calc(100% - 20px); }
+.net-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.lg { display: inline-block; width: 10px; height: 10px; }
+.lg.team { border-radius: 50%; background: var(--s1); width: 12px; height: 12px; }
+.lg.leader { background: var(--s1); transform: rotate(45deg) scale(.8); }
+.lg.member { border-radius: 50%; background: var(--s1); width: 7px; height: 7px; opacity: .85; }
+.lg.persona { border-radius: 50%; background: var(--net-persona); }
+.lg.ai { border-radius: 50%; background: var(--net-persona); outline: 1.5px dashed var(--net-persona); outline-offset: 2px; }
+.lg.line { width: 22px; height: 3px; border-radius: 2px; background: linear-gradient(90deg, var(--s1), transparent); }
+.lg.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--net-glow); box-shadow: 0 0 6px var(--net-glow); }
+
+.net-side { display: flex; flex-direction: column; min-height: 0; height: calc(100vh - 290px); min-height: 460px; color: var(--net-ink); }
+.net-side h3 { margin: 14px 0 6px; font-size: 13px; color: var(--net-ink-2); }
+.net-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.net-stats div { background: var(--net-surface); border: 1px solid var(--net-line); border-radius: 8px; padding: 8px; }
+.net-stats b { display: block; font-size: 22px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.net-stats span { font-size: 11px; white-space: nowrap; color: var(--net-muted); }
+.net-detail { margin-top: 10px; background: var(--net-surface); border: 1px solid var(--net-line); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+.net-detail h4 { margin: 0 0 2px; font-size: 15px; display: flex; align-items: center; gap: 6px; }
+.net-detail .sw { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.net-detail .sub { color: var(--net-muted); font-size: 12px; margin-bottom: 8px; }
+.net-detail table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.net-detail td { padding: 2px 0; border: 0; }
+.net-detail td.n { text-align: right; font-variant-numeric: tabular-nums; color: var(--net-ink-2); white-space: nowrap; padding-left: 6px; }
+.net-detail .btn { margin-top: 8px; }
+.net-detail ol { margin: 4px 0 0; padding: 0; list-style: none; }
+.net-detail li { padding: 2px 0; color: var(--net-ink-2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.net-detail .label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--net-muted); margin: 8px 0 2px; }
+.net-feed { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; min-height: 80px; font-size: 12px; }
+.net-feed li { padding: 6px 2px; border-bottom: 1px solid var(--net-line); cursor: pointer; }
+.net-feed li:hover { background: rgba(127,127,127,.08); }
+.net-feed li.fresh { animation: net-fresh 2.5s ease-out; }
+.net-feed .who { color: var(--net-ink); font-weight: 600; }
+.net-feed .s { display: block; color: var(--net-ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.net-feed .t { float: right; color: var(--net-muted); font-variant-numeric: tabular-nums; margin-left: 6px; }
+@keyframes net-fresh { from { background: rgba(42,120,214,.25); } to { background: transparent; } }
+@media (max-width: 960px) { .net-main { grid-template-columns: 1fr; } .net-side { height: auto; } }
+
+/* The wall screen: dark, nothing but the map. */
+body.net-screen { background: #121211; color: #f0efec; margin: 0; }
+body.net-screen .net { padding: 0 18px; }
+.net-head { display: flex; align-items: center; gap: 18px; padding: 12px 18px 8px; font-size: 15px; }
+.net-head b span { font-weight: 500; color: #9b9a92; }
+.net-clocks { display: inline-flex; gap: 18px; font-variant-numeric: tabular-nums; color: #c3c2b7; }
+.net-clocks [data-net-sim] { color: #f0efec; font-weight: 600; }
+.net-back { margin-left: auto; color: #9b9a92; font-size: 12px; }
+body.net-screen .net-controls { color: #c3c2b7; }
+body.net-screen .net-controls select, body.net-screen .net-controls input[type=number] { background: #1a1a19; color: #f0efec; border-color: #34332f; }
+body.net-screen .seg { background: #262624; }
+body.net-screen .seg button { color: #c3c2b7; }
+body.net-screen .seg button.on { background: #3a3a37; color: #fff; }
+body.net-screen .btn { background: #262624; color: #f0efec; border-color: #3a3a37; }
+body.net-screen .net-stage, body.net-screen .net-side { height: calc(100vh - 140px); }
+.net-foot { padding: 8px 18px; color: #6f6e68; }
+.net-foot a { color: #9b9a92; }

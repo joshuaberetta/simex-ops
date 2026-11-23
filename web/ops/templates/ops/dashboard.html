@@ -5,6 +5,10 @@
 <div class="bar">
   <h1>Dashboard</h1>
   <nav class="seg">
+    <a href="/dashboard/?kind={{ kind }}&score={{ source }}" class="on">Figures</a>
+    <a href="/dashboard/network/?kind={{ kind }}">Network</a>
+  </nav>
+  <nav class="seg">
     <a href="/dashboard/?kind=live&score={{ source }}" class="{% if kind == 'live' %}on{% endif %}">Exercise</a>
     <a href="/dashboard/?kind=test&score={{ source }}" class="{% if kind != 'live' %}on{% endif %}">Test team</a>
   </nav>
