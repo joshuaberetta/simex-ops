@@ -24,7 +24,7 @@ SIMEX ops and SIMEX Mail are open source under the GNU AGPL-3.0: every page of b
 
 ## 2. The tabs
 
-The tabs come in two groups: what you use while the exercise runs (**Injects**, **Replies**, **Team inboxes**, **Compose**, **Dashboard**, **Log**), then, after the divider, setting it up (**People & logins**, **Senders**, **Test runs**, **Settings**).
+The tabs come in two groups: what you use while the exercise runs (**Injects**, **Replies**, **Team inboxes**, **Compose**, **Dashboard**, **Log**, **Role play**), then, after the divider, setting it up (**People & logins**, **Senders**, **Test runs**, **Settings**).
 
 | Tab | What it is for |
 |---|---|
@@ -34,6 +34,7 @@ The tabs come in two groups: what you use while the exercise runs (**Injects**, 
 | **Compose** | Write as any persona (but the team leader persona) to teams, team members or team leaders, now, without making an inject: the persona desk's **Write as a persona** on these screens (5.3), with what was sent from here and the desk below. |
 | **Dashboard** | The exercise at a glance: per team, replies, response times, scores, sentiment over time and a funnel; the rubric heatmap; flags, possibly AI-written replies, what teams ask for and commit to; an AI-written exercise summary (5.7). **End-of-exercise reports** for each team and for ExCon (6.1). |
 | **Log** | Every delivery the app made, with content and status, plus the activity log of every action. A delivery sent by mistake can be withdrawn from SIMEX Mail on its page (5.3). |
+| **Role play** | The role players' schedule: every sitting of every role play (face to face, phone, VTC) by time, who plays it, where and for which team, **In position** / **Done**, **Slip** the schedule, checks, each role play's script and files, the import, the role players' briefing and FAQ, and printable run sheets (5.11). |
 | **People & logins** | Teams, participants, and their logins (create, reset password, disable, printable credential sheet). |
 | **Senders** | The personas: username (`cnn`), display name ("CNN Breaking News"). Participants write to them (their address book grows with use). |
 | **AI personas** | Only while Settings → AI personas is on: personas that answer the teams on their own, in character (5.9). |
@@ -85,7 +86,8 @@ Only participant-facing fields are imported. Expected outcomes, story, theme, ke
    - **Email logins** (right column) emails each person, at their personal email, their username, a **new password**, the QR code and sign-in link of their slip, how to start (phone: scan, alerts, Home Screen on an iPhone; laptop: the address and password) and what their mailboxes are, plus an optional **note** (e.g. when and where the exercise starts). Choose everyone or a team; by default only those whose login isn't shared yet (tick **also those already shared** to send new passwords to them too). **Answers go to**: an ExCon address for their answers (remembered); left empty, answers land on the Replies tab, ignored. One person: **email login** in their row. Sending issues a new password, so their printed slips and old password stop working; the Log keeps each email without its password and link. The QR code and link work for 14 days from sending, the password until it is reset.
    - Each row shows **shared** (when, by email or by hand) or **not shared**, and *email failed* or a bounce. A slip handed out on paper: **mark shared** (**unmark** to undo). **Reset password** marks the login not shared, as nobody has the new one yet.
 6. **Persona desk** (5.10): role-players who answer as the personas get the role **Persona desk (ExCon)** (no team; roster role `desk`, team code empty). They sign in at the SIMEX Mail address with their username and password (or scan the QR code on their slip or in their login email: it opens **Set up this device** for the persona desk's mailbox) and reach SIMEX Mail only, never these screens.
-7. Give yourself a login in the **Test team** (Add person → team "Test team" → create login) to try SIMEX Mail as a participant.
+7. **Role players** (5.11): people who play characters face to face or by phone get the role **Role player (ExCon)** (no team; roster role `rp`). Most are added by the role-play import; give them logins here. Their QR code opens their role plays and turns on reminders on their phone; they reach nothing else.
+8. Give yourself a login in the **Test team** (Add person → team "Test team" → create login) to try SIMEX Mail as a participant.
 
 - **Team code** fills `{team}` in addresses (`undac-{team}-tl` → `undac-a-tl@…`); **team name** fills `{team_name}`.
 - **Disable** blocks a login without deleting the person; **delete** removes both.
@@ -298,6 +300,51 @@ A shared mailbox in SIMEX Mail for the people playing the personas, so answering
 - Desk members turn on alerts like participants: each new message to a persona is pushed to their devices. Their guide is under **?** in SIMEX Mail.
 - Reading on the desk is never counted as the team reading. **Clear mailboxes** (every mailbox) also clears the desk's copies of that team's mail.
 
+### 5.11 Role play
+The people who play characters face to face, by phone or by VTC (airport staff, immigration, the RC, the press, the team leaders' scripted calls) need to be at the right place at the right time, for the right team, with their script. The **Role play** tab is ExCon's board for that. Each role player has the same on their phone, with reminders.
+
+**Control-side, kept apart.** Scripts, expected outcomes and notes are kept here, unlike for injects. They are shown only on this tab and to the role players assigned to each role play. Teams, team leaders' mailboxes, the AI (analysis, AI personas, drafts) and the reports never see them.
+
+**Load the schedule: Role play → Import.** Upload the MEL-MIL workbook and the role-player schedule sheet, in one workbook or one after the other:
+- From the **MEL-MIL** sheet, its rows played face to face, by phone or VTC (Inject method *F2F*, *Phone*, *VTC*, *MS Teams*, *Signal*): serial, day, time, duration, title, **script** (Content), **expected outcomes** and documents. The email rows stay with the injects.
+- From the **role-player schedule** (columns *Serial, Time, Duration, Role, Role player, Event*): the role and who plays it. Names are matched to People (role players, team leaders, the persona desk); new names are added as role players without a login. A serial on two rows (the RC with Peter + Janet for teams A&C, with Ben + Aida for B&D) makes two role plays, sharing the MEL's script. *n/a* leaves it unassigned.
+- Times become **sittings**, one per team where the sheet says so:
+  - `1440 - A`, or one line per team (`1430 - A`, `1450 - B`…)
+  - `18:00 A - B / 18:20 C - D`
+  - `18:00 + 18:20` with the role *RC - teams A&C* (A at 18:00, C at 18:20)
+  - `19:10` for `4 x 5 min (D C B A)` (D at 19:10, C at 19:15…)
+  - `4 x 5 min` with no order: the teams in order
+
+  A plain time is one sitting for every team together.
+- The sheets name the day only (*Monday*). The plan shows the date each day stands for, guessed from the MEL's email rows: correct them there, or later under **Role players & briefing → Exercise days**.
+- The plan lists what is new, updated and edited by you (kept unless you tick *overwrite my edits*). The checkboxes at the top choose the sheets: an old schedule kept in the workbook (other serials) starts unticked. A re-import never moves a sitting that has started.
+
+**Role players: Role play → Role players & briefing.**
+- Add role players there or on **People & logins** (role **Role player (ExCon)**, no team). Give them a login and email it or print the slip as for anyone (3.2). The QR code signs them in on their phone, opens their role plays and turns on alerts (on an iPhone, after adding it to the Home Screen).
+- Write the **briefing** and **FAQ** every role player sees, and set the reminders. They come so many minutes before each sitting (15 by default) and again at its start, unless the role player is already in position. Optionally they're emailed to role players with no alerts on any device.
+- The list shows each role player's login, alert devices, when they last opened their schedule, their next sitting, and a link to their **run sheet** (printable, with their scripts).
+- A **team leader** can be given role plays too (*Team Leaders: Silva - Stefania…*). Each leader plays only their own team's sittings (or those for every team), and gets a **My role plays** tab in SIMEX Mail.
+
+**During the exercise: Role play → Board.**
+- Every sitting of the day by time: the role play, the team, the role and who plays it (🔔 = alerts on), where, and its status. A role player taps **I'm in position** and **Done** on their phone; you can set either here too, or **skip** a sitting. The board refreshes itself.
+- A sitting past its start with nobody in position is marked *late*, and a notification says so (Notifications → System).
+- **Slip the schedule** moves every *pending* sitting from a time to the end of that day by so many minutes (negative: earlier). Done and in-position sittings stay. The role players affected get *Changed: 1-29 now 15:25 (was 15:10)*.
+- **Checks**:
+  - a role player double-booked
+  - sittings with no time
+  - role plays with no role player, or face to face with no location
+  - a team in two places at once (fine if it splits up)
+- Open a role play to edit anything, assign role players, add, move or delete sittings (moving one tells its role players) or **Rebuild from the time text**, and upload files (handouts, signs). Role players download the files from their phone.
+- **Print run sheets**: the day's sittings with every script, or `?player=` / `?location=` for one role player or one place, with or without the scripts.
+
+**What a role player sees** (`/inbox/rp/` in SIMEX Mail):
+- **Now** and **Next**, with a countdown
+- their whole schedule by day, each sitting with its team, place, role and who else plays it
+- for each role play, the script, what the teams should do, documents, files and notes
+- the **Briefing & FAQ**
+
+Everything on it is marked as Exercise Control's, never to be shown to a team.
+
 ## 6. After the exercise
 In this order:
 1. **Disarm** and wait for the last answers; **Download backup**.
@@ -322,7 +369,7 @@ In this order:
 - **Members' own mailboxes only** empties just the members' My mail; the team inbox and its replies stay.
 - Deliveries stay in the Log, and in the Dashboard's Delivered and Read, unless you tick **Also delete the deliveries to them**.
 
-**Before going live: Settings → Start afresh.** Type `START AFRESH`. For every team it deletes every mailbox (team inboxes, leaders', members' own, the persona desk), replies, persona answers, grades, AI analyses, the exercise summary and reports, test runs, notifications and every delivery in the Log with its read and download figures: the Dashboard, Replies and Log start from zero. Injects, documents, rubrics, personas, people, logins (and login emails), settings and the audit trail stay, and live sending stays armed or disarmed as it was. With **Put injects already sent back on the schedule** (ticked), injects sent, failed or overdue during testing are scheduled again at their send time (those whose time has passed go overdue: send them by hand or change their time). Received email from before the reset is never synced back.
+**Before going live: Settings → Start afresh.** Type `START AFRESH`. For every team it deletes every mailbox (team inboxes, leaders', members' own, the persona desk), replies, persona answers, grades, AI analyses, the exercise summary and reports, test runs, notifications, role-play progress (every sitting pending again at its imported time, slips undone) and every delivery in the Log with its read and download figures: the Dashboard, Replies and Log start from zero. Injects, documents, rubrics, personas, people, logins (and login emails), settings and the audit trail stay, and live sending stays armed or disarmed as it was. With **Put injects already sent back on the schedule** (ticked), injects sent, failed or overdue during testing are scheduled again at their send time (those whose time has passed go overdue: send them by hand or change their time). Received email from before the reset is never synced back.
 
 Neither can be undone: download a backup first.
 
