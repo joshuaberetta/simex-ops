@@ -1,0 +1,21 @@
+/* Suggest a reply (suggest.js): the desk's conversation page and ExCon's reply page. */
+.sg { border: 1px solid #d6cdf3; background: #faf8ff; border-radius: 10px; padding: 10px 14px; margin: 10px 0; font-size: 14px; }
+.sg-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sg-head b { color: #4a3aa8; }
+.sg-head input { flex: 1; min-width: 180px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; font: inherit; }
+.sg-btn { border: 1px solid #8f80d8; background: #fff; color: #3b2d94; border-radius: 16px; padding: 5px 12px; font: inherit; cursor: pointer; }
+.sg-btn.primary { background: #5b4bc4; border-color: #5b4bc4; color: #fff; }
+.sg-btn:disabled { opacity: .5; cursor: default; }
+.sg-meta, .sg-wait { color: #666; font-size: 13px; margin: 8px 0 4px; }
+.sg-err { color: #b3261e; }
+.sg-asks { margin: 6px 0; }
+.sg-answer { background: #fff; border: 1px solid #e2dcf7; border-radius: 8px; padding: 10px; margin: 6px 0; }
+.sg-body { white-space: pre-wrap; font: inherit; margin: 0 0 8px; }
+.sg-acts { display: flex; gap: 8px; }
+.sg-sec h4, .sg-sec summary { margin: 10px 0 4px; font-size: 13px; color: #4a3aa8; cursor: default; }
+.sg-sec summary { cursor: pointer; }
+.sg-sec ul { margin: 0; padding-left: 20px; }
+.sg-sec p { margin: 0; }
+.sg-src { color: #777; }
+.sg-fact.upcoming, .sg-fact.not_given { color: #b3261e; }
+.sg > .sg-sec:first-of-type ul { color: inherit; }

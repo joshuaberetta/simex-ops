@@ -7,7 +7,7 @@
     {% if not ai_available %}AI analysis: no provider configured{% elif not ai_enabled %}AI analysis is off (<a href="/settings/#ai">Settings</a>){% else %}about ${{ ai_spent|floatformat:2 }} of ${{ ai_cap|floatformat:2 }} today{% endif %}
   </span>
 </div>
-<p class="small muted">Claude drafts a message from the injects, the personas and what the teams have written. Nothing is sent: you get a draft to edit, then make it a draft inject (or copy it into the follow-up or answer form) and send it as usual. It only knows what this app holds, so check any new fact it lists against the scenario.</p>
+<p class="small muted">SIMEX AI drafts a message from the injects, the personas and what the teams have written. Nothing is sent: you get a draft to edit, then make it a draft inject (or copy it into the follow-up or answer form) and send it as usual. It only knows what this app holds, so check any new fact it lists against the scenario.</p>
 
 <div class="cols">
 <section class="col-main">
@@ -34,7 +34,7 @@
     </label>
   </div>
   {% endif %}
-  <label>What should it do? <span class="hint">persona, purpose, tone, timing; leave empty to let Claude propose one from the context</span>
+  <label>What should it do? <span class="hint">persona, purpose, tone, timing; leave empty to let SIMEX AI propose one from the context</span>
     <textarea name="prompt" rows="5" placeholder="{% if resp %}e.g. The ministry can't release the trucks before Thursday; ask the team to prioritise.{% else %}e.g. The governor of Plaida complains on the radio that the team ignored the island; pressure for a visit tomorrow morning.{% endif %}"></textarea></label>
   <button class="btn primary" {% if not ai_enabled %}disabled{% endif %}>Draft</button>
   <span class="hint">A few seconds; about a cent (ten for the first after the injects change).</span>

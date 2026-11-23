@@ -9,11 +9,11 @@
     {% if st.npc %}<span class="gm-deskbar-npc">{% if st.npc.status == 'held' %}The AI persona's answer is held for ExCon.{% elif st.npc.status == 'failed' %}The AI persona's answer failed: answer it here.{% elif st.npc.status == 'writing' %}The AI persona is writing its answer.{% else %}The AI persona answers at {{ st.npc.due_at|time:"H:i" }} (answering it here cancels that).{% endif %}</span>{% endif %}
     {% if st.owner %}<span class="gm-deskbar-owner">{% if st.mine %}{% if st.assigned_by %}{{ st.assigned_by }} gave it to you.{% else %}You took it.{% endif %}{% elif st.assigned_by %}Assigned to <b>{{ st.owner }}</b> by {{ st.assigned_by }}.{% else %}Taken by <b>{{ st.owner }}</b>.{% endif %}</span>{% endif %}
   </div>
-  {% if st.triage %}<div class="gm-deskbar-ai"><span class="gm-label gm-st-ai">Claude</span>
+  {% if st.triage %}<div class="gm-deskbar-ai"><span class="gm-label gm-st-ai">SIMEX AI</span>
     {% if st.triage.need == 'none' %}No reply needed{% elif st.triage.need == 'optional' %}A reply is optional{% else %}Needs a reply{% endif %}{% if st.triage.urgency == 'high' %}, <b>urgent</b>{% elif st.triage.urgency == 'low' %}, not urgent{% endif %}{% if st.triage.ask %}: {{ st.triage.ask }}{% endif %}.
     <small>{{ st.triage.reason }}</small></div>
-  {% elif st.waiting and c.ai_status == 'queued' and desk_ai %}<div class="gm-deskbar-ai"><span class="gm-label gm-st-ai">Claude</span> reading it…</div>
-  {% elif st.waiting and c.ai_status == 'failed' and desk_ai %}<div class="gm-deskbar-ai"><span class="gm-label gm-st-ai">Claude</span> could not read it: {{ c.ai_error|truncatechars:120 }}</div>{% endif %}
+  {% elif st.waiting and c.ai_status == 'queued' and desk_ai %}<div class="gm-deskbar-ai"><span class="gm-label gm-st-ai">SIMEX AI</span> reading it…</div>
+  {% elif st.waiting and c.ai_status == 'failed' and desk_ai %}<div class="gm-deskbar-ai"><span class="gm-label gm-st-ai">SIMEX AI</span> could not read it: {{ c.ai_error|truncatechars:120 }}</div>{% endif %}
   <form method="post" action="/inbox/desk/mark/" class="gm-deskbar-acts">{% csrf_token %}
     <input type="hidden" name="threads" value="{{ thread }}">
     <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -40,7 +40,7 @@
       <button class="gm-pill-btn" name="act" value="follow">{% if st.follow %}Change follow-up{% else %}Follow up{% endif %}</button>
       {% if st.follow %}<button class="gm-pill-btn" name="act" value="unfollow">Stop</button>{% endif %}
     </span>
-    {% if desk_ai and st.waiting and not st.triage and c.ai_status != 'queued' %}<button class="gm-pill-btn" name="act" value="triage" title="Claude reads whether it needs an answer">Ask Claude</button>{% endif %}
+    {% if desk_ai and st.waiting and not st.triage and c.ai_status != 'queued' %}<button class="gm-pill-btn" name="act" value="triage" title="SIMEX AI reads whether it needs an answer">Ask SIMEX AI</button>{% endif %}
     {% if next_waiting %}<a class="gm-pill-btn" href="{{ base }}/t/{{ next_waiting }}/?folder={{ folder }}">Next waiting →</a>{% endif %}
   </form>
 </div>

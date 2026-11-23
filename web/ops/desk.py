@@ -382,7 +382,7 @@ def on_now(threads, user_id=None):
 # and conversations an AI persona is about to answer (LATER), then the rest.
 
 ATTENTION, QUIET, LATER, REST = "attention", "quiet", "later", "rest"
-SECTIONS = [(ATTENTION, "Needs attention"), (QUIET, "Probably no reply needed (Claude)"),
+SECTIONS = [(ATTENTION, "Needs attention"), (QUIET, "Probably no reply needed (SIMEX AI)"),
             (LATER, "Later"), (REST, "Answered or nothing to answer")]
 URGENCY = {"high": 0, "normal": 1, "low": 2}
 

@@ -7,8 +7,8 @@ You are your team's **team leader**: part of ExCon, not of the team. You play th
 - **Team inbox** (read-only): exactly what your team has, so you can follow its work. Opening mail here does **not** mark it read for the team. The red number is new mail in the team's inbox since you last looked.
 - **Team members**: who is in your team, with their team role (e.g. Deputy Team Leader, set by ExCon), what each has written and read so far, whether their alerts are on and when they last signed in, and a link to each member's own mailbox, read-only (opening mail there doesn't mark it read for them; the side bar switches between members).
 - **Team leaders** (read-only): the other team leaders' own mailboxes (pick one in the side bar), to see what they are sending their teams and what their teams write to them. Opening mail here doesn't mark it read for them. They can read yours the same way.
-- **AI personas** (read-only, when ExCon has them on): some personas answer on their own, with answers written by Claude in character after a delay of their own. Here you see every conversation your team has had with one, both ways, with when the persona's answer is due, and the AI personas your team can write to. Your team isn't told which personas these are.
-- **Dashboard**: your team's replies in figures, and Claude's reading of them.
+- **AI personas** (read-only, when ExCon has them on): some personas answer on their own, with answers written by SIMEX AI in character after a delay of their own. Here you see every conversation your team has had with one, both ways, with when the persona's answer is due, and the AI personas your team can write to. Your team isn't told which personas these are.
+- **Dashboard**: your team's replies in figures, and SIMEX AI's reading of them.
 
 **Simulation time.** When ExCon runs the simulation clock, the calendar and clock at the top show the scenario's date and time (what your team sees), with the real time beside it. Messages show the real time, with their simulation time under it (marked with a small clock). Your members see only the simulation time.
 
@@ -24,17 +24,17 @@ You only ever see your own team's inbox. The other teams are independent of your
 
 ## Team inbox
 - It opens on **Team replies**: the conversations your team has written in, newest reply first, with the name of the member who wrote the latest message. **Inbox**, **Sent** and **All mail** are there too.
-- In a conversation, each message from the team shows who wrote it, how many minutes after the message it answers, and, once Claude has read it: its tone, a quality score (clarity, completeness, actionability, out of 5), flags, and whether it **may be AI-written**. Click **Claude's reading** for the summary and the reasons.
-- "Likely / possibly AI-assisted" is Claude's estimate from the text and the time taken to write it. Short messages and non-native English make it unreliable: a reason to look closer, never proof. Don't confront a participant on it alone. Participants never see any of this.
+- In a conversation, each message from the team shows who wrote it, how many minutes after the message it answers, and, once SIMEX AI has read it: its tone, a quality score (clarity, completeness, actionability, out of 5), flags, and whether it **may be AI-written**. Click **SIMEX AI's reading** for the summary and the reasons.
+- "Likely / possibly AI-assisted" is SIMEX AI's estimate from the text and the time taken to write it. Short messages and non-native English make it unreliable: a reason to look closer, never proof. Don't confront a participant on it alone. Participants never see any of this.
 
 ## Dashboard
-Messages written, injects answered, median time to the first reply, late or missing replies, delivered → read → answered, who in the team is writing (with their team role, e.g. Deputy Team Leader, if ExCon gave them one), the work by team role (messages written and their share, time to reply, messages read, documents opened), replies per hour, and Claude's reading: tone, quality, possibly AI-written replies with the reasons, flags, what the team asks for and what it commits to. Click a time to open the conversation in the Team inbox. The page refreshes every two minutes.
+Messages written, injects answered, median time to the first reply, late or missing replies, delivered → read → answered, who in the team is writing (with their team role, e.g. Deputy Team Leader, if ExCon gave them one), the work by team role (messages written and their share, time to reply, messages read, documents opened), replies per hour, and SIMEX AI's reading: tone, quality, possibly AI-written replies with the reasons, flags, what the team asks for and what it commits to. Click a time to open the conversation in the Team inbox. The page refreshes every two minutes.
 
 ## Alerts
 Scan the QR code on your login slip with your phone: it signs you in and shows how to turn alerts on. As in the team's SIMEX Mail: a chime and a blue bar for new mail in **My mail**, and, once you click **Turn on alerts**, notifications on your computer or phone (on an iPhone, from the home-screen app: **Share → Add to Home Screen**).
 
 ## After the exercise
-ExCon compiles a debrief report for your team from its mail, the grades and Claude's reading of it: timeliness, missed replies, what the team asked for, critical points missed, writing style and points for the debrief. Before it goes to the team, ExCon will ask you to read it: say what is wrong or missing, as you know what happened in the team.
+ExCon compiles a debrief report for your team from its mail, the grades and SIMEX AI's reading of it: timeliness, missed replies, what the team asked for, critical points missed, writing style and points for the debrief. Before it goes to the team, ExCon will ask you to read it: say what is wrong or missing, as you know what happened in the team.
 
 ## Problems
 Ask ExCon. If a page looks stuck, reload it.

@@ -10,12 +10,12 @@
   </span>
 </div>
 <p class="small muted">{% if rep.team %}Written for {{ rep.team.name }}, to read at the debrief.{% else %}For ExCon and the exercise director, not for participants.{% endif %}
-Figures as of {{ ex.created_at|date:"D d M H:i" }}{% if rep.model %}; written by {{ rep.model }}{% endif %}. Edit any section: the print uses your text. <b>Reset</b> puts Claude's back.</p>
+Figures as of {{ ex.created_at|date:"D d M H:i" }}{% if rep.model %}; written by {{ rep.model }}{% endif %}. Edit any section: the print uses your text. <b>Reset</b> puts SIMEX AI's back.</p>
 {% if rep.error %}<p class="err">{{ rep.error }}</p>{% endif %}
 
 <div class="cols">
 <section class="col-main">
-{% if busy %}<div class="card"><p>Claude is writing this report{% if not rep.team %} (after the team reports){% endif %}. This page refreshes.</p></div>{% endif %}
+{% if busy %}<div class="card"><p>SIMEX AI is writing this report{% if not rep.team %} (after the team reports){% endif %}. This page refreshes.</p></div>{% endif %}
 {% for key, title, text, edited in parts %}
 <form method="post" action="/reports/part/{{ rep.id }}/section/" class="card form report-section" id="s-{{ key }}">{% csrf_token %}
   <input type="hidden" name="key" value="{{ key }}">
@@ -25,7 +25,7 @@ Figures as of {{ ex.created_at|date:"D d M H:i" }}{% if rep.model %}; written by
     <textarea name="text" rows="8">{{ text }}</textarea>
     <p class="hint">Markdown: **bold**, "- " for a list item, "> " for a quote. Name injects by their id, e.g. (1-15).</p>
     <button class="btn" name="action" value="save">Save</button>
-    {% if rep.body %}<button class="btn link" name="action" value="reset">Reset to Claude's</button>{% endif %}
+    {% if rep.body %}<button class="btn link" name="action" value="reset">Reset to SIMEX AI's</button>{% endif %}
   </details>
 </form>
 {% endfor %}

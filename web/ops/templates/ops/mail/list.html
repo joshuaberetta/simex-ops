@@ -50,24 +50,28 @@
     {% if sections %}{% ifchanged st.section %}{% with sec=sections|get:st.section %}
     <div class="gm-section gm-section-{{ st.section }}">
       <span>{{ sec.name }}</span> <span class="gm-section-n">{{ sec.n }}</span>
-      {% if st.section == 'attention' %}<small>oldest waiting first{% if desk_ai %} · most urgent first, as Claude reads them{% endif %}</small>
-      {% elif st.section == 'quiet' %}<small>Claude reads the team's latest message as needing no answer: check, then <b>No reply needed</b></small>
+      {% if st.section == 'attention' %}<small>oldest waiting first{% if desk_ai %} · most urgent first, as SIMEX AI reads them{% endif %}</small>
+      {% elif st.section == 'quiet' %}<small>SIMEX AI reads the team's latest message as needing no answer: check, then <b>No reply needed</b></small>
       {% elif st.section == 'later' %}<small>follow-ups not due yet, and conversations an AI persona is about to answer</small>{% endif %}
     </div>{% endwith %}{% endifchanged %}{% endif %}
-    <div class="gm-row{% if r.unread %} unread{% endif %}{% if st %} desk-{{ st.section }}{% endif %}" role="listitem" tabindex="-1"{% if r.desk.colour %} style="--persona: {{ r.desk.colour }}"{% endif %}
+    <div class="gm-row{% if r.unread %} unread{% endif %}{% if st %} desk-{{ st.section }}{% endif %}{% if st or r.desk %} two-line{% endif %}" role="listitem" tabindex="-1"{% if r.desk.colour %} style="--persona: {{ r.desk.colour }}"{% endif %}
          {% if r.draft %}data-draft="{{ m.id }}"{% else %}data-href="{{ base }}/t/{{ r.thread }}/?folder={{ folder }}"{% if not readonly and folder != 'trash' %} draggable="true"{% endif %}{% endif %} data-thread="{{ r.thread }}" data-labels="{% for l in r.all_labels %}{{ l }}{% if not forloop.last %},{% endif %}{% endfor %}">
       <label class="gm-check" onclick="event.stopPropagation()"><input type="checkbox" name="threads" value="{{ r.thread }}"><span></span></label>
       <span class="gm-avatar gm-ravatar" style="background: {{ r.people|avatar_colour }}"{% if not readonly %} role="checkbox" aria-checked="false" aria-label="Select" tabindex="0" data-select-row{% endif %}>{% if r.draft %}D{% else %}{{ r.people|cut:"To: "|initial }}{% endif %}</span>
       <button type="button" class="gm-star{% if r.starred %} on{% endif %}" data-star-thread="{{ r.thread }}" aria-label="Star" {% if readonly %}disabled{% endif %}>{% if r.starred %}{% icon "star" 20 %}{% else %}{% icon "star_border" 20 %}{% endif %}</button>
       <span class="gm-from">{% if r.draft %}<span class="gm-draft-red">Draft</span>{% else %}{{ r.people }}{% endif %}{% if r.count > 1 %} <span class="gm-n">{{ r.count }}</span>{% endif %}</span>
       <span class="gm-subj">
-        {% if st %}{% include "ops/mail/_desk_state.html" with st=st here=r.here %}{% endif %}
-        {% if r.desk %}{% for p in r.desk.personas %}<span class="gm-label gm-persona" style="background: {{ p.colour }}; color: {{ p.fg }}" title="{{ p.addr }}">{{ p.name }}</span>{% endfor %}{% for t in r.desk.teams %}<span class="gm-label gm-teamchip">{{ t }}</span>{% endfor %}{% if r.desk.test %}<span class="gm-label test">Test</span>{% endif %}{% endif %}
+        <span class="gm-line1">
         {% if folder != 'inbox' and m.folder == 'inbox' and not m.archived %}<span class="gm-label">Inbox</span>{% endif %}
-        {% if r.ai %}<span class="gm-label gm-ai {{ r.ai.level }}" title="{{ r.ai.level|capfirst }} AI-assisted ({{ r.ai.pct }} %, Claude's estimate, never proof). {{ r.ai.why }}">AI?</span>{% endif %}
         {% for l in r.labels %}<span class="gm-label"{% if l.colour %} style="background: {{ l.colour }}; color: {{ l.fg }}"{% endif %}>{{ l.name }}</span>{% endfor %}
         <span class="gm-s">{{ r.subject|default:"(no subject)" }}</span>{% with sn=m.body|snippet:140 %}{% if sn %}<span class="gm-snip"> - {{ sn }}</span>{% endif %}{% endwith %}
       </span>
+        {% if st or r.desk %}<span class="gm-chips">{% comment %}the persona desk: a second line under the subject{% endcomment %}
+        {% if r.desk %}{% for p in r.desk.personas %}<span class="gm-label gm-persona" style="background: {{ p.colour }}; color: {{ p.fg }}" title="{{ p.addr }}">{{ p.name }}</span>{% endfor %}{% for t in r.desk.teams %}<span class="gm-label gm-teamchip">{{ t }}</span>{% endfor %}{% if r.desk.test %}<span class="gm-label test">Test</span>{% endif %}{% endif %}
+        {% if st %}{% include "ops/mail/_desk_state.html" with st=st here=r.here %}{% endif %}
+        </span>{% endif %}
+      </span>
+      {% if v.sees_ai %}<span class="gm-aicol">{% if r.ai %}{% include "ops/mail/_ai_meter.html" with ai=r.ai %}{% endif %}</span>{% endif %}
       <span class="gm-att">{% if r.has_files %}{% icon "attach" 18 %}{% endif %}</span>
       <span class="gm-date">{% listdate m %}</span>
       {% if not readonly %}

@@ -14,7 +14,7 @@
     {% if not ai_available %}AI analysis: no provider configured{% elif not ai_enabled %}AI analysis is off (<a href="/settings/#ai">Settings</a>){% elif not on %}Reading documents is off (<a href="/settings/#ai">Settings</a>){% else %}about ${{ ai_spent|floatformat:2 }} of ${{ ai_cap|num }} today{% if ai_pending %} · {{ ai_pending }} queued{% endif %}{% endif %}
   </span>
 </div>
-<p class="small muted">Every file a member or team leader attached (in SIMEX Mail, to anyone, or to an email to a persona), each read once per team{% if not auto %}; automatic reading is off, so only the files you click Analyse on{% endif %}. Claude says what it is and estimates how likely it was written with an AI assistant, from its text and what the file records about itself (application, editing time, editing sessions, when it was created). Forwarded inject documents aren't the team's and are left out. An estimate to look closer, never proof; not shown to members.</p>
+<p class="small muted">Every file a member or team leader attached (in SIMEX Mail, to anyone, or to an email to a persona), each read once per team{% if not auto %}; automatic reading is off, so only the files you click Analyse on{% endif %}. SIMEX AI says what it is and estimates how likely it was written with an AI assistant, from its text and what the file records about itself (application, editing time, editing sessions, when it was created). Forwarded inject documents aren't the team's and are left out. An estimate to look closer, never proof; not shown to members.</p>
 <table class="list small">
   <tr><th>Sent</th><th>Team</th><th>File</th><th>What it is</th><th>AI-written</th><th></th></tr>
   {% for d in rows %}<tr>

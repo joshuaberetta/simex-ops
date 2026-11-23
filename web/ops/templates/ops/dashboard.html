@@ -17,7 +17,7 @@
     {% if not ai_available %}AI analysis: no provider configured{% elif not ai_enabled %}AI analysis is off (<a href="/settings/#ai">Settings</a>){% else %}AI analysis on · {{ ai_unanalysed }} repl{{ ai_unanalysed|pluralize:"y,ies" }} waiting{% if ai_pending %}, {{ ai_pending }} queued{% endif %} · about ${{ ai_spent|floatformat:2 }} of ${{ ai_cap|num }} today{% endif %}
   </span>
 </div>
-<p class="small muted">Response figures come from the app's own records. Tone, quality, flags and "AI-written" are Claude's reading of each reply; "AI" scores are suggestions, never part of the grades. The page refreshes every two minutes.</p>
+<p class="small muted">Response figures come from the app's own records. Tone, quality, flags and "AI-written" are SIMEX AI's reading of each reply; "AI" scores are suggestions, never part of the grades. The page refreshes every two minutes.</p>
 
 <h2>Teams</h2>
 {% if tiles %}

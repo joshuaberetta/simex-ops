@@ -9,7 +9,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('ops', '0028_sender_notes_category'),
+        ('ops', '0029_library_suggestions'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

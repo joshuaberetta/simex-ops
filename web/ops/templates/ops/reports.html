@@ -11,7 +11,7 @@
     {% if not ai_available %}AI analysis: no provider configured{% elif not ai_enabled %}AI analysis is off (<a href="/settings/#ai">Settings</a>): figures only{% else %}about ${{ ai_spent|floatformat:2 }} of ${{ ai_cap|num }} today{% endif %}
   </span>
 </div>
-<p class="small muted">At the end of the exercise: a report for each team ({{ teams|length }}), written for the team to read at the debrief, and one for ExCon comparing the teams. The figures come from the app's records; Claude writes about them. Read and edit every section before you print. A team's report is written from that team's mail only, with the human grades (never the AI-suggested scores).</p>
+<p class="small muted">At the end of the exercise: a report for each team ({{ teams|length }}), written for the team to read at the debrief, and one for ExCon comparing the teams. The figures come from the app's records; SIMEX AI writes about them. Read and edit every section before you print. A team's report is written from that team's mail only, with the human grades (never the AI-suggested scores).</p>
 
 <form method="post" action="/reports/compile/" class="card form">{% csrf_token %}
   <input type="hidden" name="kind" value="{{ kind }}">

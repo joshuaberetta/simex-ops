@@ -9,6 +9,7 @@ from . import views_npc as npc
 from . import views_report as rp
 from . import views_roleplay as rpx
 from . import views_rp as rpp
+from . import views_suggest as sg
 
 # The participant mail client, mounted on a mailbox: /inbox/ for the logged-in member (their
 # team's inbox) or team leader (their own mailbox), /inbox/me/ for a member's own mailbox,
@@ -67,6 +68,8 @@ urlpatterns = [
     path("inbox/desk/mark/", p.desk_mark),
     path("inbox/desk/notices/", p.desk_notices),
     path("inbox/desk/notices/mark/", p.desk_notices_mark),
+    path("inbox/desk/suggest/", sg.suggestion),
+    path("inbox/desk/suggest/<int:sid>/", sg.suggestion_get),
     path("inbox/desk/dashboard/", p.desk_dashboard),
     path("inbox/desk/setup/", p.setup, {"box": "desk"}),
     path("inbox/desk/", include(mail_patterns), {"box": "desk"}),
@@ -100,6 +103,11 @@ urlpatterns = [
     path("injects/drafts/<int:did>/use/", a.draft_use),
     path("attachments/<int:aid>/", x.attachment_get),
     path("attachments/<int:aid>/delete/", x.attachment_delete),
+    path("library/", sg.library),
+    path("library/<int:did>/", sg.library_doc),
+    path("library/<int:did>/text/", sg.library_text),
+    path("suggestions/", sg.excon_suggestion),
+    path("suggestions/<int:sid>/", sg.excon_suggestion_get),
     path("import/", x.import_page),
     path("import/<int:bid>/apply/", x.import_apply),
     path("import/attachments/", x.import_attachments),

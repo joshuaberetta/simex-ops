@@ -9,7 +9,7 @@
     <a href="/reports/{{ ex.id }}/print/" target="_blank">Print all</a>
   </span>
 </div>
-<p class="small muted">{% if ex.kind == 'test' %}Test team. {% endif %}AI-written estimate in the team reports: {% if ex.include_ai_written %}included{% else %}ExCon only{% endif %}.{% if busy %} Claude is writing: the team reports first, then ExCon's. This page refreshes.{% endif %}</p>
+<p class="small muted">{% if ex.kind == 'test' %}Test team. {% endif %}AI-written estimate in the team reports: {% if ex.include_ai_written %}included{% else %}ExCon only{% endif %}.{% if busy %} SIMEX AI is writing: the team reports first, then ExCon's. This page refreshes.{% endif %}</p>
 <table class="list">
   <thead><tr><th>Report</th><th>Status</th><th>Headline</th><th></th></tr></thead>
   <tbody>{% for r in reps %}<tr>
