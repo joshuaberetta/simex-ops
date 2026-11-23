@@ -272,8 +272,11 @@ def _identity(inj, sender, ctx):
 
 
 def build_inapp(inj, cfg):
-    """In-app: one inbox item per team (each_team, all_bcc) or per participant (each_person)."""
+    """In-app: one inbox item per team (each_team, all_bcc) or per participant (each_person). A
+    participant's item lands in their own mailbox if Settings has personal mailboxes (not in the
+    team inbox, which would hold one copy per member), else in the team inbox addressed to them."""
     warnings = []
+    personal = cfg.get("personal_mailboxes", "1") == "1"
     sender = _sender_checks(inj, warnings)
     footer = footer_for(inj, cfg)
     teams = scope_teams(inj)
@@ -312,7 +315,7 @@ def build_inapp(inj, cfg):
                   bcc=[], subject=subject, body=fill(inj.body or "", ctx), footer=footer,
                   attachment_ids=[a.id for a in atts], team_id=team.id, person_id=person.id if person else None,
                   reply_local=local, channel="inapp", inbox_team_id=team.id, to_label=to_label, from_name=name,
-                  inbox_owner_id=person.id if person and person.is_leader else None)
+                  inbox_owner_id=person.id if person and (person.is_leader or personal) else None)
         if not LOCAL.match(local):
             d.warnings.append(f"Sender username '{local}' is not a valid email username.")
         if not subject.strip():
@@ -423,8 +426,9 @@ def redirect_inapp(d: Draft, test_team, label="TEST"):
         f" (To: {d.to_label})" if d.to_label and d.to_label != d.target else "") + "."
     d.original_to = {"inbox": d.target}
     d.inbox_team_id = test_team.id
-    if d.inbox_owner_id:  # a team leader's copy goes to the Test team's leader, if it has one
-        lead = test_team.leader()
+    if d.inbox_owner_id:  # a team leader's copy goes to the Test team's leader, if it has one;
+        owner = Person.objects.filter(pk=d.inbox_owner_id).first()  # a member's, to the Test team's inbox
+        lead = test_team.leader() if owner and owner.is_leader else None
         d.inbox_owner_id = lead.id if lead else None
     d.subject = f"[{label}] {d.subject}"
     return d

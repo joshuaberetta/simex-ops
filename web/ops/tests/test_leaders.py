@@ -38,7 +38,7 @@ def test_leader_is_not_a_participant(excon):
     Inject.objects.filter(mel_id="3-13").update(delivery="each_person")
     deliver_now("3-13")
     assert not Mail.objects.filter(to_person=lead).exists() and not Message.objects.filter(person=lead).exists()
-    assert Mail.objects.filter(owner=None, to_person=pa.person).exists()
+    assert Mail.objects.filter(owner=pa.person, message__person=pa.person).exists()  # their own mailbox
     assert la.get("/inbox/").context["v"].owner == lead  # their own mailbox, not the team's
     assert not la.get("/inbox/").context["rows"]
     assert pa.get("/inbox/team/").status_code == 403 and pa.get("/inbox/dashboard/").status_code == 403

@@ -206,3 +206,31 @@ def test_team_tab_announces_personal_mail_too(excon):
     new = pa.get(f"/inbox/poll/?since={since}").json()["new"]
     assert sorted((n["subject"], n["url"].split("/t/")[0]) for n in new) == [("Psst", "/inbox/me"),
                                                                              ("Update for Team A", "/inbox")]
+
+
+def test_one_message_per_participant_lands_in_their_own_mailbox_only(excon):
+    """each_person with personal mailboxes: each member's item in their own mailbox, none in the
+    team inbox (it used to hold one copy per member); their answer is still the team's."""
+    setup_exercise(excon)
+    pa, po = participant("a", "Jane"), participant("a", "Omar")
+    ta = Team.objects.get(code="a")
+    from ops.models import Inject
+    Inject.objects.filter(mel_id="3-13").update(delivery="each_person")
+    deliver_now("3-13")
+    assert not Mail.objects.filter(owner=None, team=ta, folder="inbox").exists()
+    mine = Mail.objects.get(owner=pa.person, folder="inbox")
+    assert mine.message.person == pa.person and mine.message.inbox_owner == pa.person
+    assert Mail.objects.filter(owner=po.person, folder="inbox").count() == 1  # Omar's own, not Jane's too
+    assert [r["thread"] for r in pa.get("/inbox/me/").context["rows"]] == [mine.thread]
+    pa.get(f"/inbox/me/t/{mine.thread}/")
+    assert Message.objects.get(pk=mine.message_id).opened_at  # counts as read
+    send(pa, to=f"p:{mine.persona}", subject="Re: it", body="Thanks", in_reply_to=mine.id)
+    resp = Response.objects.get()
+    assert resp.message == mine.message and resp.match == "exact" and resp.mail.owner is None  # the team's Sent
+    # Without personal mailboxes: the team inbox, addressed to each member, as before.
+    conf.put("personal_mailboxes", "0")
+    Mail.objects.all().delete()
+    Inject.objects.filter(mel_id="3-13").update(status="scheduled", attempt=2)
+    deliver_now("3-13")
+    assert set(Mail.objects.filter(folder="inbox", team=ta).values_list("owner", "to_person")) >= {
+        (None, pa.person.id), (None, po.person.id)}
