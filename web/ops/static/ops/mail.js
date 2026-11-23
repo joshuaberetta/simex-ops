@@ -182,8 +182,10 @@
       this.form.elements.body.value = d.body || "";
       if (this.form.elements.from) {
         const sel = this.form.elements.from;
-        sel.value = d.from || CFG.fromDefault || "team";
-        if (!sel.value) sel.value = CFG.fromDefault || "team";  // a persona no longer on the list
+        // The persona desk has no default: "" until a persona is chosen (a reply: the one written to).
+        const fallback = CFG.fromDefault === "" ? "" : (CFG.fromDefault || "team");
+        sel.value = d.from || fallback;
+        if (!sel.value) sel.value = fallback;  // a persona no longer on the list
         this.paintFrom();
       }
       this.files = []; this.renderFiles();
@@ -194,6 +196,7 @@
       if (!sel) return;
       const field = sel.closest(".gm-from-field"), opt = sel.selectedOptions && sel.selectedOptions[0];
       field.classList.toggle("own", sel.value === "me");
+      field.classList.toggle("unset", !sel.value);
       field.style.setProperty("--from-colour", (opt && opt.dataset.colour) || "transparent");
     }
     data(withFiles) {
@@ -228,6 +231,8 @@
       await this.commitAll();  // an address still being typed
       if ($$(".gm-chip-input.bad", this.form).length) { snack("Check the addresses: one of them isn't in SIMEX Mail."); return; }
       if (!this.keys.to.length && !this.keys.cc.length && !this.keys.bcc.length) { snack("Please specify at least one recipient."); return; }
+      const from = this.form.elements.from;
+      if (from && !from.value) { snack("Choose the persona it is from."); from.focus(); return; }
       btn.disabled = true;
       // No autosave while sending: a save landing after the send would leave a copy in Drafts.
       this.sending = true;

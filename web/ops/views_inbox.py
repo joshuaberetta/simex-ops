@@ -765,7 +765,8 @@ def _ctx(v, **extra):
     c = {"v": v, "team": DESK if v.desk else v.team, "base": v.base, "readonly": v.readonly, "folders": v.folders,
          "me": v.person, "my_address": my_identity(v)[1], "my_name": my_identity(v)[0], **_counts(v),
          "from_choices": choices,
-         "from_default": choices[0]["key"] if v.desk and choices else "me" if v.member_box else "team"}
+         # The desk picks the persona every time: a default persona sent mail as the wrong one.
+         "from_default": "" if v.desk else "me" if v.member_box else "team"}
     c.update(extra)
     c["box"] = box_theme(v)
     c["labels"] = [] if v.leader_mode else labels(v)

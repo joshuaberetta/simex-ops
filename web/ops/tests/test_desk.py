@@ -394,3 +394,18 @@ def test_withdraw_a_delivery_sent_by_mistake(excon):
     assert pa.get("/inbox/").status_code == 200 and pa.get(f"/inbox/t/{r.mail.thread}/").status_code == 200
     assert delivery.withdraw(m, [ta.id]) == 0
     assert "Withdrawn from SIMEX Mail" in excon.get(f"/log/{m.id}/").content.decode()
+
+
+def test_desk_has_no_default_persona(excon):
+    """New desk mail starts with no From: the desk picks the persona every time."""
+    setup(excon)
+    dc = desk_client()
+    r = dc.get("/inbox/desk/")
+    assert r.context["from_default"] == ""
+    html = r.content.decode()
+    assert '<option value="">Choose the persona it is from…</option>' in html and "data-from required" in html
+    assert "selected data-colour" not in html  # no persona preselected
+    team = Team.objects.get(code="a")
+    r = dc.post("/inbox/desk/send/", {"to": f"t:{team.id}", "subject": "Hello", "body": "Hi"}, headers=FETCH)
+    assert r.json()["error"] == "Choose the persona it goes from."
+    assert not Message.objects.filter(kind="desk").exists()

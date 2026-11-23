@@ -495,6 +495,8 @@ body.desk .gm-row[style*="--persona"]::after { content: ""; position: absolute; 
 .gm-side-empty { color: var(--muted); font-size: 13px; padding: 4px 26px; }
 .gm-from-field.desk { border-left: 6px solid var(--from-colour, transparent); padding-left: 6px; }
 .gm-from-field.desk .gm-from-select { font-weight: 600; }
+.gm-from-field.desk.unset { border-left-color: #d93025; }
+.gm-from-field.desk.unset .gm-from-select { background: #fce8e6; color: #a50e0e; }
 .gm-presence { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: #fef7e0; color: #7a4f01; font-size: 14px; }
 .gm-presence.replying { background: #fce8e6; color: #a50e0e; font-weight: 600; }
 
