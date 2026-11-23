@@ -101,6 +101,56 @@ def readings(mails, pairs, teams, now):
             "read_n": len(found), "readable_n": len(rid_mail)}
 
 
+CONV_MAX = 15  # conversations listed per person
+
+
+def by_assignee(states, by_thread, teams, now, memo):
+    """Who on the desk has which conversations (DeskConversation.owner), with nobody's last:
+    [{"uid", "name", "desk", "n", "attention", "waiting", "longest", "follow_due", "follow_later",
+    "later", "answered", "convs": [...] (those still open first)}]. Every desk member is listed,
+    with none if so; nobody's row counts only what is still open."""
+    order = [s for s, _ in desk.SECTIONS]
+    users = {u["id"]: u for u in desk.assignees()}
+    rows = {uid: [] for uid, u in users.items() if u["desk"]}
+    for t, st in states.items():
+        if st["owner_id"]:
+            rows.setdefault(st["owner_id"], []).append((t, st))
+    nobody = [(t, st) for t, st in states.items() if not st["owner_id"] and st["section"] != desk.REST]
+    listed = {t for xs in list(rows.values()) + [nobody] for t, st in xs}
+    subjects = {}
+    for t, subj in (Mail.objects.filter(team=None, owner=None, thread__in=listed).exclude(folder="drafts")
+                    .order_by("id").values_list("thread", "subject")):
+        subjects.setdefault(t, subj)
+    names = dict(DeskConversation.objects.filter(owner__isnull=False, thread__in=listed).values_list("owner_id", "owner_name"))
+
+    def conv(t, st):
+        ms = by_thread.get(t, [])
+        first_in = next((m for m in ms if m["folder"] == "inbox"), None) or (ms[0] if ms else {})
+        return {"thread": t, "subject": subjects.get(t, ""), "section": st["section"], "waiting": st["waiting"],
+                "mins": round(_mins(st["since"], now)) if st["since"] else None, "follow": st["follow"],
+                "team": teams.get(first_in.get("desk_team_id")),
+                "persona": desk.describe(first_in["persona"], memo=memo) if first_in.get("persona") else None,
+                "assigned_by": st["assigned_by"]}
+
+    def row(uid, name, xs, is_desk):
+        xs = sorted(xs, key=lambda x: (order.index(x[1]["section"]), x[1]["since"] or now))
+        w = [st for _, st in xs if st["waiting"] and st["section"] == desk.ATTENTION]
+        return {"uid": uid, "name": name, "desk": is_desk, "n": len(xs),
+                "attention": sum(1 for _, st in xs if st["section"] == desk.ATTENTION), "waiting": len(w),
+                "longest": round(max(_mins(st["since"], now) for st in w)) if w else None,
+                "follow_due": sum(1 for _, st in xs if st["follow"] and st["follow"]["due"]),
+                "follow_later": sum(1 for _, st in xs if st["follow"] and not st["follow"]["due"]),
+                "later": sum(1 for _, st in xs if st["section"] == desk.LATER),
+                "answered": sum(1 for _, st in xs if st["section"] == desk.REST),
+                "convs": [conv(t, st) for t, st in xs[:CONV_MAX]], "more": max(0, len(xs) - CONV_MAX)}
+
+    out = [row(uid, users[uid]["name"] if uid in users else names.get(uid, "?"), xs, users.get(uid, {}).get("desk", False))
+           for uid, xs in rows.items()]
+    out.sort(key=lambda r: (-r["attention"], -r["n"], r["name"].lower()))
+    out.append(row(0, "Nobody", nobody, False))
+    return out
+
+
 def compute(kind="live", now=None):
     now = now or timezone.now()
     qs = Mail.objects.filter(team=None, owner=None, trashed_at__isnull=True).exclude(folder="drafts")
@@ -231,6 +281,7 @@ def compute(kind="live", now=None):
              for i in range(HOURS)]
 
     requests = readings(mails, pairs, teams, now)
+    assigned = by_assignee(states, by_thread, teams, now, memo)
 
     npc = Counter(NpcReply.objects.filter(status__in=["queued", "writing", "held", "failed"],
                                           team__is_test=(kind == "test")).values_list("status", flat=True))
@@ -247,7 +298,7 @@ def compute(kind="live", now=None):
         "follow_due": follow_due, "follow_later": follow_later,
         "median": _med(timed), "p90": _p90(timed), "median_hour": _med(timed_hour),
         "within_pct": round(100 * len(within) / len(timed)) if timed and target else None,
-        "oldest": queue[:10], "teams": team_rows, "personas": personas, "people": people, "hours": hours,
+        "oldest": queue[:10], "assigned": assigned, "teams": team_rows, "personas": personas, "people": people, "hours": hours,
         "asks": sorted([o for o in queue if o["triage"] and o["triage"]["ask"]],
                        key=lambda o: (desk.URGENCY.get(o["triage"]["urgency"], 1), o["since"]))[:20],
         **requests,

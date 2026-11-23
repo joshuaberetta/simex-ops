@@ -65,6 +65,8 @@ urlpatterns = [
     path("inbox/desk/teams/", p.desk_teams),
     path("inbox/desk/presence/", p.desk_presence),
     path("inbox/desk/mark/", p.desk_mark),
+    path("inbox/desk/notices/", p.desk_notices),
+    path("inbox/desk/notices/mark/", p.desk_notices_mark),
     path("inbox/desk/dashboard/", p.desk_dashboard),
     path("inbox/desk/setup/", p.setup, {"box": "desk"}),
     path("inbox/desk/", include(mail_patterns), {"box": "desk"}),

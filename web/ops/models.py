@@ -423,6 +423,10 @@ class DeskConversation(models.Model):
     follow_by = models.CharField(max_length=150, blank=True, default="")
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     owner_name = models.CharField(max_length=150, blank=True, default="")
+    assigned_by = models.CharField(max_length=150, blank=True, default="")  # who gave it to the owner ("" : they took it)
+    assigned_at = models.DateTimeField(null=True, blank=True)
+    follow_user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    follow_told = models.IntegerField(default=0)  # the follow_upto its "follow-up due" notice was for
     ai_upto = models.IntegerField(default=0)
     ai_status = models.CharField(max_length=10, blank=True, default="")  # "" | queued | done | failed
     ai_need = models.CharField(max_length=10, blank=True, default="")  # reply | optional | none
@@ -432,6 +436,43 @@ class DeskConversation(models.Model):
     ai_error = models.TextField(blank=True, default="")
     ai_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class DeskWatch(models.Model):
+    """Someone on the persona desk (a login: a desk member or ExCon staff) involved in one of
+    its conversations (Mail.thread, team None): they answered in it, took it or were given it,
+    set a follow-up, or follow it (reason follow). off: they stopped following it, and nothing
+    they do in it starts it again (but following it on purpose)."""
+    thread = models.CharField(max_length=40, db_index=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    reason = models.CharField(max_length=10)  # answered | owner | follow_up | follow
+    off = models.BooleanField(default=False)
+    at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["thread", "user"], name="desk_watch_once")]
+
+
+class DeskNotice(models.Model):
+    """One update for one person on the persona desk (ops/desk.py notify; the bell in SIMEX
+    Mail): a conversation given to them, a follow-up due, a team writing again in a conversation
+    they are involved in, someone else answering it, a team waiting too long, an AI persona's
+    answer held. One per event and person (key)."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    key = models.CharField(max_length=120)  # e.g. in:<mail id>, fu:<thread>:<follow_upto>
+    kind = models.CharField(max_length=10)  # assign | follow_up | reply | answer | wait | npc
+    title = models.CharField(max_length=300)
+    body = models.CharField(max_length=500, blank=True, default="")
+    thread = models.CharField(max_length=40, blank=True, default="", db_index=True)
+    url = models.CharField(max_length=300, blank=True, default="")
+    test = models.BooleanField(default=False)  # about the Test team
+    at = models.DateTimeField(default=timezone.now)
+    read_at = models.DateTimeField(null=True, blank=True)
+    dismissed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-id"]
+        constraints = [models.UniqueConstraint(fields=["user", "key"], name="desk_notice_once")]
 
 
 class ThreadLabel(models.Model):

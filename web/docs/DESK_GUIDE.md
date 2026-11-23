@@ -14,7 +14,7 @@ You are on the **persona desk**: part of ExCon, playing the exercise's personas 
 - On the left, **Personas** shows one persona's conversations and **Teams** one team's, each with its unread conversations. **AI** marks personas that answer on their own.
 
 ## The Dashboard tab
-How the desk is keeping up, refreshed every minute: what needs attention and how many nobody has taken, how long the teams wait, how fast you answer, and an hourly strip of messages in against answers out. **Waiting longest** lists the teams waiting, with who has each. **Requests to the personas** shows what the teams asked each persona, unanswered first; **Decisions and commitments** what they told a persona they will do (a cue for a follow-up), and **Figures and facts** the numbers and places they gave (keep the personas' answers consistent with them). **Teams** shows whether one is being left behind, **Personas** which ones carry the load (time for a second person?), **Who is answering** who is online and what each has taken. Requests, commitments and flags are Claude's reading of the teams' messages: a hint, check the message.
+How the desk is keeping up, refreshed every minute: what needs attention and how many nobody has taken, how long the teams wait, how fast you answer, and an hourly strip of messages in against answers out. **Waiting longest** lists the teams waiting, with who has each. **Requests to the personas** shows what the teams asked each persona, unanswered first; **Decisions and commitments** what they told a persona they will do (a cue for a follow-up), and **Figures and facts** the numbers and places they gave (keep the personas' answers consistent with them). **Teams** shows whether one is being left behind, **Personas** which ones carry the load (time for a second person?), **Who is answering** who is online and what each has taken. **Who has which conversations** lists each of you with what you have: how many, how many need attention, the longest wait, follow-ups, and the conversations themselves (open a name). **Nobody has them** shows the open ones nobody has taken. Requests, commitments and flags are Claude's reading of the teams' messages: a hint, check the message.
 
 ## Answering a team
 - Open the conversation and click **Reply**. **From** is already the persona the team wrote to; **To** is that team. Your answer lands in the team's conversation, in SIMEX Mail or by email, like any other answer from that persona. It is also recorded as the persona's answer on ExCon's Replies tab.
@@ -33,11 +33,24 @@ A conversation leaves Needs attention as soon as a persona answers that team in 
 
 At the top of each conversation:
 - **I'll take it**: the others see your name on its row (**Yours** for you), so two of you don't pick up the same one. **Release** when you hand it back. Rows also show who is reading or writing in a conversation right now.
+- **Assign to…**: give it to someone else on the desk (or to ExCon). They get a notification and find it under **Assigned to me**; if someone had it, they are told too.
+- **Follow** / **Unfollow**: hear about this conversation even when someone else has it (or stop hearing about it).
 - **No reply needed**: nothing to answer (a thanks, a confirmation). It leaves Needs attention and the next waiting conversation opens. **Reopen** undoes it.
 - **Follow up** now or in 15 minutes to 4 hours, with a note (*chase the convoy ETA*): it waits in Later, comes back to Needs attention when due, and ends when a persona writes in it (or **Stop**).
 - **Ask Claude**, when Claude hasn't read it yet; **Next waiting** to move on.
 
-Tick several rows in the Inbox for **I'll take these**, **No reply needed** or **Reopen** at once; the ✓ on a row (on hover) is **No reply needed**.
+Tick several rows in the Inbox for **I'll take these**, **Assign to…**, **No reply needed** or **Reopen** at once; the ✓ on a row (on hover) is **No reply needed**.
+
+## Your conversations and your notifications
+- On the left, **Assigned to me** has the conversations you took or were given, with what needs attention first; its number is how many of them need attention. **Following** has the ones you answered in, set a follow-up on or follow, but don't have.
+- The **bell** at the top (next to ?) is yours alone. It tells you when:
+  - a conversation is given to you, or someone takes over or reassigns one you had;
+  - one of your follow-ups falls due;
+  - a team writes again in a conversation you have or follow;
+  - someone else answers in it, or an AI persona's answer to it is held or failed;
+  - a team has waited too long in one of yours.
+- While nobody has a conversation, everyone who answered in it or set a follow-up on it hears when the team writes again. Once someone has it, only they do, plus anyone who clicked **Follow**.
+- Click a notification to open the conversation. **✕** dismisses it; **Mark all read** and **Clear all** are at the top. Conversations given to you, follow-ups due and teams waiting too long also come to your phone, if you turned on alerts.
 
 ## Writing first
 Click **Write as a persona**, choose **From** (each persona with its address), and pick one or more teams, team members (e.g. **Team A (Jane Doe)**) or team leaders (**Team A leader (John Roe)**) in To, Cc or Bcc: start typing a team, a name or an address and every match is suggested. Each gets its own message and only ever sees its own. A member's or a leader's goes to their own mailbox, not the team's. A leader can't answer a persona in SIMEX Mail (only by email). New messages to the teams only go out once ExCon has armed live sending (except to the Test team), and nothing goes while sending is paused.

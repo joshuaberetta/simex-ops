@@ -50,6 +50,27 @@
     </tr>{% empty %}<tr><td class="muted">No team is waiting for an answer.</td></tr>{% endfor %}
   </table>
 
+  <h2>Who has which conversations</h2>
+  <table class="gm-dtable gm-dd-assigned">
+    <tr><th></th><th>has</th><th>need attention</th><th>longest wait</th><th>follow-ups</th><th>later</th><th>answered</th></tr>
+    {% for a in d.assigned %}<tr class="{% if a.uid == 0 %}gm-dd-nobody{% endif %}">
+      <td>{% if a.convs %}<details><summary><b>{% if a.uid == 0 %}Nobody has them{% else %}{{ a.name }}{% endif %}</b>{% if not a.desk and a.uid %} <span class="muted">(ExCon)</span>{% endif %}</summary>
+        <ul class="gm-dd-convs">{% for c in a.convs %}<li class="s-{{ c.section }}">
+          {% if c.team %}<span class="gm-label gm-teamchip">{{ c.team.name }}</span>{% endif %}{% if c.persona %}<span class="gm-label gm-persona" style="background: {{ c.persona.colour }}; color: {{ c.persona.fg }}">{{ c.persona.name }}</span>{% endif %}
+          <a href="/inbox/desk/t/{{ c.thread }}/">{{ c.subject|default:"(no subject)" }}</a>
+          <span class="muted">{% if c.section == 'attention' %}{% if c.waiting %}<b class="{% if d.target and c.mins >= d.target %}gm-dd-late{% endif %}">waiting {{ c.mins }} min</b>{% else %}follow-up due{% endif %}{% elif c.section == 'quiet' %}probably no reply needed{% elif c.section == 'later' %}{% if c.follow %}follow up at {{ c.follow.at|time:"H:i" }}{% else %}AI persona answering{% endif %}{% else %}answered{% endif %}{% if c.assigned_by %} · from {{ c.assigned_by }}{% endif %}</span></li>{% endfor %}
+          {% if a.more %}<li class="muted">and {{ a.more }} more</li>{% endif %}</ul></details>
+        {% else %}{% if a.uid == 0 %}Nobody has them{% else %}{{ a.name }}{% endif %}{% endif %}</td>
+      <td><a href="/inbox/desk/?folder=o{{ a.uid }}">{{ a.n }}</a></td>
+      <td>{% if a.attention %}<b class="gm-dd-late">{{ a.attention }}</b>{% else %}0{% endif %}</td>
+      <td>{% if a.longest is not None %}<span class="{% if d.target and a.longest >= d.target %}gm-dd-late{% endif %}">{{ a.longest }} min</span>{% else %}—{% endif %}</td>
+      <td>{% if a.follow_due %}<b>{{ a.follow_due }} due</b>{% if a.follow_later %} · {% endif %}{% endif %}{% if a.follow_later %}{{ a.follow_later }} later{% endif %}{% if not a.follow_due and not a.follow_later %}—{% endif %}</td>
+      <td>{{ a.later }}</td>
+      <td>{% if a.uid == 0 %}—{% else %}{{ a.answered }}{% endif %}</td>
+    </tr>{% endfor %}
+  </table>
+  <p class="small muted">Conversations taken or assigned (Assign to… on a conversation or the Inbox list), by who has them now; <i>Nobody has them</i> counts only those still open. <i>Later</i>: follow-ups not due yet, AI persona answers coming. Open a name for their conversations, a number for them as a list.</p>
+
   <h2>Requests to the personas</h2>
   {% if not d.read_n %}<p class="small muted">{% if d.readable_n %}Claude hasn't read the teams' messages yet{% else %}No team message to read yet{% endif %}: what the teams ask each persona appears here once Claude has read them (ExCon, Settings → AI analysis).</p>
   {% else %}<div class="gm-dd-requests">

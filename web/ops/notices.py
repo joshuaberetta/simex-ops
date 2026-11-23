@@ -117,6 +117,8 @@ def attachments_done(job):
 
 def npc(job):
     """An AI persona's answer: sent, waiting for ExCon or failed; a flag it raised on top."""
+    from . import desk
+    desk.told_npc(job)  # those on its persona desk conversation
     who, team = job.npc.sender.display_name or job.npc.sender.local_part, _team(job.team)
     test = bool(job.team and job.team.is_test)
     url, links = f"/npcs/{job.npc_id}/#q{job.id}", dict(team=job.team, response=job.response, test=test)

@@ -40,6 +40,14 @@
       {% if sim.both %}<span class="gm-realtext"><small>Real time</small><b data-real-time>{% now "H:i" %}</b><small data-real-date>{% now "D j M" %}</small></span>{% endif %}
     </div>{{ sim.js|json_script:"simex-clock" }}{% endif %}
     {% if readonly and not leader_tabs and v %}<a class="gm-viewas" href="{{ back_url|default:'/inboxes/' }}" title="{% if desk_tabs %}Back to the teams{% else %}Back to ExCon{% endif %}">{% icon "eye" 18 %} {% if box %}{% if desk_tabs %}Back to the teams{% else %}Back to ExCon{% endif %}{% else %}Viewing {% if v.leader_box %}{{ team.name }}'s team leader{% elif v.member_box %}{{ v.owner.name }} ({{ team.name }}){% else %}as {{ team.name }}{% endif %} · read-only{% endif %}</a>{% endif %}
+    {% if desk_tabs.bell %}<div class="gm-dn" data-dn>
+      <button type="button" class="gm-icon-btn" data-dn-toggle title="Your notifications: conversations given to you, follow-ups due, teams writing again" aria-label="Your notifications" aria-expanded="false">{% icon "notices" 22 %}<span class="gm-dn-n" data-dn-n>{% if desk_tabs.bell.unread %}{{ desk_tabs.bell.unread }}{% endif %}</span></button>
+      <div class="gm-dn-panel" data-dn-panel hidden>
+        <div class="gm-dn-head"><b>Notifications</b><span><button type="button" class="gm-link" data-dn-all>Mark all read</button> · <button type="button" class="gm-link" data-dn-clear>Clear all</button></span></div>
+        <ul class="gm-dn-list" data-dn-list><li class="gm-dn-empty">Loading…</li></ul>
+        <div class="gm-dn-foot">Conversations given to you or taken from you, your follow-ups when due, teams writing again and others answering in conversations you have or follow, a team waiting on yours, AI persona answers held. <a href="/inbox/desk/?folder=mine" class="gm-link">Assigned to me</a> · <a href="/inbox/desk/?folder=watching" class="gm-link">Following</a></div>
+      </div>
+    </div>{{ desk_tabs.bell|json_script:"simex-dn" }}{% endif %}
     <a class="gm-icon-btn" href="{{ base }}/help/" title="Help" aria-label="Help">{% icon "help" 22 %}</a>
     <button class="gm-icon-btn" data-sound title="Notification sound" aria-label="Notification sound">{% icon "bell" 22 %}</button>
     <div class="gm-account">
@@ -103,6 +111,12 @@
     </ul>
     {% else %}<button class="gm-compose-btn" data-compose {% if readonly %}disabled title="Read-only view"{% endif %}>{% icon "edit" 24 %}<span>{% if v.desk %}Write as a persona{% else %}Compose{% endif %}</span></button>{% endif %}
     {% if desk_side.attention %}<a class="gm-desk-wait" href="{{ base }}/" title="Conversations a team is waiting on, follow-ups due, AI answers held: at the top of the Inbox">{{ desk_side.attention }} need{% if desk_side.attention == 1 %}s{% endif %} attention</a>{% endif %}
+    {% if desk_side %}<ul class="gm-folders gm-desk-mine">
+      {% with m=desk_side.mine.mine %}<li><a href="{{ base }}/?folder=mine" class="{% if folder == 'mine' and not q %}on{% endif %}{% if m.attention %} bold{% endif %}" title="Conversations you took or were given: {{ m.n }}{% if m.attention %}, {{ m.attention }} needing attention{% endif %}">
+        {% icon "person" %}<span class="gm-flabel">Assigned to me</span><span class="gm-count">{% if m.attention %}{{ m.attention }}{% elif m.n %}<span class="muted">{{ m.n }}</span>{% endif %}</span></a></li>{% endwith %}
+      {% with m=desk_side.mine.watching %}<li><a href="{{ base }}/?folder=watching" class="{% if folder == 'watching' and not q %}on{% endif %}{% if m.attention %} bold{% endif %}" title="Conversations you answered in, set a follow-up on or follow, and don't have: {{ m.n }}{% if m.attention %}, {{ m.attention }} needing attention{% endif %}">
+        {% icon "eye" %}<span class="gm-flabel">Following</span><span class="gm-count">{% if m.attention %}{{ m.attention }}{% elif m.n %}<span class="muted">{{ m.n }}</span>{% endif %}</span></a></li>{% endwith %}
+    </ul>{% endif %}
     <ul class="gm-folders">
       {% for key, label in folders %}
       <li><a href="{{ base }}/?folder={{ key }}" class="{% if folder == key and not q %}on{% endif %}{% if key == 'inbox' and inbox_unread %} bold{% endif %}" data-folder="{{ key }}"{% if key == 'inbox' %} data-drop-to="inbox"{% endif %}>

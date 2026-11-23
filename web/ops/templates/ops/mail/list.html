@@ -31,6 +31,8 @@
         {% include "ops/mail/_label_menus.html" %}
         {% if v.desk %}<span class="gm-tb-sep"></span>
         <button class="gm-pill-btn gm-desk-btn" name="act" value="take" formaction="/inbox/desk/mark/" title="These are yours: the desk sees your name on them">I'll take these</button>
+        <select class="gm-desk-btn" name="assignee" aria-label="Assign to"><option value="">Assign to…</option>{% for a in desk_assignees %}<option value="{{ a.id }}">{{ a.name }}{% if a.me %} (me){% elif not a.desk %} (ExCon){% endif %}</option>{% endfor %}</select>
+        <button class="gm-pill-btn gm-desk-btn" name="act" value="assign" formaction="/inbox/desk/mark/" title="They get a notification and find them in Assigned to me">Assign</button>
         <button class="gm-pill-btn gm-desk-btn" name="act" value="done" formaction="/inbox/desk/mark/" title="Needs no answer: out of Needs attention until the team writes again">No reply needed</button>
         <button class="gm-pill-btn gm-desk-btn" name="act" value="reopen" formaction="/inbox/desk/mark/" title="Back to Needs attention if a team is waiting">Reopen</button>{% endif %}
       {% endif %}

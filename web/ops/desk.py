@@ -13,6 +13,7 @@ Replies tab); anything else is a Message of kind desk (no inject: kept apart fro
 figures). Answering a conversation as an AI persona skips that persona's queued answer to it.
 """
 
+import contextvars
 import email.utils
 import logging
 import time
@@ -21,8 +22,9 @@ import zlib
 from datetime import timedelta
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 
 from . import conf, inbound, push, render
@@ -140,6 +142,7 @@ def _on_delivered(m, mail):
         message=m, inject_id=m.inject_id, is_test=m.kind in ("test", "oneoff") or bool(team and team.is_test),
         read_at=timezone.now(), author_id=m.author_id, sim_at=mail.sim_at if mail is not None else None)
     _files(desk_mail, mail=mail) if mail is not None else _files(desk_mail, m=m)
+    _told_out(m, desk_mail)
     return desk_mail
 
 
@@ -178,6 +181,7 @@ def _on_response(r, personas_):
         created_at=r.received_at, author_id=r.person_id, sim_at=src.sim_at if src else None)
     _files(mail, mail=src) if src else _files(mail, response=r)
     push.notify_mail(mail)
+    _told_in(mail)
     return mail
 
 
@@ -247,6 +251,15 @@ def send(person, user, from_key, entries, subject, body, files=(), docs=(), pare
     if not targets:
         raise DeskError("Write to one or more teams, team members or team leaders.")
     who = person.name if person else user
+    actor = person.user if person and person.user_id else get_user_model().objects.filter(username=user).first()
+    token = ACTOR.set(actor)  # those on the conversation hear of it, but not the sender (_told_out)
+    try:
+        return _send(s, targets, subject, body, files, docs, parent, person, user, who)
+    finally:
+        ACTOR.reset(token)
+
+
+def _send(s, targets, subject, body, files, docs, parent, person, user, who):
     msgs, errors = [], []
     from . import delivery
     for t, member in targets:
@@ -421,13 +434,14 @@ def states(threads, user=None, now=None):
                     last_rid = rid or last_rid
         waiting = first_open is not None
         st = {"waiting": waiting, "since": first_open, "open_id": open_id, "last_in": last_in, "follow": None, "owner": "", "mine": False,
-              "npc": None, "triage": None, "done_by": "", "section": REST}
+              "owner_id": None, "assigned_by": "", "npc": None, "triage": None, "done_by": "", "section": REST}
         if c:
             last_sent = max((mid for mid, folder, *_ in ms if folder == "sent"), default=0)
             if c.follow_upto and last_sent <= c.follow_upto:
                 st["follow"] = {"at": c.follow_at, "note": c.follow_note, "by": c.follow_by,
                                 "due": c.follow_at is None or c.follow_at <= now}
             st["owner"], st["mine"] = c.owner_name, bool(user and c.owner_id and c.owner_id == user.id)
+            st["owner_id"], st["assigned_by"] = c.owner_id, c.assigned_by if c.owner_id else ""
             if c.done_upto and not waiting and c.done_upto >= last_in:
                 st["done_by"] = c.done_by or "the desk"
             if waiting and c.ai_status == "done" and c.ai_upto >= last_in:
@@ -461,25 +475,46 @@ def sort_key(st, latest_at):
     return (sec, 0, -latest_at.timestamp())
 
 
-ACTIONS = ("take", "release", "done", "reopen", "follow", "unfollow", "triage")
+ACTIONS = ("take", "assign", "release", "done", "reopen", "follow", "unfollow", "triage", "watch", "unwatch")
 
 
-def mark(threads, act, user, name, minutes=None, note=""):
-    """A desk member's action on conversations (ACTIONS): take it (it's theirs) or release it;
-    done (no reply needed: the teams' messages so far) or reopen; follow up (in minutes, or
-    now, with a note) or stop; triage (ask Claude now). Returns how many were changed."""
+def mark(threads, act, user, name, minutes=None, note="", assignee=None):
+    """A desk member's action on conversations (ACTIONS): take it (it's theirs), assign it to
+    someone on the desk (assignee, a user id of assignees()) or release it; done (no reply
+    needed: the teams' messages so far) or reopen; follow up (in minutes, or now, with a note)
+    or stop; triage (ask Claude now); watch or unwatch (hear of what happens in it, or not).
+    Whoever is given a conversation, or has it taken from them, is told (notify). Returns how
+    many were changed."""
     from .models import DeskConversation
     if act not in ACTIONS:
         raise DeskError("Unknown action.")
+    to = None
+    if act == "assign":
+        to = next((u for u in assignee_users() if str(u.id) == str(assignee or "")), None)
+        if to is None:
+            raise DeskError("Choose who on the desk it goes to.")
     threads = list(Mail.objects.filter(team=None, owner=None, thread__in=threads).order_by()
                    .values_list("thread", flat=True).distinct())
     now = timezone.now()
+    given = []  # (thread, previous owner id, new owner)
     for t in threads:
         c = conversation(t, create=True)
-        if act == "take":
-            c.owner, c.owner_name = user, name[:150]
+        if act in ("take", "assign"):
+            new = user if act == "take" else to
+            if c.owner_id == new.id:
+                continue
+            given.append((t, c.owner_id, new))
+            c.owner, c.owner_name = new, (name if new.id == user.id else user_name(new))[:150]
+            c.assigned_by, c.assigned_at = ("" if new.id == user.id else name[:150]), now
+            watch(t, new, "owner")
         elif act == "release":
-            c.owner, c.owner_name = None, ""
+            c.owner, c.owner_name, c.assigned_by, c.assigned_at = None, "", "", None
+        elif act == "watch":
+            watch(t, user, "follow", force=True)
+            continue
+        elif act == "unwatch":
+            unwatch(t, user)
+            continue
         elif act == "done":
             c.done_upto = (Mail.objects.filter(team=None, owner=None, thread=t, folder="inbox")
                            .order_by("-id").values_list("id", flat=True).first() or 0)
@@ -490,15 +525,36 @@ def mark(threads, act, user, name, minutes=None, note=""):
             c.follow_upto = (Mail.objects.filter(team=None, owner=None, thread=t).exclude(folder="drafts")
                              .order_by("-id").values_list("id", flat=True).first() or 0) or 1
             c.follow_at = now + timedelta(minutes=minutes) if minutes else None
-            c.follow_note, c.follow_by = (note or "")[:300], name[:150]
+            c.follow_note, c.follow_by, c.follow_user, c.follow_told = (note or "")[:300], name[:150], user, 0
+            watch(t, user, "follow_up")
         elif act == "unfollow":
-            c.follow_upto, c.follow_at, c.follow_note, c.follow_by = 0, None, "", ""
+            c.follow_upto, c.follow_at, c.follow_note, c.follow_by, c.follow_user = 0, None, "", "", None
         elif act == "triage":
             c.ai_status, c.ai_upto, c.ai_error = "queued", 0, ""
         c.save()
     if threads:
-        audit("desk_mark", f"{act} x{len(threads)}", name)
+        audit("desk_mark", f"{act} x{len(threads)}" + (f" -> {user_name(to)}" if to else ""), name)
+    if given:
+        _told_given(given, user, name)
     return len(threads)
+
+
+def _told_given(given, user, name):
+    """Conversations given (by user, name) to someone else, or taken from someone: both told."""
+    info = _about([t for t, _, _ in given])
+    User = get_user_model()
+    old = {u.id: u for u in User.objects.filter(id__in={o for _, o, _ in given if o})}
+    for t, old_id, new in given:
+        subj, team, test = info.get(t, ("", None, False))
+        what = f"{team.name}: {subj}" if team else subj
+        url = f"/inbox/desk/t/{t}/"
+        if new.id != user.id:
+            notify([new], f"assign:{t}:{timezone.now().timestamp():.0f}", "assign", f"{name} gave you a conversation",
+                   what, t, url, test, push_=True)
+        if old_id and old_id not in (user.id, new.id) and old_id in old:
+            by = "took it over" if new.id == user.id else f"gave it to {user_name(new)}"
+            notify([old[old_id]], f"unassign:{t}:{timezone.now().timestamp():.0f}", "assign",
+                   f"{name} {by}", what, t, url, test)
 
 
 def attention_count():
@@ -513,7 +569,12 @@ def attention_count():
 def tick(now=None):
     """Scheduler main loop: a Notice for ExCon for each conversation a team has waited
     desk_wait_minutes (Settings) for a persona's answer, once per message waiting; not those
-    an AI persona is about to answer or Claude reads as needing no reply. Returns how many."""
+    an AI persona is about to answer or Claude reads as needing no reply; the owner of each is
+    told too, and follow-ups falling due are told (tick_follow_ups). Returns how many waits."""
+    try:
+        tick_follow_ups(now)
+    except Exception:
+        log.exception("desk follow-ups not told")
     try:
         wait = int(conf.get("desk_wait_minutes") or 0)
     except ValueError:
@@ -532,10 +593,221 @@ def tick(now=None):
         mail = Mail.objects.filter(pk=st["open_id"]).select_related("desk_team").first()
         if mail and notices.desk_wait(t, mail, wait, st["owner"]):
             n += 1
+        if mail and st["owner_id"]:
+            owner = get_user_model().objects.filter(pk=st["owner_id"]).first()
+            notify([owner], f"wait:{t}:{mail.id}", "wait", f"{_team_name(mail.desk_team)} has waited {wait} min",
+                   mail.subject, t, f"/inbox/desk/t/{t}/", mail.is_test, push_=True)
+    return n
+
+
+def tick_follow_ups(now=None):
+    """Scheduler main loop: whoever set a follow-up (and whoever has the conversation) is told
+    when it falls due, once per follow-up. Returns how many follow-ups came due."""
+    from .models import DeskConversation
+    now = now or timezone.now()
+    due = list(DeskConversation.objects.filter(follow_upto__gt=0, follow_at__isnull=False, follow_at__lte=now)
+               .exclude(follow_told=models.F("follow_upto")).select_related("owner", "follow_user"))
+    if not due:
+        return 0
+    sts = states([c.thread for c in due], now=now)
+    info = _about([c.thread for c in due])
+    n = 0
+    for c in due:
+        DeskConversation.objects.filter(pk=c.pk).update(follow_told=c.follow_upto)
+        st = sts.get(c.thread) or {}
+        if not (st.get("follow") and st["follow"]["due"]):
+            continue  # a persona wrote in it since: the follow-up is over
+        subj, team, test = info.get(c.thread, ("", None, False))
+        title = f"Follow up: {team.name}: {subj}" if team else f"Follow up: {subj}"
+        notify([c.follow_user, c.owner], f"fu:{c.thread}:{c.follow_upto}:{c.follow_at.timestamp():.0f}", "follow_up",
+               title, c.follow_note or f"Set by {c.follow_by or 'the desk'}.", c.thread, f"/inbox/desk/t/{c.thread}/", test,
+               push_=True)
+        n += 1
     return n
 
 
 def prune():
-    """Conversations no longer on the desk (cleared, withdrawn): their state goes."""
-    from .models import DeskConversation
-    DeskConversation.objects.exclude(thread__in=Mail.objects.filter(team=None, owner=None).values("thread")).delete()
+    """Conversations no longer on the desk (cleared, withdrawn): their state goes, with who
+    followed them and the notices about them."""
+    from .models import DeskConversation, DeskNotice, DeskWatch
+    on = Mail.objects.filter(team=None, owner=None).values("thread")
+    DeskConversation.objects.exclude(thread__in=on).delete()
+    DeskWatch.objects.exclude(thread__in=on).delete()
+    DeskNotice.objects.exclude(thread="").exclude(thread__in=on).delete()
+
+
+# --- who is on a conversation, and what they hear ----------------------------------------------------
+#
+# Anyone signed in on the desk (a desk member or ExCon staff) is a login (User). A conversation
+# can be given to one of them (DeskConversation.owner: Assigned to me), and they are involved in
+# the ones they answered, took, were given, set a follow-up on or follow (DeskWatch: Following).
+# DeskNotice is each one's own feed (the bell): the owner hears of everything in theirs, those
+# who follow a conversation on purpose too, and the others involved only while nobody has it.
+
+ACTOR = contextvars.ContextVar("desk_actor", default=None)  # who on the desk is sending (desk.send)
+
+
+def user_name(user):
+    """How the desk names a login: its Person's name, else the account's."""
+    person = getattr(user, "person", None) if user else None
+    if person:
+        return person.name
+    return (user.get_full_name() or user.get_username()) if user else ""
+
+
+def assignee_users():
+    """Who a conversation can be given to: the active desk members with a login, and ExCon
+    staff."""
+    from django.db.models import Q
+    User = get_user_model()
+    return list(User.objects.filter(is_active=True).filter(
+        Q(person__role="desk", person__active=True) | Q(is_staff=True) | Q(is_superuser=True) | Q(groups__name="excon"))
+        .distinct().select_related("person").order_by("first_name", "username"))
+
+
+def assignees(me=None):
+    """The "Assign to" choices: [{"id", "name", "desk" (a desk member, not ExCon), "me"}], desk
+    members first."""
+    out = [{"id": u.id, "name": user_name(u), "desk": bool(getattr(u, "person", None) and u.person.role == "desk"),
+            "me": bool(me and u.id == me.id)} for u in assignee_users()]
+    return sorted(out, key=lambda x: (not x["desk"], x["name"].lower()))
+
+
+def watch(thread, user, reason, force=False):
+    """user is involved in the desk conversation thread (reason). force: following it on
+    purpose, even after they stopped."""
+    from .models import DeskWatch
+    if not (user and getattr(user, "pk", None)):
+        return None
+    w, made = DeskWatch.objects.get_or_create(thread=thread, user=user, defaults={"reason": reason})
+    if made:
+        return w
+    if force and (w.off or w.reason != "follow"):
+        w.off, w.reason, w.at = False, "follow", timezone.now()
+        w.save()
+    return w
+
+
+def unwatch(thread, user):
+    from .models import DeskWatch
+    DeskWatch.objects.update_or_create(thread=thread, user=user, defaults={"off": True, "reason": "follow"})
+
+
+def watching(thread, user):
+    """Is user following this conversation (involved and not stopped)?"""
+    from .models import DeskWatch
+    return DeskWatch.objects.filter(thread=thread, user=user, off=False).exists()
+
+
+def audience(thread, exclude=()):
+    """Who hears of what happens in a conversation: its owner and those following it on
+    purpose; while nobody has it, everyone involved. exclude: user ids."""
+    from .models import DeskWatch
+    c = conversation(thread)
+    ws = list(DeskWatch.objects.filter(thread=thread, off=False).select_related("user"))
+    out = {}
+    if c and c.owner_id and c.owner:
+        out[c.owner_id] = c.owner
+    for w in ws:
+        if w.reason == "follow" or not (c and c.owner_id):
+            out[w.user_id] = w.user
+    return [u for uid, u in out.items() if uid not in set(exclude) and u.is_active]
+
+
+def notify(users, key, kind, title, body="", thread="", url="", test=False, push_=False):
+    """A DeskNotice for each of users (once per key), pushed to their devices (push_; desk
+    members only, ExCon staff have no Person). Never breaks what it reports on. Returns how
+    many were new."""
+    from .models import DeskNotice
+    seen, new = set(), []
+    try:
+        for u in users:
+            if not u or u.id in seen:
+                continue
+            seen.add(u.id)
+            _, made = DeskNotice.objects.get_or_create(user=u, key=key[:120], defaults=dict(
+                kind=kind, title=title[:300], body=(body or "")[:500], thread=thread, url=url, test=test))
+            if made:
+                new.append(u)
+        people = [p.id for p in Person.objects.filter(user__in=new, role="desk", active=True)] if push_ else []
+        if people:
+            push.notify_people(people, {"title": title[:120], "body": (body or "")[:160], "url": url or "/inbox/desk/",
+                                        "tag": f"desk-{kind}-{thread[:20]}"})
+    except Exception:
+        log.exception("desk notice %s not written", key)
+    return len(new)
+
+
+def notices_of(user):
+    """user's notices not dismissed, newest first."""
+    from .models import DeskNotice
+    return DeskNotice.objects.filter(user=user, dismissed_at__isnull=True)
+
+
+def notice_counts(user):
+    """{"unread", "latest"} of user's notices (the bell, the poll)."""
+    from django.db.models import Max
+    if not (user and user.is_authenticated):
+        return {"unread": 0, "latest": 0}
+    qs = notices_of(user)
+    return {"unread": qs.filter(read_at__isnull=True).count(), "latest": qs.aggregate(m=Max("id"))["m"] or 0}
+
+
+def _team_name(team):
+    return team.name if team else "A team"
+
+
+def _about(threads):
+    """{thread: (subject, team, test)} of desk conversations: their first message's subject and
+    the team on the other side."""
+    out = {}
+    for m in (Mail.objects.filter(team=None, owner=None, thread__in=threads).exclude(folder="drafts")
+              .select_related("desk_team").order_by("id")):
+        if m.thread not in out:
+            out[m.thread] = (m.subject, m.desk_team, m.is_test)
+        elif out[m.thread][1] is None and m.desk_team:
+            out[m.thread] = (out[m.thread][0], m.desk_team, out[m.thread][2])
+    return out
+
+
+def _told_in(mail):
+    """A team wrote in a desk conversation (mail, the desk's Inbox copy): those on it hear."""
+    who = mail.from_name or mail.from_addr
+    notify(audience(mail.thread), f"in:{mail.id}", "reply", f"{_team_name(mail.desk_team)} wrote: {mail.subject}",
+           f"{who}: {(mail.body or '').strip()[:200]}", mail.thread, f"/inbox/desk/t/{mail.thread}/", mail.is_test)
+
+
+def _told_out(m, desk_mail):
+    """A persona answered in a desk conversation (m, the Message): those on it hear, but not
+    whoever sent it; the sender is involved from now on."""
+    if not (m.kind in ("reply", "desk") or m.npc):
+        return
+    actor = ACTOR.get()
+    if actor is not None:
+        watch(desk_mail.thread, actor, "answered")
+    if m.npc:
+        who = "The AI persona"
+    elif actor is not None:
+        who = user_name(actor)
+    else:
+        who = m.author.name if m.author_id else "ExCon"
+    exclude = [actor.id] if actor is not None else []
+    if m.author_id and m.author.user_id:
+        exclude.append(m.author.user_id)
+    persona = describe(m.persona, desk_mail.desk_team)["name"]
+    notify(audience(desk_mail.thread, exclude), f"out:{desk_mail.id}", "answer",
+           f"{who} answered {_team_name(desk_mail.desk_team)} as {persona}", desk_mail.subject, desk_mail.thread,
+           f"/inbox/desk/t/{desk_mail.thread}/", desk_mail.is_test)
+
+
+def told_npc(job):
+    """An AI persona's answer held for ExCon or failed: those on its desk conversation hear."""
+    if job.status not in ("held", "failed") or not job.response_id:
+        return
+    mail = Mail.objects.filter(team=None, owner=None, desk_response_id=job.response_id).select_related("desk_team").first()
+    if not mail:
+        return
+    who = job.npc.sender.display_name or job.npc.sender.local_part
+    what = "is held for ExCon" if job.status == "held" else "failed: answer it here"
+    notify(audience(mail.thread), f"npc:{job.id}:{job.status}", "npc", f"AI persona {who}'s answer {what}",
+           f"{_team_name(mail.desk_team)}: {mail.subject}", mail.thread, f"/inbox/desk/t/{mail.thread}/", mail.is_test)

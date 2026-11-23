@@ -18,6 +18,14 @@ never sees grades, quality, tone or the AI-written estimate.
   team, per persona and per desk member, and the requests, commitments, facts and desk flags
   from `ReplyAnalysis`.
 
+- **Assigned conversations and each person's notifications** (`DeskWatch`, `DeskNotice`).
+  A conversation can be given to anyone on the desk or in ExCon (`desk.mark` `assign`), and the
+  side bar has Assigned to me and Following. The Dashboard shows who has which conversations
+  (`desk_stats.by_assignee`). Each person has a bell for conversations given to them, their
+  follow-ups when due (`desk.tick_follow_ups`), teams writing again and others answering in
+  conversations they are involved in, AI persona answers held, and teams waiting on theirs
+  (`desk.notify`, `/inbox/desk/notices/`). Step 3 below can build on `assign` and `DeskWatch`.
+
 ## Next steps, in order
 
 ### 1. Live updates without a page reload

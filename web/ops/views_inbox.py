@@ -26,7 +26,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login, logout
+from django.contrib.auth import get_user_model, login, logout
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
@@ -499,6 +499,33 @@ def desk_filter(v, folder):
     return (folder[0], obj) if obj else None
 
 
+# The persona desk's own folders: what is assigned to me, what I follow, and (from its Dashboard)
+# what one person has ("o<user id>") or nobody has ("o0").
+DESK_FOLDERS = {"mine": "Assigned to me", "watching": "Following"}
+
+
+def desk_assigned(v, folder):
+    """On the persona desk, a folder of conversations by who has them: (name, threads, a
+    queryset of thread ids) or None."""
+    from .models import DeskConversation, DeskWatch
+    if not (v.desk and folder):
+        return None
+    owned = DeskConversation.objects.filter(owner__isnull=False)
+    if folder == "mine":
+        return DESK_FOLDERS[folder], owned.filter(owner=v.user).values("thread")
+    if folder == "watching":
+        return DESK_FOLDERS[folder], (DeskWatch.objects.filter(user=v.user, off=False)
+                                      .exclude(thread__in=owned.filter(owner=v.user).values("thread")).values("thread"))
+    if folder[0] == "o" and folder[1:].isdigit():
+        uid = int(folder[1:])
+        if uid == 0:
+            return "Not assigned", None
+        u = get_user_model().objects.filter(pk=uid).first()
+        if u:
+            return f"Assigned to {desk.user_name(u)}", owned.filter(owner_id=uid).values("thread")
+    return None
+
+
 def persona_locals(sender):
     """The usernames a Sender writes as: its own, or with {team}, one per team."""
     if "{team}" not in sender.local_part:
@@ -510,9 +537,15 @@ def _folder_qs(v, folder, q=""):
     qs = v.mails()
     label = label_of(v, folder)
     flt = desk_filter(v, folder)
+    own = desk_assigned(v, folder)
     if flt:
         qs = qs.filter(trashed_at__isnull=True).exclude(folder="drafts")
         qs = qs.filter(desk_team=flt[1]) if flt[0] == "t" else qs.filter(persona__in=persona_locals(flt[1]))
+    elif own:
+        from .models import DeskConversation
+        qs = qs.filter(trashed_at__isnull=True).exclude(folder="drafts")
+        qs = (qs.exclude(thread__in=DeskConversation.objects.filter(owner__isnull=False).values("thread"))
+              if own[1] is None else qs.filter(thread__in=own[1]))
     elif label:
         qs = qs.filter(trashed_at__isnull=True, thread__in=label.threads.values("thread")).exclude(folder="drafts")
     elif folder == "trash":
@@ -611,7 +644,7 @@ def conversations(v, folder, q=""):
 def sectioned(v, folder):
     """The persona desk's Inbox (and its persona and team filters): in sections, what needs
     attention first (desk.SECTIONS)."""
-    return v.desk and (folder == "inbox" or bool(desk_filter(v, folder)))
+    return v.desk and (folder == "inbox" or bool(desk_filter(v, folder)) or bool(desk_assigned(v, folder)))
 
 
 def ai_flags(team, threads):
@@ -665,16 +698,30 @@ def desk_side(v):
                          "unread": len({t for t, p, _ in unread if p in locs})})
     teams = [{"key": f"t{t.id}", "name": t.name, "test": t.is_test,
               "unread": len({th for th, _, tid in unread if tid == t.id})} for t in Team.objects.filter(active=True)]
-    return {"personas": personas, "teams": teams, "attention": desk.attention_count()}
+    return {"personas": personas, "teams": teams, "attention": desk.attention_count(), "mine": _desk_mine(v)}
 
 
-def desk_tabs(person, current):
-    """A persona desk member's tab bar: the desk, and the teams' and team leaders' mailboxes (read-only)."""
+def _desk_mine(v):
+    """The sidebar's Assigned to me and Following: how many of each need attention, and in all."""
+    out = {}
+    for key in DESK_FOLDERS:
+        threads = list(Mail.objects.filter(team=None, owner=None, trashed_at__isnull=True,
+                                           thread__in=desk_assigned(v, key)[1]).exclude(folder="drafts")
+                       .order_by().values_list("thread", flat=True).distinct())
+        sts = desk.states(threads, v.user)
+        out[key] = {"n": len(threads), "attention": sum(1 for st in sts.values() if st["section"] == desk.ATTENTION)}
+    return out
+
+
+def desk_tabs(person, current, user=None):
+    """A persona desk member's tab bar: the desk, and the teams' and team leaders' mailboxes
+    (read-only); with user, the bell of their desk notices."""
     teams = list(Team.objects.filter(active=True))
     leads = {p.team_id: p for p in Person.objects.filter(role="tl", active=True, team__in=teams)}
     for t in teams:
         t.lead = leads.get(t.id)
-    return {"current": current, "teams": teams, "unread": _unread(None, None)}
+    return {"current": current, "teams": teams, "unread": _unread(None, None),
+            "bell": desk.notice_counts(user) if user else None}
 
 
 def _label_dict(label, unread=0):
@@ -793,11 +840,14 @@ def _ctx(v, **extra):
         flt = desk_filter(v, folder)
         if flt:
             c["folder_name"] = (flt[1].display_name or flt[1].local_part) if flt[0] == "a" else flt[1].name
+        elif desk_assigned(v, folder):
+            c["folder_name"] = desk_assigned(v, folder)[0]
+        c["desk_assignees"] = desk.assignees(v.user)
     if v.desk_person:
-        c["desk_tabs"] = desk_tabs(v.desk_person, "desk" if v.desk else "teams")
+        c["desk_tabs"] = desk_tabs(v.desk_person, "desk" if v.desk else "teams", v.user)
         c["back_url"], c["me"] = "/inbox/desk/teams/", v.desk_person  # also on the teams it views
     elif v.desk:  # ExCon staff on the desk: its tabs too
-        c["desk_tabs"] = desk_tabs(None, "desk")
+        c["desk_tabs"] = desk_tabs(None, "desk", v.user)
     if v.leader:
         c["leader_tabs"] = leader_tabs(v.leader, "team" if v.leader_mode else "peer" if v.peer
                                        else "members" if v.member_box else "mail")
@@ -817,7 +867,8 @@ def _ctx(v, **extra):
 def _folder(v, request):
     default = "replies" if v.leader_mode else "inbox"
     folder = request.GET.get("folder", default)
-    if folder not in dict(v.folders) and (v.leader_mode or not label_of(v, folder)) and not desk_filter(v, folder):
+    if folder not in dict(v.folders) and (v.leader_mode or not label_of(v, folder)) and not desk_filter(v, folder) \
+            and not desk_assigned(v, folder):
         folder = default
     return folder
 
@@ -957,6 +1008,7 @@ def thread_view(request, v, thread):
         desk_chips=desk_chips(mails, {}, dict(Team.objects.values_list("id", "name"))) if v.desk else None,
         desk_state=desk.states([thread], v.user).get(thread) if v.desk else None,
         desk_conv=desk.conversation(thread) if v.desk else None, desk_ai=v.desk and desk_ai.enabled(),
+        desk_watching=v.desk and desk.watching(thread, v.user),
         next_waiting=_next_waiting(rows, thread) if v.desk else None,
         in_inbox=any(m.folder == "inbox" and not m.archived for m in mails), starred=any(m.starred for m in mails),
         thread_labels=[_label_dict(tl.label) for tl in ThreadLabel.objects.filter(label__in=v.labels(), thread=thread)
@@ -1469,7 +1521,7 @@ def desk_teams(request):
     """The persona desk's Teams tab: every team's inbox, team leader's and (with personal
     mailboxes) members' mailboxes, read-only, with what is waiting on the desk from each."""
     person = desk_of(request.user)
-    tabs = desk_tabs(person, "teams")
+    tabs = desk_tabs(person, "teams", request.user)
     personal = conf.flag("personal_mailboxes")
     desk_unread = {r["desk_team_id"]: r["n"] for r in Mail.objects.filter(
         team=None, owner=None, folder="inbox", read_at__isnull=True, trashed_at__isnull=True)
@@ -1497,7 +1549,7 @@ def desk_dashboard(request):
     kind = request.GET.get("kind") or ("test" if have == {"test"} else "live")
     kind = kind if kind in ("live", "test") else "live"
     return render(request, "ops/mail/desk_dashboard.html", {
-        "team": DESK, "me": person, "base": "/inbox/desk", "readonly": True, "desk_tabs": desk_tabs(person, "dashboard"),
+        "team": DESK, "me": person, "base": "/inbox/desk", "readonly": True, "desk_tabs": desk_tabs(person, "dashboard", request.user),
         "box": box_theme(kind="desk", title="Persona desk", sub="Dashboard"), "v": None, "back_url": "/inbox/desk/",
         "d": desk_stats.compute(kind), "kind": kind, "have": have, "desk_ai": desk_ai.enabled(),
         "simex_js": {"base": "/inbox/desk", "readonly": True, "book": [], "team": DESK["name"], "leader": False,
@@ -1517,15 +1569,49 @@ def desk_mark(request):
     except ValueError:
         minutes = 0
     try:
-        n = desk.mark(P.getlist("threads"), P.get("act", ""), request.user, name, minutes, P.get("note", ""))
+        n = desk.mark(P.getlist("threads"), P.get("act", ""), request.user, name, minutes, P.get("note", ""),
+                      P.get("assignee"))
     except desk.DeskError as e:
-        return JsonResponse({"ok": False, "error": str(e)}, status=400)
+        if request.headers.get("x-requested-with") == "fetch":
+            return JsonResponse({"ok": False, "error": str(e)}, status=400)
+        messages.error(request, str(e))
+        nxt = P.get("next") or ""
+        return redirect(nxt if nxt.startswith("/inbox/desk/") else "/inbox/desk/")
     if request.headers.get("x-requested-with") == "fetch":
         return JsonResponse({"ok": True, "n": n})
+    if P.get("act") == "assign" and n:
+        messages.success(request, f"Assigned to {desk.user_name(get_user_model().objects.get(pk=P.get('assignee')))}.")
     nxt = P.get("next") or ""
     if P.get("act") == "done":  # on to the next conversation waiting, else back to the Inbox
         nxt = P.get("next_done") or ("/inbox/desk/" if "/t/" in nxt else nxt)
     return redirect(nxt if nxt.startswith("/inbox/desk/") else "/inbox/desk/")
+
+
+@_desk_page
+def desk_notices(request):
+    """The bell's list: the signed-in person's desk notices (desk.notify), newest first."""
+    from django.utils.timesince import timesince
+    now = timezone.now()
+    items = [{"id": n.id, "kind": n.kind, "title": n.title, "body": n.body, "url": n.url, "test": n.test,
+              "read": n.read_at is not None, "at": timezone.localtime(n.at).strftime("%H:%M"),
+              "ago": "just now" if (now - n.at).total_seconds() < 60 else timesince(n.at, now).split(",")[0] + " ago"}
+             for n in desk.notices_of(request.user)[:60]]
+    return JsonResponse({"items": items, **desk.notice_counts(request.user)})
+
+
+@_desk_page
+@require_POST
+def desk_notices_mark(request):
+    """Mark the signed-in person's desk notices read or dismiss them (ids, or all)."""
+    P = request.POST
+    qs = desk.notices_of(request.user)
+    if not P.get("all"):
+        qs = qs.filter(id__in=[int(x) for x in P.getlist("ids") if x.isdigit()])
+    now = timezone.now()
+    qs.filter(read_at__isnull=True).update(read_at=now)
+    if P.get("act") == "dismiss":
+        qs.update(dismissed_at=now)
+    return JsonResponse({"ok": True, **desk.notice_counts(request.user)})
 
 
 @_desk_page
@@ -1581,6 +1667,8 @@ def poll(request, as_team=None, box="", pid=None):
         out.update(me_unread=_unread(v.team, v.person), team_unread=_unread(v.team, None))
     if v.desk_person:  # the desk tab's badge
         out.update(desk_unread=_unread(None, None))
+    if v.desk or v.desk_person:  # the bell: their own desk notices
+        out["dn"] = desk.notice_counts(request.user)
     out["clock"] = simclock.js()  # the simulation clock widget follows ExCon's changes
     return JsonResponse(out)
 

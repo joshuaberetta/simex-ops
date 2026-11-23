@@ -605,6 +605,63 @@
     }
   });
 
+  // --- the persona desk's bell: this person's own notices (desk.notify) -----------------------------
+  const dn = (() => {
+    const box = $("[data-dn]");
+    if (!box) return { update() {} };
+    const panel = $("[data-dn-panel]", box), list = $("[data-dn-list]", box), badge = $("[data-dn-n]", box);
+    const btn = $("[data-dn-toggle]", box);
+    const start = JSON.parse(($("#simex-dn") || {}).textContent || "{}");
+    const seenKey = "simex-dn-latest";
+    let latest = Number(localStorage.getItem(seenKey) || 0), known = start.latest || 0;
+    if (!localStorage.getItem(seenKey)) { latest = known; localStorage.setItem(seenKey, String(known)); }
+    const setBadge = (n) => { badge.textContent = n ? n : ""; };
+    async function load() {
+      const r = await fetch("/inbox/desk/notices/", { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } });
+      if (!r.ok) return null;
+      const j = await r.json();
+      setBadge(j.unread);
+      list.innerHTML = j.items.length ? j.items.map((n) => `<li class="gm-dn-item${n.read ? "" : " unread"} k-${esc(n.kind)}" data-id="${n.id}" data-url="${esc(n.url)}">
+          <button type="button" class="gm-dn-open"><b>${esc(n.title)}</b>${n.test ? ' <span class="gm-label test">Test</span>' : ""}
+          ${n.body ? `<span class="gm-dn-body">${esc(n.body)}</span>` : ""}<small>${esc(n.at)} · ${esc(n.ago)}</small></button>
+          <button type="button" class="gm-icon-btn sm gm-dn-x" data-dn-x title="Dismiss" aria-label="Dismiss">✕</button></li>`).join("")
+        : '<li class="gm-dn-empty">Nothing for you yet.</li>';
+      return j;
+    }
+    const open = (on) => { panel.hidden = !on; btn.setAttribute("aria-expanded", on ? "true" : "false"); if (on) load(); };
+    btn.onclick = (e) => { e.stopPropagation(); open(panel.hidden); };
+    document.addEventListener("click", (e) => { if (!panel.hidden && !e.target.closest("[data-dn]")) open(false); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !panel.hidden) open(false); });
+    list.addEventListener("click", async (e) => {
+      const li = e.target.closest(".gm-dn-item");
+      if (!li) return;
+      if (e.target.closest("[data-dn-x]")) {
+        const r = await post("/inbox/desk/notices/mark/", { act: "dismiss", ids: li.dataset.id });
+        if (r.ok) { li.remove(); setBadge((await r.json()).unread); if (!$(".gm-dn-item", list)) load(); }
+        return;
+      }
+      await post("/inbox/desk/notices/mark/", { act: "read", ids: li.dataset.id });
+      if (li.dataset.url) location.href = li.dataset.url; else load();
+    });
+    $("[data-dn-all]", box).onclick = async () => { await post("/inbox/desk/notices/mark/", { act: "read", all: "1" }); load(); };
+    $("[data-dn-clear]", box).onclick = async () => { await post("/inbox/desk/notices/mark/", { act: "dismiss", all: "1" }); load(); };
+    return {
+      async update(c) {  // from the poll: {unread, latest}
+        setBadge(c.unread);
+        if (c.latest > known) { known = c.latest; if (!panel.hidden) load(); }
+        if (c.latest > latest) {
+          const j = !panel.hidden ? null : await load();
+          const fresh = j ? j.items.filter((n) => n.id > latest && !n.read) : [];
+          latest = c.latest; localStorage.setItem(seenKey, String(latest));
+          if (fresh.length) {
+            const n = fresh[0], more = fresh.length > 1 ? ` (+${fresh.length - 1} more)` : "";
+            snack(`${n.title}${more}`, { label: "Open", run: () => open(true) }, true);
+          }
+        } else if (c.latest < latest) { latest = c.latest; localStorage.setItem(seenKey, String(latest)); }  // cleared
+      },
+    };
+  })();
+
   // --- polling: unread count, tab title and icon, chime, desktop notification ----------------------
   const N = window.simexNotify;
   const soundBtn = $("[data-sound]");
@@ -758,6 +815,7 @@
         $$("[data-tab-me]").forEach((el) => el.textContent = j.me_unread && !BASE.endsWith("/me") ? j.me_unread : "");
         $$("[data-tab-teambox]").forEach((el) => el.textContent = j.team_unread && BASE.endsWith("/me") ? j.team_unread : "");
       }
+      if (j.dn) dn.update(j.dn);  // the persona desk's bell
       if (j.desk_unread !== undefined) {  // the persona desk's tab bar
         $$("[data-tab-desk]").forEach((el) => el.textContent = j.desk_unread && !BASE.startsWith("/inbox/desk") ? j.desk_unread : "");
       }
