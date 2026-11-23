@@ -30,6 +30,8 @@ Several of you share the desk, so *read* doesn't mean *answered*. The **Inbox** 
 - **Later**: follow-ups not due yet, and conversations an AI persona is about to answer.
 - **Answered or nothing to answer**: the rest.
 
+Prefer your Inbox like any email, newest at the top? Click **In sections · show newest first** above the list (and **Newest first · show in sections** to go back); your choice stays as you move around.
+
 A conversation leaves Needs attention as soon as a persona answers that team in it; a new message from the team puts it back. A blue tag on a row is what SIMEX AI reads the team asking for: a hint, check the message.
 
 At the top of each conversation:

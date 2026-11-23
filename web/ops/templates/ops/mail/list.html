@@ -14,6 +14,8 @@
           <a href="{{ base }}/?folder=all">Open All mail</a>
         </div>
       </span>
+      {% if desk_order %}<a class="gm-pill-btn gm-desk-order" href="?folder={{ folder }}&order={% if desk_order == 'newest' %}sections{% else %}newest{% endif %}"
+         title="{% if desk_order == 'newest' %}Show what needs attention first, in sections{% else %}Show every conversation newest first, like any email{% endif %}">{% if desk_order == 'newest' %}Newest first · show in sections{% else %}In sections · show newest first{% endif %}</a>{% endif %}
     </span>
     <span class="gm-tb-selected" hidden>
       {% if folder == 'trash' %}

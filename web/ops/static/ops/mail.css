@@ -561,6 +561,7 @@ body.desk .gm-row[style*="--persona"]::after { content: ""; position: absolute; 
 .gm-deskbar-ai small { color: var(--muted); margin-left: 4px; }
 .gm-deskbar-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
 .gm-deskbar-acts .gm-pill-btn { padding: 4px 14px; font-size: 13px; text-decoration: none; color: inherit; }
+.gm-desk-order { padding: 4px 14px; font-size: 13px; text-decoration: none; color: inherit; margin-left: 8px; white-space: nowrap; }
 .gm-deskbar-fu { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .gm-deskbar-fu select, .gm-deskbar-fu input { font: inherit; font-size: 13px; padding: 4px 8px; border: 1px solid #c4c7c5; border-radius: 6px; }
 .gm-deskbar-fu input { width: 200px; }

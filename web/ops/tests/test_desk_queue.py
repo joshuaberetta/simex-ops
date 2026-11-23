@@ -238,3 +238,29 @@ def test_desk_dashboard_requests_to_the_personas(excon):
     assert "stressed" not in page and "95" not in page and "No action" not in page  # never tone, quality, AI-written
     answer(d, Mail.objects.get(team=None, folder="inbox"), ta)
     assert desk_stats.compute("live")["requests"][0]["open"] == 0
+
+
+def test_newest_first_like_any_email(excon):
+    """The desk's Inbox in sections by default, or newest first, each login's choice kept."""
+    setup(excon)
+    deliver_now("3-13")
+    ta, tb = Team.objects.get(code="a"), Team.objects.get(code="b")
+    got_a, _ = team_writes(participant("a"), ta)
+    got_b, _ = team_writes(participant("b"), tb)
+    d = desk_client()
+    answer(d, Mail.objects.filter(team=None, folder="inbox", desk_team=tb).get(), tb)
+    page = d.get("/inbox/desk/")
+    order = [r["thread"] for r in page.context["rows"]]
+    assert page.context["sections"] and page.context["desk_order"] == "sections"
+    assert order.index(got_a.thread) < order.index(got_b.thread)  # waiting first
+    page = d.get("/inbox/desk/?order=newest")
+    order = [r["thread"] for r in page.context["rows"]]
+    assert page.context["sections"] is None and page.context["desk_order"] == "newest"
+    assert order.index(got_b.thread) < order.index(got_a.thread)  # the latest at the top
+    assert b"gm-section-attention" not in page.content and b"Waiting" in page.content  # rows still say where they stand
+    page = d.get("/inbox/desk/")  # kept
+    assert page.context["desk_order"] == "newest" and page.context["sections"] is None
+    t = d.get(f"/inbox/desk/t/{got_b.thread}/")  # the arrows follow the same order
+    assert t.status_code == 200
+    page = d.get("/inbox/desk/?order=sections")
+    assert page.context["sections"] and page.context["desk_order"] == "sections"

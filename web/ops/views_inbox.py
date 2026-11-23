@@ -269,6 +269,9 @@ def mailbox_view(view):
         if box == "me" and not conf.flag("personal_mailboxes") and participant_of(request.user):
             return redirect("/inbox/")
         v = Viewer(request, as_team, box, pid)
+        # The persona desk's Inbox in sections (default) or, like any email, newest first: each
+        # login's choice, kept in its session (?order=newest | sections).
+        v.desk_newest = bool(v.desk and request.session.get("desk_order") == "newest")
         if request.method == "POST" and v.readonly:
             raise PermissionDenied("Read-only view.")
         return view(request, v, *args, **kwargs)
@@ -643,7 +646,12 @@ def conversations(v, folder, q=""):
 
 def sectioned(v, folder):
     """The persona desk's Inbox (and its persona and team filters): in sections, what needs
-    attention first (desk.SECTIONS)."""
+    attention first (desk.SECTIONS), unless the viewer chose newest first (desk_orderable)."""
+    return desk_orderable(v, folder) and not getattr(v, "desk_newest", False)
+
+
+def desk_orderable(v, folder):
+    """The desk lists that can be in sections or newest first."""
     return v.desk and (folder == "inbox" or bool(desk_filter(v, folder)) or bool(desk_assigned(v, folder)))
 
 
@@ -883,6 +891,10 @@ def _folder(v, request):
 @mailbox_view
 def inbox(request, v):
     folder = _folder(v, request)
+    order = request.GET.get("order")
+    if v.desk and order in ("newest", "sections"):
+        request.session["desk_order"] = order
+        v.desk_newest = order == "newest"
     q = (request.GET.get("q") or "").strip()
     rows = conversations(v, "all" if q and folder in ("inbox", "replies") else folder, q)
     try:
@@ -901,7 +913,8 @@ def inbox(request, v):
         counts = Counter(r["state"]["section"] for r in rows)
         sections = {key: {"name": name, "n": counts.get(key, 0)} for key, name in desk.SECTIONS}
     return render(request, "ops/mail/list.html", _ctx(
-        v, folder=folder, q=q, rows=rows[start:start + PAGE], sections=sections, desk_ai=desk_ai.enabled(), total=total, first=start + 1 if total else 0,
+        v, folder=folder, q=q, rows=rows[start:start + PAGE], sections=sections,
+        desk_order=("newest" if v.desk_newest else "sections") if not q and desk_orderable(v, folder) else "", desk_ai=desk_ai.enabled(), total=total, first=start + 1 if total else 0,
         last=min(start + PAGE, total), page=page, has_prev=page > 1, has_next=start + PAGE < total, today=timezone.localdate()))
 
 
