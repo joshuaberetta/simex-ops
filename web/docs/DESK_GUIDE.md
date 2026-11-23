@@ -14,29 +14,29 @@ You are on the **persona desk**: part of ExCon, playing the exercise's personas 
 - On the left, **Personas** shows one persona's conversations and **Teams** one team's, each with its unread conversations. **AI** marks personas that answer on their own.
 
 ## The Dashboard tab
-How the desk is keeping up, refreshed every minute: what needs attention and how many nobody has taken, how long the teams wait, how fast you answer, and an hourly strip of messages in against answers out. **Waiting longest** lists the teams waiting, with who has each. **Requests to the personas** shows what the teams asked each persona, unanswered first; **Decisions and commitments** what they told a persona they will do (a cue for a follow-up), and **Figures and facts** the numbers and places they gave (keep the personas' answers consistent with them). **Teams** shows whether one is being left behind, **Personas** which ones carry the load (time for a second person?), **Who is answering** who is online and what each has taken. Requests, commitments and flags are Claude's reading of the teams' messages: a hint, check the message.
+How the desk is keeping up, refreshed every minute: what needs attention and how many nobody has taken, how long the teams wait, how fast you answer, and an hourly strip of messages in against answers out. **Waiting longest** lists the teams waiting, with who has each. **Requests to the personas** shows what the teams asked each persona, unanswered first; **Decisions and commitments** what they told a persona they will do (a cue for a follow-up), and **Figures and facts** the numbers and places they gave (keep the personas' answers consistent with them). **Teams** shows whether one is being left behind, **Personas** which ones carry the load (time for a second person?), **Who is answering** who is online and what each has taken. Requests, commitments and flags are SIMEX AI's reading of the teams' messages: a hint, check the message.
 
 ## Answering a team
 - Open the conversation and click **Reply**. **From** is already the persona the team wrote to; **To** is that team. Your answer lands in the team's conversation, in SIMEX Mail or by email, like any other answer from that persona. It is also recorded as the persona's answer on ExCon's Replies tab.
 - You can change **From** to have another persona write in the same conversation (e.g. the press picking up on a government message). The team sees it in the same conversation.
-- **Suggest a reply** (under the bar at the top of a conversation): Claude looks up the documents, injects and role plays the team has had so far and suggests the persona's answer, with what it rests on, what the team got wrong, what isn't in the package and what is still to come for this team (so you don't give it away early). Add what the answer should do if you like (*keep it short*), wait about a minute, then **Reply with this** and read it before you send it. The notes can quote role-play scripts: they are for the desk, never paste them to a team.
+- **Suggest a reply** (under the bar at the top of a conversation): SIMEX AI looks up the documents, injects and role plays the team has had so far and suggests the persona's answer, with what it rests on, what the team got wrong, what isn't in the package and what is still to come for this team (so you don't give it away early). Add what the answer should do if you like (*keep it short*), wait about a minute, then **Reply with this** and read it before you send it. The notes can quote role-play scripts: they are for the desk, never paste them to a team.
 - If an AI persona was going to answer that conversation, your answer replaces its answer: its queued answer is cancelled.
 - **Someone else on it?** At the top of a conversation, a yellow bar says who else on the desk has it open, and a red one who is writing an answer, so two of you don't answer the same message. Read and starred are shared: a conversation one of you opened is no longer unread for the others.
 
 ## What still needs an answer
 Several of you share the desk, so *read* doesn't mean *answered*. The **Inbox** comes in sections:
 - **Needs attention**: a team is waiting for a persona's answer (*Waiting 12 min*), a follow-up is due, or an AI persona's answer was held. The longest waiting first; **Urgent** ones above. The red box on the left says how many.
-- **Probably no reply needed (Claude)**: Claude reads the team's latest message as a thanks or an acknowledgement. Check it, then **No reply needed**.
+- **Probably no reply needed (SIMEX AI)**: SIMEX AI reads the team's latest message as a thanks or an acknowledgement. Check it, then **No reply needed**.
 - **Later**: follow-ups not due yet, and conversations an AI persona is about to answer.
 - **Answered or nothing to answer**: the rest.
 
-A conversation leaves Needs attention as soon as a persona answers that team in it; a new message from the team puts it back. A blue tag on a row is what Claude reads the team asking for: a hint, check the message.
+A conversation leaves Needs attention as soon as a persona answers that team in it; a new message from the team puts it back. A blue tag on a row is what SIMEX AI reads the team asking for: a hint, check the message.
 
 At the top of each conversation:
 - **I'll take it**: the others see your name on its row (**Yours** for you), so two of you don't pick up the same one. **Release** when you hand it back. Rows also show who is reading or writing in a conversation right now.
 - **No reply needed**: nothing to answer (a thanks, a confirmation). It leaves Needs attention and the next waiting conversation opens. **Reopen** undoes it.
 - **Follow up** now or in 15 minutes to 4 hours, with a note (*chase the convoy ETA*): it waits in Later, comes back to Needs attention when due, and ends when a persona writes in it (or **Stop**).
-- **Ask Claude**, when Claude hasn't read it yet; **Next waiting** to move on.
+- **Ask SIMEX AI**, when SIMEX AI hasn't read it yet; **Next waiting** to move on.
 
 Tick several rows in the Inbox for **I'll take these**, **No reply needed** or **Reopen** at once; the ✓ on a row (on hover) is **No reply needed**.
 

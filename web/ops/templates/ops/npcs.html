@@ -7,7 +7,7 @@
   <span class="small muted">{% if not on %}<span class="pill warn">Off</span> nothing answers on its own (<a href="/settings/#npc">Settings</a>){% else %}<span class="pill safe">On</span> for {% if scope == 'all' %}every team{% else %}the Test team only{% endif %} (<a href="/settings/#npc">Settings</a>){% endif %}
     · {% if not ai_available %}no AI provider configured{% elif not ai_enabled %}AI analysis is off (<a href="/settings/#ai">Settings</a>){% else %}about ${{ ai_spent|floatformat:2 }} of ${{ ai_cap|floatformat:2 }} today{% endif %}</span>
 </div>
-<p class="small muted">Personas the teams can write to that answer on their own, like non-player characters: Claude writes each answer in character from the persona's profile (who they are, what they know and may share, their limits), after a delay drawn from its timing, in the same conversation, in SIMEX Mail or by email.
+<p class="small muted">Personas the teams can write to that answer on their own, like non-player characters: SIMEX AI writes each answer in character from the persona's profile (who they are, what they know and may share, their limits), after a delay drawn from its timing, in the same conversation, in SIMEX Mail or by email.
 Put only what the teams may learn in a profile: never control-side material. Answers go out as the persona and are on the Replies tab; team leaders see their team's conversations with them.</p>
 
 <div class="cols">
@@ -40,11 +40,11 @@ Put only what the teams may learn in a profile: never control-side material. Ans
   <label>Who is it? <span class="hint">role, organisation, temperament, what they know, how fast they answer</span>
     <textarea name="brief" rows="5" required placeholder="e.g. The deputy governor of the worst-hit province: proud, defensive about the province's preparedness, knows which roads are cut and where the evacuation centres are; slow to answer, office hours only."></textarea></label>
   <button class="btn primary" {% if not ai_enabled %}disabled{% endif %}>Generate</button>
-  <p class="hint">Claude writes the profile from your brief and the injects (a few seconds). It stays off and out of the address book until you have read it and saved it.</p>
+  <p class="hint">SIMEX AI writes the profile from your brief and the injects (a few seconds). It stays off and out of the address book until you have read it and saved it.</p>
 </form>
 <form method="post" action="/npcs/" class="card form">{% csrf_token %}
   <h3>From the injects</h3>
-  <p class="small">Profiles for the personas your injects come from: Claude reads each one's injects for who they are and how they write, and gives them what the teams have been told (never what their planned injects will say).</p>
+  <p class="small">Profiles for the personas your injects come from: SIMEX AI reads each one's injects for who they are and how they write, and gives them what the teams have been told (never what their planned injects will say).</p>
   {% if seedable %}<p class="small muted">{% for s in seedable %}{{ s.display_name|default:s.local_part }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>
   <button class="btn" name="seed" value="1" {% if not ai_enabled %}disabled{% endif %}>Write {{ seedable|length }} profile{{ seedable|length|pluralize }}</button>
   <p class="hint">One call each, about a cent apiece; each stays off until you have read it and saved it.</p>

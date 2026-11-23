@@ -64,6 +64,7 @@
           </div>
         </div>
         <div class="gm-msg-meta">
+          {% if m.note.meter %}{% include "ops/mail/_ai_meter.html" with ai=m.note.meter %}{% endif %}
           {% if m.files.all %}<span class="gm-att">{% icon "attach" 18 %}</span>{% endif %}
           <span class="gm-msg-date">{% msgdate m %}</span>
           <button type="button" class="gm-star sm{% if m.starred %} on{% endif %}" data-star-mail="{{ m.id }}" aria-label="Star" {% if readonly %}disabled{% endif %}>{% if m.starred %}{% icon "star" 20 %}{% else %}{% icon "star_border" 20 %}{% endif %}</button>
@@ -76,12 +77,12 @@
       <div class="gm-msg-body gm-open-only">
         {% if m.note %}{% with n=m.note %}<div class="gm-note">
           {% if n.author %}Written by <b>{{ n.author }}</b>{% endif %}{% if n.after is not None %} · {{ n.after }} min after the message it answers{% endif %}
-          {% if n.ai %}<div>{% if n.band %}<span class="gm-band" title="Claude's estimate from the text and the time taken: a hint, never proof">{{ n.band }}</span> {% endif %}{% if n.ai.tone %}Tone <b>{{ n.ai.tone }}</b>{% endif %}{% if n.quality %} · quality <b>{{ n.quality }}</b>/5{% endif %}{% if n.ai.wpm %} · {{ n.ai.wpm|floatformat:0 }} words/min{% endif %}</div>
+          {% if n.ai %}<div>{% if n.ai.ai_written is not None %}<span class="gm-aiscore">{% if n.docs %}{% include "ops/mail/_ai_meter.html" with ai=n.meter_msg %}{% endif %}{% if n.band %} <span class="gm-band" title="SIMEX AI's estimate from the text and the time taken: a hint, never proof">{{ n.band }}</span>{% endif %}</span> {% endif %}{% if n.ai.tone %}Tone <b>{{ n.ai.tone }}</b>{% endif %}{% if n.quality %} · quality <b>{{ n.quality }}</b>/5{% endif %}{% if n.ai.wpm %} · {{ n.ai.wpm|floatformat:0 }} words/min{% endif %}</div>
           {% for f in n.flags %}<span class="gm-flag">{{ f }}</span>{% endfor %}
-          <details><summary>Claude's reading</summary><p>{{ n.ai.summary }}</p>{% if n.band and n.ai.ai_signals %}<p><b>Why it may be AI-written:</b> {{ n.ai.ai_signals }}</p>{% endif %}</details>
+          <details><summary>SIMEX AI's reading</summary><p>{{ n.ai.summary }}</p>{% if n.band and n.ai.ai_signals %}<p><b>Why it may be AI-written:</b> {{ n.ai.ai_signals }}</p>{% endif %}</details>
           {% endif %}
-          {% for x in n.docs %}<div>📎 {{ x.d.filename }}: {% if x.band %}<span class="gm-band" title="Claude's estimate from the document's text and what the file records about its editing: a hint, never proof">{{ x.band }}</span> {% endif %}{{ x.d.doc_type }}
-            <details><summary>Claude's reading of the document</summary><p>{{ x.d.summary }}</p>{% if x.band and x.d.ai_signals %}<p><b>Why it may be AI-written:</b> {{ x.d.ai_signals }}</p>{% endif %}</details></div>{% endfor %}
+          {% for x in n.docs %}<div>📎 {{ x.d.filename }}: {% if x.meter %}<span class="gm-aiscore">{% include "ops/mail/_ai_meter.html" with ai=x.meter %}{% if x.band %} <span class="gm-band" title="SIMEX AI's estimate from the document's text and what the file records about its editing: a hint, never proof">{{ x.band }}</span>{% endif %}</span> {% endif %}{{ x.d.doc_type }}
+            <details><summary>SIMEX AI's reading of the document</summary><p>{{ x.d.summary }}</p>{% if x.band and x.d.ai_signals %}<p><b>Why it may be AI-written:</b> {{ x.d.ai_signals }}</p>{% endif %}</details></div>{% endfor %}
           </div>{% endwith %}{% endif %}
         {% if m.banner %}<div class="gm-banner">{{ m.banner }}</div>{% endif %}
         <div class="gm-text">{{ m.body|mailbody }}</div>

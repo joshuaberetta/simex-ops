@@ -3,7 +3,7 @@
 {% block body %}
 <h1><a href="/injects/" class="muted">Injects</a> / Library</h1>
 <div class="card">
-  <p>The documents the participants have or may be given (baseline documents, inject documents, maps), as text. When the persona desk or ExCon asks for a <b>suggested reply</b>, Claude searches them, with the injects and role plays, and is told for each one whether <b>this team has it yet</b>: it uses only what the team has, and tells the desk what not to get ahead of.</p>
+  <p>The documents the participants have or may be given (baseline documents, inject documents, maps), as text. When the persona desk or ExCon asks for a <b>suggested reply</b>, SIMEX AI searches them, with the injects and role plays, and is told for each one whether <b>this team has it yet</b>: it uses only what the team has, and tells the desk what not to get ahead of.</p>
   <p class="small muted">{{ counts.total }} document{{ counts.total|pluralize }}: {{ counts.all }} the participants have, {{ counts.with }} released with an inject or role play, {{ counts.no }} not given.</p>
   <form method="post" enctype="multipart/form-data" class="rowform">{% csrf_token %}
     <input type="file" name="file" accept=".json,.gz" required>

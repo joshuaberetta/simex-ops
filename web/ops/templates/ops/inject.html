@@ -39,7 +39,7 @@
   </div>
 </div>
 {% endif %}{% endif %}
-{% if drafted_from %}<p class="small"><span class="flag ai">AI draft</span> Drafted by Claude (<a href="/injects/drafts/{{ drafted_from.id }}/">the draft and its reasons</a>{% if drafted_from.body.new_facts %}; it invented {{ drafted_from.body.new_facts|length }} fact{{ drafted_from.body.new_facts|length|pluralize }} to check{% endif %}).</p>{% endif %}
+{% if drafted_from %}<p class="small"><span class="flag ai">AI draft</span> Drafted by SIMEX AI (<a href="/injects/drafts/{{ drafted_from.id }}/">the draft and its reasons</a>{% if drafted_from.body.new_facts %}; it invented {{ drafted_from.body.new_facts|length }} fact{{ drafted_from.body.new_facts|length|pluralize }} to check{% endif %}).</p>{% endif %}
 {% if st == 'overdue' %}<div class="flash warn">This inject missed its send time by more than the grace period ({{ cfg.grace_minutes }} min) and was not sent. Send it now, or change the time and schedule it again.</div>{% endif %}
 
 <div class="cols">

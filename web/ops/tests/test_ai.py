@@ -290,7 +290,7 @@ def test_draft_new_inject_from_a_reply_never_sends(excon, fake):
     assert InjectReview.objects.get(inject=inj).status == "queued"
     excon.post(f"/injects/drafts/{d.id}/use/")
     assert Inject.objects.filter(mel_id__startswith="AI-").count() == 1  # not made twice
-    assert "Drafted by Claude" in excon.get(f"/injects/{inj.id}/").content.decode()
+    assert "Drafted by SIMEX AI" in excon.get(f"/injects/{inj.id}/").content.decode()
     assert Message.objects.count() == sent
     # a revision carries the previous draft
     excon.post("/injects/drafts/", {"previous": d.id, "mode": "new", "inject": r.inject_id, "prompt": "Shorter"})

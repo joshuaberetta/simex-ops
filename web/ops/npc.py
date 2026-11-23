@@ -361,7 +361,7 @@ NEW_SCHEMA = {
 ai.INSTRUCTIONS["npc"] = {"label": "AI personas: answers", "default": NPC_RULES,
                           "help": "How an AI persona answers the teams in character (AI personas tab)."}
 ai.INSTRUCTIONS["npc_new"] = {"label": "AI personas: Generate with AI", "default": NEW_RULES,
-                              "help": "How Claude writes a new AI persona's profile from your brief."}
+                              "help": "How SIMEX AI writes a new AI persona's profile from your brief."}
 
 
 def profile_block(p):

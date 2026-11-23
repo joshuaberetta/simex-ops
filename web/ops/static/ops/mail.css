@@ -164,8 +164,17 @@ body.side-collapsed .gm-labels-head, body.side-collapsed .gm-lmore { display: no
 .gm-label { display: inline-block; background: #ddd; color: #444; border-radius: 4px; font-size: 12px; line-height: 18px;
   padding: 0 4px; margin-right: 6px; font-weight: 400; vertical-align: 1px; }
 .gm-label.test { background: #fce8b2; color: #7a4f01; }
-.gm-label.gm-ai.likely { background: #fce8e6; color: #a50e0e; font-weight: 600; }
-.gm-label.gm-ai.possibly { background: #fef7e0; color: #7a4f01; }
+/* SIMEX AI's AI-written estimate as a meter: green (unlikely) through amber to red (likely) */
+.gm-aimeter { --hue: max(0, 130 - var(--pct) * 1.6); display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
+  font-weight: 600; color: hsl(var(--hue) 70% 32%); white-space: nowrap; vertical-align: middle; cursor: help; }
+.gm-aimeter-bar { width: 40px; height: 6px; border-radius: 3px; background: #e8eaed; overflow: hidden; flex: none; }
+.gm-aimeter-bar > span { display: block; height: 100%; width: calc(max(var(--pct), 4) * 1%); border-radius: 3px;
+  background: hsl(var(--hue) 70% 45%); }
+.gm-aimeter.unlikely { font-weight: 400; }
+.gm-aimeter-n { min-width: 46px; }
+.gm-aicol { width: 96px; flex: none; display: inline-flex; justify-content: flex-end; padding-left: 8px; }
+.gm-msg-meta .gm-aimeter { margin-right: 8px; }
+.gm-aiscore { display: inline-flex; align-items: center; gap: 6px; }
 .gm-att { color: var(--muted); padding: 0 8px; display: inline-flex; }
 .gm-date { width: 64px; flex: none; text-align: right; font-size: 12px; color: var(--ink2); }
 .gm-hover { display: none; position: absolute; right: 8px; top: 0; height: 40px; align-items: center; background: inherit; padding-left: 8px; }
@@ -520,6 +529,26 @@ body.desk .gm-row[style*="--persona"]::after { content: ""; position: absolute; 
 .gm-label.gm-st-here.replying { background: #fce8e6; color: #a50e0e; }
 .gm-label.gm-st-done { background: #e6f4ea; color: #137333; }
 .gm-label.gm-st-ai { background: #e8f0fe; color: #0b57d0; font-weight: 600; }
+/* Persona desk rows on two lines: subject and snippet, then where it stands, the persona and team (the ask shrinks first) */
+.gm-row.two-line { height: auto; min-height: 56px; padding-top: 6px; padding-bottom: 6px; }
+.gm-row.two-line .gm-from { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 20px; }
+.gm-row.two-line .gm-subj { display: flex; flex-direction: column; gap: 4px; }
+.gm-row.two-line .gm-line1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gm-chips { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.gm-chips > .gm-label { margin-right: 0; flex: none; order: 5; }
+.gm-chips > .gm-st-wait { order: 1; }
+.gm-chips > .gm-st-urgent, .gm-chips > .gm-st-quiet { order: 2; }
+.gm-chips > .gm-persona { order: 3; }
+.gm-chips > .gm-teamchip, .gm-chips > .test { order: 4; }
+.gm-chips > .gm-st-ask { order: 9; flex: 0 1 auto; min-width: 80px; overflow: hidden; text-overflow: ellipsis; }
+.gm-row.two-line .gm-hover { height: 100%; }
+@media (max-width: 760px) {
+  .gm-row.two-line { padding: 10px 12px; }
+  .gm-row.two-line .gm-line1 { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .gm-chips { flex-wrap: wrap; row-gap: 4px; }
+  .gm-aicol { grid-column: 2 / 4; width: auto; justify-content: flex-start; padding: 0; order: 5; }
+  .gm-aicol:empty { display: none; }
+}
 .gm-desk-btn { padding: 4px 12px; font-size: 13px; margin-left: 4px; }
 .gm-desk-wait { display: block; margin: 0 16px 8px 12px; padding: 6px 10px; border-radius: 8px; background: #fce8e6; color: #a50e0e;
   font-weight: 600; font-size: 13px; text-decoration: none; }

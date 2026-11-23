@@ -222,7 +222,7 @@ def test_inbox_lists_flag_ai_documents(excon, fake):
         rows = [r for r in c.get(url).context["rows"] if r.get("ai")]
         assert rows and rows[0]["ai"]["pct"] == 88 and rows[0]["ai"]["why"].startswith("plan.docx"), url
     thread = excon.get(f"/inbox/as/{d.team_id}/member/{pa.person.id}/t/{d.response.mail.thread}/").content.decode()
-    assert "Claude's reading of the document" in thread and "Written by <b>Jane</b>" in thread
+    assert "SIMEX AI's reading of the document" in thread and "Written by <b>Jane</b>" in thread
     assert "gm-ai" not in pa.get("/inbox/?folder=sent").content.decode()
     assert "gm-ai" not in pa.get("/inbox/me/?folder=sent").content.decode()
 

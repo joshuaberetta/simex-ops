@@ -33,7 +33,7 @@
     if (!s) return;
     if (s.status === "running") {
       go.disabled = true;
-      out.append(el("p", "sg-wait", "Claude is looking things up and writing a suggestion… (usually under a minute)"));
+      out.append(el("p", "sg-wait", "SIMEX AI is looking things up and writing a suggestion… (usually under a minute)"));
       clearTimeout(timer); timer = setTimeout(load, 3000, s.id);
       return;
     }

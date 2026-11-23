@@ -614,18 +614,25 @@ def sectioned(v, folder):
     return v.desk and (folder == "inbox" or bool(desk_filter(v, folder)))
 
 
+def ai_level(pct):
+    """The AI-written estimate's band, for the meter's colour and words: likely (70 % and up),
+    possibly (40 %), else unlikely."""
+    return "likely" if pct >= 70 else "possibly" if pct >= 40 else "unlikely"
+
+
 def ai_flags(team, threads):
     """{thread: {"pct", "level", "why"}} for conversations holding a message the team wrote, or a
-    file it sent, that Claude reads as possibly (40 %) or likely (70 %) AI-assisted: the highest
-    one. threads: {thread: [Mail]} with their files. For the readers of Viewer.sees_ai only."""
+    file it sent, that SIMEX AI has read for how likely it is AI-assisted: the highest estimate,
+    shown as a meter on the row. threads: {thread: [Mail]} with their files. For the readers of
+    Viewer.sees_ai only."""
     from .models import DocumentAnalysis, ReplyAnalysis
     if not team or not threads:
         return {}
     best = {}
 
     def keep(t, pct, why):
-        if pct is not None and pct >= 40 and pct > best.get(t, {}).get("pct", -1):
-            best[t] = {"pct": pct, "level": "likely" if pct >= 70 else "possibly", "why": why}
+        if pct is not None and pct > best.get(t, {}).get("pct", -1):
+            best[t] = {"pct": pct, "level": ai_level(pct), "why": why}
 
     for t, pct, sig, subj in (ReplyAnalysis.objects.filter(status="done", response__team=team, response__mail__thread__in=list(threads))
                               .values_list("response__mail__thread", "ai_written", "ai_signals", "response__subject")):
@@ -848,7 +855,7 @@ def inbox(request, v):
 
 
 def ai_band(score):
-    """Claude's 0-100 estimate that a reply was AI-written, as words (an estimate, never proof)."""
+    """SIMEX AI's 0-100 estimate that a reply was AI-written, as words (an estimate, never proof)."""
     if score is None:
         return ""
     return "Likely AI-assisted" if score >= 70 else "Possibly AI-assisted" if score >= 40 else ""
@@ -887,8 +894,18 @@ def _team_notes(mails, team):
                   "quality": round((a.clarity + a.completeness + a.actionability) / 3, 1)
                   if a and None not in (a.clarity, a.completeness, a.actionability) else None,
                   "flags": [ai.FLAGS[f] for f in (a.flags if a else []) if f in ai.FLAGS],
-                  "docs": [{"d": d, "band": ai_band(d.ai_written)} for d in
+                  "meter_msg": {"pct": a.ai_written, "level": ai_level(a.ai_written), "why": ""}
+                  if a and a.ai_written is not None else None,
+                  "docs": [{"d": d, "band": ai_band(d.ai_written),
+                            "meter": {"pct": d.ai_written, "level": ai_level(d.ai_written), "why": ""}
+                            if d.ai_written is not None else None} for d in
                            (docs.get(f.sha256) for f in m.files.all()) if d]}
+        # The meter on the message's header: the highest estimate, the message's or a file's.
+        scores = ([(a.ai_written, f"Message: {a.ai_signals or 'no signs given'}")] if a and a.ai_written is not None else []) + \
+                 [(x["d"].ai_written, f"{x['d'].filename}: {x['d'].ai_signals}") for x in m.note["docs"] if x["d"].ai_written is not None]
+        if scores:
+            pct, why = max(scores, key=lambda x: x[0])
+            m.note["meter"] = {"pct": pct, "level": ai_level(pct), "why": why}
 
 
 @mailbox_view

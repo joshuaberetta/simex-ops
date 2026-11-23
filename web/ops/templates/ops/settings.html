@@ -30,7 +30,7 @@
 </form>
 <form method="post" action="/settings/ai/prompts/" class="card form" id="ai-prompts">{% csrf_token %}
   <h3>AI instructions</h3>
-  <p class="small">What Claude is told for each kind of reading. The exercise context opens every one of them. Edit the text to change what it
+  <p class="small">What SIMEX AI is told for each kind of reading. The exercise context opens every one of them. Edit the text to change what it
   looks for or how it writes; what it is given and the fields it answers with stay the same. Changes apply to the next reading (use
   <b>Re-run</b> to redo one); a change to the inject check re-checks every unsent inject. Empty, or <b>Reset to default</b>, uses the built-in text.</p>
   {% for p in ai_prompts %}
@@ -75,7 +75,7 @@
 </div>
 <div class="card" id="ai">
   <h3>AI analysis</h3>
-  <p class="small">Claude reads each reply (summary, tone, quality, flags, how likely it is AI-written) and suggests rubric points for each
+  <p class="small">SIMEX AI reads each reply (summary, tone, quality, flags, how likely it is AI-written) and suggests rubric points for each
   team's thread. For ExCon only: participants never see it, and suggested points never count in the grades.</p>
   {% if not ai_available %}
   <p class="small warn">No provider configured: set <code>ANTHROPIC_API_KEY</code>, or <code>AI_PROVIDER=bedrock</code> with AWS credentials, on the web and scheduler components.</p>

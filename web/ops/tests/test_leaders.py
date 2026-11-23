@@ -166,7 +166,7 @@ def test_team_inbox_read_only_with_the_ai_reading(excon):
     from ops.tests.test_desk import desk_client
     row = la.get("/inbox/team/").context["rows"][0]
     assert row["ai"]["level"] == "likely" and row["ai"]["pct"] == 82 and "Uniform structure" in row["ai"]["why"]
-    assert 'class="gm-label gm-ai likely"' in la.get("/inbox/team/").content.decode()
+    assert 'class="gm-aimeter likely" style="--pct: 82"' in la.get("/inbox/team/").content.decode()
     as_url = f"/inbox/as/{team_mail.team_id}/"
     assert excon.get(as_url).context["rows"][0]["ai"]["pct"] == 82
     assert "Uniform structure" in excon.get(f"{as_url}t/{team_mail.thread}/").content.decode()

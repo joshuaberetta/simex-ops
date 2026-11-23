@@ -51,7 +51,7 @@
   </table>
 
   <h2>Requests to the personas</h2>
-  {% if not d.read_n %}<p class="small muted">{% if d.readable_n %}Claude hasn't read the teams' messages yet{% else %}No team message to read yet{% endif %}: what the teams ask each persona appears here once Claude has read them (ExCon, Settings → AI analysis).</p>
+  {% if not d.read_n %}<p class="small muted">{% if d.readable_n %}SIMEX AI hasn't read the teams' messages yet{% else %}No team message to read yet{% endif %}: what the teams ask each persona appears here once SIMEX AI has read them (ExCon, Settings → AI analysis).</p>
   {% else %}<div class="gm-dd-requests">
     {% for p in d.requests %}<section class="gm-dd-req"{% if p.persona %} style="--persona: {{ p.persona.colour }}"{% endif %}>
       <h3>{% if p.persona %}<span class="gm-label gm-persona" style="background: {{ p.persona.colour }}; color: {{ p.persona.fg }}">{{ p.persona.name }}</span>{% endif %}
@@ -112,7 +112,7 @@
             {% if f.persona %}<div class="muted">to {{ f.persona.name }}{% if f.status == 'open' %} · <b>not answered</b>{% endif %}</div>{% endif %}</td></tr>
         {% empty %}<tr><td class="muted">No flags.</td></tr>{% endfor %}
       </table>
-      <p class="small muted">Claude's flags on the teams' messages to the personas: needs ExCon attention, safety or duty of care, sent to the wrong persona, steps out of the exercise.</p>
+      <p class="small muted">SIMEX AI's flags on the teams' messages to the personas: needs ExCon attention, safety or duty of care, sent to the wrong persona, steps out of the exercise.</p>
     </section>
   </div>
   {% if d.read_n %}<div class="gm-cols">

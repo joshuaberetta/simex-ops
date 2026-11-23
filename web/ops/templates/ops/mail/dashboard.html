@@ -41,7 +41,7 @@
   <div class="small muted" style="display:flex;justify-content:space-between"><span>{{ hours.0.at|date:"D H:i" }}</span><span>now</span></div>
   {% endif %}
 
-  <h2>Claude's reading of the replies</h2>
+  <h2>SIMEX AI's reading of the replies</h2>
   {% if not ai_enabled %}<p class="small muted">AI analysis is off: ExCon turns it on in Settings.</p>{% endif %}
   <div class="gm-cards">
     <div class="gm-card"><div class="n">{{ analysed }}<span> / {{ reps|length }}</span></div><div class="lab">replies analysed</div></div>
@@ -58,14 +58,14 @@
         {% if not r.thread %}<details><summary>The reply</summary><p>{{ r.text|linebreaksbr }}</p></details>{% endif %}</td></tr>
     {% empty %}<tr><td class="muted">None so far.</td></tr>{% endfor %}
   </table>
-  <p class="small muted">Claude's estimate from the text and the time taken to write it. Short messages and non-native English make it unreliable: a hint to look closer, never proof. Participants never see it.</p>
+  <p class="small muted">SIMEX AI's estimate from the text and the time taken to write it. Short messages and non-native English make it unreliable: a hint to look closer, never proof. Participants never see it.</p>
 
   <h2>Documents your team sent</h2>
   <table class="gm-dtable">
     {% for d in docs %}<tr><td class="nowrap">{{ d.sent_at|date:"D H:i" }}</td>
       <td class="nowrap">{{ d.person.name|default:"" }}<div class="muted">{{ d.band|default:"" }}</div></td>
       <td><b>{{ d.filename }}</b> <span class="muted">{{ d.doc_type }}{% if d.words %} · {{ d.words }} words{% endif %} · AI-written {{ d.ai_written }}%</span>
-        <details><summary>Claude's reading</summary><p>{{ d.summary }}</p>{% if d.band and d.ai_signals %}<p><b>Why it may be AI-written:</b> {{ d.ai_signals }}</p>{% endif %}
+        <details><summary>SIMEX AI's reading</summary><p>{{ d.summary }}</p>{% if d.band and d.ai_signals %}<p><b>Why it may be AI-written:</b> {{ d.ai_signals }}</p>{% endif %}
         {% for p in d.passages %}<p class="muted"><q>{{ p.quote }}</q> {{ p.why }}</p>{% endfor %}</details></td></tr>
     {% empty %}<tr><td class="muted">None read yet.</td></tr>{% endfor %}
   </table>

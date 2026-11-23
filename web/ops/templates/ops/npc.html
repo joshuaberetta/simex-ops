@@ -9,7 +9,7 @@
 </div>
 
 {% if p.gen_status == 'running' %}
-<div class="card"><p class="muted">Claude is writing this persona's profile{% if p.brief %} from your brief{% else %} from its injects{% endif %}… the page refreshes on its own.</p>{% if p.brief %}<p class="small"><b>Brief:</b> {{ p.brief }}</p>{% endif %}</div>
+<div class="card"><p class="muted">SIMEX AI is writing this persona's profile{% if p.brief %} from your brief{% else %} from its injects{% endif %}… the page refreshes on its own.</p>{% if p.brief %}<p class="small"><b>Brief:</b> {{ p.brief }}</p>{% endif %}</div>
 {% elif p.gen_status == 'failed' %}
 <div class="flash error">Writing it failed: {{ p.gen_error }}. Fill it in yourself below, or generate another from the <a href="/npcs/">list</a>.</div>
 {% elif p.gen_status == 'done' %}
