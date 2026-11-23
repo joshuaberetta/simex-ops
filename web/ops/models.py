@@ -138,6 +138,10 @@ class Sender(models.Model):
     team_leader = models.BooleanField(default=False)
     # Its colour on the persona desk (one of views_inbox.LABEL_COLOURS; empty = one picked from its username).
     colour = models.CharField(max_length=7, blank=True, default="")
+    # ExCon's notes (who it is, what it's used for) and a category (UN, NGO, GoE...): the Senders
+    # tab and its import/export only, never shown to participants.
+    notes = models.TextField(blank=True, default="")
+    category = models.CharField(max_length=60, blank=True, default="")
 
     class Meta:
         ordering = ["local_part"]

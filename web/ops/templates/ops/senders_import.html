@@ -1,0 +1,27 @@
+{% extends "ops/base.html" %}
+{% block title %}Senders check · SIMEX ops{% endblock %}
+{% block body %}
+<h1><a href="/senders/" class="muted">Senders</a> / {{ filename }}</h1>
+<form method="post" action="/senders/import/apply/">{% csrf_token %}
+<div class="card">
+  <p><b>{{ counts.add }}</b> to add · <b>{{ counts.update }}</b> to update{% if counts.replaces %} (<span class="warn"><b>{{ counts.replaces }}</b> change values set here, marked <b>changes</b></span>){% endif %} · {{ counts.same }} unchanged{% if counts.skip %} · <span class="warn"><b>{{ counts.skip }}</b> skipped (see below)</span>{% endif %}{% if missing %} · <b>{{ missing|length }}</b> active here but not in the file{% endif %}</p>
+  <p class="small">Untick a row to leave that sender as it is. Usernames (what injects use) are never changed; a new SIMEX Mail address applies to mail sent from now on (mail already sent keeps the address it had).</p>
+  {% if missing %}<details class="small"><summary>Active here but not in the file: left as they are unless ticked</summary>
+    {% for m in missing %}<label class="chk"><input type="checkbox" name="deactivate" value="{{ m.sender.id }}" {% if m.sender.team_leader %}disabled{% endif %}> make <b>{{ m.sender.local_part }}</b> inactive <span class="muted">({{ m.sender.inapp_address }}{% if m.sender.display_name %}, {{ m.sender.display_name }}{% endif %}; {{ m.usage }} inject{{ m.usage|pluralize }}{% if m.sender.team_leader %}; the team leader persona{% endif %})</span></label>{% endfor %}
+  </details>{% endif %}
+  <button class="btn primary">Apply</button> <a href="/senders/" class="btn">Cancel</a>
+</div>
+<table class="list">
+  <thead><tr><th></th><th>Line</th><th>In the file</th><th>Action</th><th>Sender here</th><th>Changes</th></tr></thead>
+  {% for i in items %}
+  <tr><td>{% if i.action == 'add' or i.action == 'update' %}<input type="checkbox" name="line" value="{{ i.row.line }}" checked>{% endif %}</td>
+    <td class="small">{{ i.row.line }}</td>
+    <td>{{ i.address|default:i.username }}<div class="small muted">{{ i.row.display_name|default:"no name" }}{% if i.row.category %} · {{ i.row.category }}{% endif %}</div></td>
+    <td><span class="status {% if i.action == 'add' %}scheduled{% elif i.action == 'skip' %}failed{% elif i.action == 'update' and i.replaces %}overdue{% elif i.action == 'update' %}draft{% else %}sent{% endif %}">{% if i.action == 'update' and i.replaces %}changes{% else %}{{ i.action }}{% endif %}</span>
+      {% for x in i.problems %}<div class="warn small">{{ x }}</div>{% endfor %}</td>
+    <td>{% if i.sender %}{{ i.sender.local_part }} <span class="small muted">({{ i.how }})</span>{% else %}<span class="muted">new: {{ i.username }}</span>{% endif %}</td>
+    <td class="small">{% for c in i.changes %}<div><b>{{ c.field }}</b>{% if c.replaces %} <span class="warn">(replaces)</span>{% endif %}: <span class="old">{{ c.old|default:'—'|truncatechars:80 }}</span> → <span class="new">{{ c.new|truncatechars:80 }}</span></div>{% endfor %}</td></tr>
+  {% endfor %}
+</table>
+</form>
+{% endblock %}

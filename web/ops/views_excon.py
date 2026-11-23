@@ -23,6 +23,7 @@ from django.views.decorators.http import require_POST
 
 from . import (activity, addresses, ai, ai_docs, legacy_import, backup, checks, reset, conf, simclock, delivery, desk, documents, importer, inbound, logins, mailer,
                notices, render as rnd, roster, signin)
+from . import senders_import as senders_import_mod
 from .access import excon_required
 from .models import (CHANNELS, DELIVERY_MODES, ROLES, STATUSES, AiGrade, Attachment, AttachmentImport, Audit, Grade,
                      ImportBatch, Inject, InjectDraft, InjectReview, Mail, MailAttachment, MailLabel, Message,
@@ -593,6 +594,8 @@ def senders_page(request):
         old = x.local_part
         x.local_part, x.display_name, x.reply_to = local, (P.get("display_name") or "").strip(), reply_to
         x.inapp_local, x.domain = inapp_local, domain
+        if "category" in P:
+            x.category, x.notes = (P.get("category") or "").strip()[:60], (P.get("notes") or "").strip()
         x.colour = P.get("colour") if P.get("colour") in LABEL_COLOURS else x.colour if "colour" not in P else ""
         clash = next((o for o in Sender.objects.exclude(pk=x.pk) if o.inapp_address == x.inapp_address), None)
         if clash:
@@ -647,6 +650,55 @@ def team_addresses(request):
     messages.success(request, "Team and member addresses saved: SIMEX Mail uses them from now on (mail already "
                               "sent keeps its address).")
     return redirect("/senders/#team-addresses")
+
+
+@excon_required
+def senders_import(request):
+    """Import a list of senders (spreadsheet or CSV): POST a file to see the plan, then apply it."""
+    if request.method == "POST" and request.FILES.get("file"):
+        up = request.FILES["file"]
+        try:
+            rows = senders_import_mod.read(up.name, up.read())
+        except Exception as e:  # not a spreadsheet, no header row...
+            messages.error(request, f"{up.name}: {e}")
+            return redirect("/senders/#import")
+        request.session["senders_rows"] = rows
+        request.session["senders_name"] = up.name
+        return redirect("/senders/import/")
+    rows = request.session.get("senders_rows")
+    if not rows:
+        return redirect("/senders/#import")
+    items, missing = senders_import_mod.plan(rows)
+    counts = {a: sum(1 for i in items if i["action"] == a) for a in ("add", "update", "same", "skip")}
+    counts["replaces"] = sum(1 for i in items if i["action"] == "update" and i["replaces"])
+    return render(request, "ops/senders_import.html", {"tab": "senders", "items": items, "missing": missing,
+                                                       "counts": counts, "filename": request.session.get("senders_name")})
+
+
+@excon_required
+@require_POST
+@transaction.atomic
+def senders_import_apply(request):
+    rows = request.session.pop("senders_rows", None)
+    if not rows:
+        messages.error(request, "Nothing to import: upload the list again.")
+        return redirect("/senders/#import")
+    items, _ = senders_import_mod.plan(rows)  # planned again: the senders may have changed since
+    lines = {_int(v) for v in request.POST.getlist("line")}
+    added, updated, off = senders_import_mod.apply(items, lines, [_int(v) for v in request.POST.getlist("deactivate")])
+    audit("senders_import", f"{request.session.get('senders_name')}: {added} added, {updated} updated, "
+                            f"{off} made inactive", _u(request))
+    messages.success(request, f"Senders imported: {added} added, {updated} updated"
+                              + (f", {off} made inactive" if off else "") + ".")
+    return redirect("/senders/")
+
+
+@excon_required
+def senders_export(request):
+    resp = HttpResponse(senders_import_mod.export(),
+                        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = content_disposition_header(True, "simex-senders.xlsx")
+    return resp
 
 
 @excon_required
