@@ -52,6 +52,7 @@ def dashboard(request):
         "by_role": data["by_role"], "hours": hours,
         "analysed": len(analysed), "likely": likely, "possibly": possibly,
         "mean_wpm": round(sum(wpm) / len(wpm)) if wpm else None, "ai_list": ai_list,
+        "docs": sorted(data["documents"], key=lambda d: -(d.ai_written or 0))[:30],
         "flagged": data["flagged"], "commitments": data["commitments"], "asks": data["asks"],
         "t0": data["t0"], "t1": data["t1"], "ai_enabled": ai.enabled(), "now": timezone.now(),
         "simex_js": {"base": "/inbox", "readonly": True, "book": [], "team": team.name, "leader": True,

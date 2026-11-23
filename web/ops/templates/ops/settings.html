@@ -84,7 +84,9 @@
     <label class="chk"><input type="checkbox" name="ai_enabled" value="1" {% if cfg.ai_enabled == '1' %}checked{% endif %}> AI analysis on</label><br>
     <label class="chk"><input type="checkbox" name="ai_auto" value="1" {% if cfg.ai_auto == '1' %}checked{% endif %}> analyse every reply as it arrives (otherwise only when you click Analyse now)</label><br>
     <label class="chk"><input type="checkbox" name="ai_tests" value="1" {% if cfg.ai_tests == '1' %}checked{% endif %}> include Test team replies</label><br>
-    <label class="chk"><input type="checkbox" name="ai_injects" value="1" {% if cfg.ai_injects == '1' %}checked{% endif %}> review unsent injects before they go out (missing attachments, placeholders, ExCon notes, inconsistencies), again whenever one changes</label>
+    <label class="chk"><input type="checkbox" name="ai_injects" value="1" {% if cfg.ai_injects == '1' %}checked{% endif %}> review unsent injects before they go out (missing attachments, placeholders, ExCon notes, inconsistencies), again whenever one changes</label><br>
+    <label class="chk"><input type="checkbox" name="ai_documents" value="1" {% if cfg.ai_documents == '1' %}checked{% endif %}> read the files teams send (plans, reports, spreadsheets, PDFs, photos): what each is and how likely it was written with AI, every file a member or leader attached, those already sent included</label><br>
+    <label class="chk"><input type="checkbox" name="ai_documents_deep" value="1" {% if cfg.ai_documents_deep == '1' %}checked{% endif %}> read documents with the deep model (<code>{{ ai_model_deep }}</code>: closer reading of long plans, about 20 times the cost)</label>
     <label>Daily spending cap (USD, estimated) <input type="number" name="ai_daily_usd" value="{{ cfg.ai_daily_usd }}" min="0" step="0.5" class="narrow"></label>
     <button class="btn small">Save</button>
   </form>

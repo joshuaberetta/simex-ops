@@ -33,6 +33,8 @@ DEFAULTS = {
     "ai_auto": "1",  # analyse every reply as it arrives (else only on request)
     "ai_tests": "1",  # include Test team replies
     "ai_injects": "1",  # review unsent injects (missing attachments, placeholders...) when they change
+    "ai_documents": "1",  # read the files teams send (ops/ai_docs.py): what they are, AI-written estimate
+    "ai_documents_deep": "0",  # with the deep model (else the fast one)
     "ai_daily_usd": "5",  # spend cap per day (Nairobi), estimated
     # AI personas (ops/npc.py): personas whose answers Claude writes. Off, and for the Test team
     # only ("test") until ExCon widens it to every team ("all").

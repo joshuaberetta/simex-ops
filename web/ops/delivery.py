@@ -102,7 +102,7 @@ def copy_mail(src, **over):
     mail = Mail.objects.create(**{**{f: getattr(src, f) for f in COPIED}, "team_id": src.team_id, **over})
     for a in src.files.all():
         MailAttachment.objects.create(mail=mail, attachment=a.attachment, filename=a.filename, size=a.size,
-                                      content_type=a.content_type, data=a.data)
+                                      content_type=a.content_type, data=a.data, sha256=a.sha256)
     return mail
 
 
@@ -655,6 +655,9 @@ def withdraw(m, team_ids, user=""):
             if not Mail.objects.filter(message_id=x).exists():
                 Message.objects.filter(pk=x).update(status="withdrawn")
     if n:
+        from . import ai_docs
+        for t in {x.team for x in mails if x.team}:
+            ai_docs.prune(t)  # a leader's file that is no longer anywhere
         teams = ", ".join(sorted({(x.team or x.desk_team).name for x in mails}))
         audit("withdraw", f"delivery {m.pk} ({(m.subject or '')[:80]}) from {teams}: {n} copies", user)
     return n

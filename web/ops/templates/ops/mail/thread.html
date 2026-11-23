@@ -77,7 +77,10 @@
           {% if n.ai %}<div>{% if n.band %}<span class="gm-band" title="Claude's estimate from the text and the time taken: a hint, never proof">{{ n.band }}</span> {% endif %}{% if n.ai.tone %}Tone <b>{{ n.ai.tone }}</b>{% endif %}{% if n.quality %} · quality <b>{{ n.quality }}</b>/5{% endif %}{% if n.ai.wpm %} · {{ n.ai.wpm|floatformat:0 }} words/min{% endif %}</div>
           {% for f in n.flags %}<span class="gm-flag">{{ f }}</span>{% endfor %}
           <details><summary>Claude's reading</summary><p>{{ n.ai.summary }}</p>{% if n.band and n.ai.ai_signals %}<p><b>Why it may be AI-written:</b> {{ n.ai.ai_signals }}</p>{% endif %}</details>
-          {% endif %}</div>{% endwith %}{% endif %}
+          {% endif %}
+          {% for x in n.docs %}<div>📎 {{ x.d.filename }}: {% if x.band %}<span class="gm-band" title="Claude's estimate from the document's text and what the file records about its editing: a hint, never proof">{{ x.band }}</span> {% endif %}{{ x.d.doc_type }}
+            <details><summary>Claude's reading of the document</summary><p>{{ x.d.summary }}</p>{% if x.band and x.d.ai_signals %}<p><b>Why it may be AI-written:</b> {{ x.d.ai_signals }}</p>{% endif %}</details></div>{% endfor %}
+          </div>{% endwith %}{% endif %}
         {% if m.banner %}<div class="gm-banner">{{ m.banner }}</div>{% endif %}
         <div class="gm-text">{{ m.body|mailbody }}</div>
         {% if m.footer %}<div class="gm-footer">{{ m.footer|mailbody }}</div>{% endif %}

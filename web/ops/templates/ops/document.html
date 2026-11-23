@@ -1,0 +1,50 @@
+{% extends "ops/base.html" %}{% load ops %}
+{% block title %}{{ d.filename }} · SIMEX ops{% endblock %}
+{% block head %}{% if d.status == 'queued' %}<meta http-equiv="refresh" content="20">{% endif %}{% endblock %}
+{% block body %}
+<div class="bar">
+  <h1><a href="/documents/?kind={{ d.kind }}" class="muted">Documents</a> / {{ d.filename }}</h1>
+  {% if url %}<a href="{{ url }}" class="btn">Download</a>{% endif %}
+</div>
+<div class="cols">
+<section class="col-main">
+<div class="card">
+  <dl class="hdrs">
+    <dt>Team</dt><dd>{{ d.team.name }}{% if d.person %} · sent by {{ d.person.name }}{% if d.person.role == 'tl' %} (team leader){% endif %}{% endif %}</dd>
+    <dt>Sent</dt><dd>{{ d.sent_at|date:"D d M H:i" }}{% if d.response %} · with <a href="/replies/{{ d.response_id }}/">{{ d.response.subject|default:"(no subject)" }}</a>{% endif %}</dd>
+    {% if d.inject %}<dt>Inject</dt><dd><a href="/injects/{{ d.inject_id }}/">{{ d.inject.mel_id }}</a> {{ d.inject.subject }}</dd>{% endif %}
+    <dt>File</dt><dd>{{ d.size|kb }}{% if d.pages %} · {{ d.pages }} page{{ d.pages|pluralize }}{% endif %}{% if d.words %} · {{ d.words }} words{% endif %}</dd>
+  </dl>
+</div>
+<div class="card">
+  <h3>Claude's reading</h3>
+  {% if d.status == 'done' %}
+    <p>{{ d.summary }}</p>
+    <dl class="hdrs">
+      <dt>Type</dt><dd>{{ d.doc_type|default:'—' }}</dd>
+      {% if d.answers_inject and d.answers_inject != 'unknown' %}<dt>Answers the inject</dt><dd>{{ d.answers_inject }}</dd>{% endif %}
+      <dt>AI-written</dt><dd><b class="{% if d.ai_written >= 60 %}warn{% endif %}">{{ d.ai_written }}%</b>{% if d.band %} · {{ d.band }}{% endif %}{% if d.ai_signals %}<div>{{ d.ai_signals }}</div>{% endif %}</dd>
+      {% if d.language and d.language|lower != 'english' %}<dt>Language</dt><dd>{{ d.language }}</dd>{% endif %}
+    </dl>
+    {% if d.passages %}<h3>Passages that read most like AI</h3>
+    <ul>{% for p in d.passages %}<li><q>{{ p.quote }}</q> <span class="muted">{{ p.why }}</span></li>{% endfor %}</ul>{% endif %}
+    <p class="hint">An estimate from {{ d.model }}, {{ d.updated_at|date:"D H:i" }}. Filled-in templates, pasted figures and team editing all blur it: a hint to look closer, never proof.</p>
+  {% elif d.status == 'queued' %}<p class="small muted">Queued: this page refreshes on its own.</p>
+  {% elif d.status == 'skipped' %}<p class="small muted">Not read: {{ d.error }}</p>
+  {% elif d.status == 'failed' %}<p class="small err">Failed: {{ d.error }}</p>{% endif %}
+  {% if not on %}<p class="small muted">Reading documents is off (<a href="/settings/#ai">Settings → AI analysis</a>).</p>{% endif %}
+  <form method="post" action="/documents/{{ d.id }}/analyse/">{% csrf_token %}<button class="btn small">{% if d.status == 'queued' %}Queued{% else %}Re-run{% endif %}</button></form>
+</div>
+</section>
+<section class="col-side">
+<div class="card">
+  <h3>What the file records</h3>
+  {% if d.facts.lines %}<ul class="small">{% for x in d.facts.lines %}<li>{{ x }}</li>{% endfor %}</ul>
+  {% else %}<p class="small muted">Nothing recorded (PDF exports, Google Docs and phone photos often record nothing: no signal either way).</p>{% endif %}
+  {% if d.facts.note %}<p class="small muted">{{ d.facts.note }}</p>{% endif %}
+</div>
+{% if others %}<div class="card"><h3>{{ d.team.name }}'s other documents</h3>
+  <ul class="small">{% for o in others %}<li><a href="/documents/{{ o.id }}/">{{ o.filename }}</a> <span class="muted">{{ o.ai_written }}%</span></li>{% endfor %}</ul></div>{% endif %}
+</section>
+</div>
+{% endblock %}

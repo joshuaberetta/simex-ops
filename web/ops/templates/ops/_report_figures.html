@@ -63,8 +63,8 @@
 {% if f.excon_ai_drafts.injects %}{{ f.excon_ai_drafts.injects }} inject{{ f.excon_ai_drafts.injects|pluralize }}{% endif %}{% if f.excon_ai_drafts|get:"follow-ups" %}, {{ f.excon_ai_drafts|get:"follow-ups" }} follow-up{{ f.excon_ai_drafts|get:"follow-ups"|pluralize }}{% endif %}{% if f.excon_ai_drafts.answers %}, {{ f.excon_ai_drafts.answers }} answer{{ f.excon_ai_drafts.answers|pluralize }}{% endif %} started as an AI draft that ExCon reviewed.</p>{% endif %}
 
 {% if f.ai_written %}<h4>Possibly written with AI help {% if not printing %}{% if not ex.include_ai_written %}<span class="flag">ExCon only</span>{% endif %}{% endif %}</h4>
-<p class="small muted">An estimate from the wording and the writing speed, never a finding.</p>
-<ul class="small">{% for x in f.ai_written %}<li>{% if not printing %}<a href="/replies/{{ x.response }}/">{{ x.inject|default:"message" }}</a>{% else %}{{ x.inject|default:"message" }}{% endif %}: {{ x.band }}{% if x.signals %} ({{ x.signals }}){% endif %}{% if x.wpm %}, {{ x.wpm|num }} words a minute{% endif %}</li>{% endfor %}</ul>{% endif %}
+<p class="small muted">An estimate from the wording and the writing speed (for documents, also what the file records about its editing), never a finding.</p>
+<ul class="small">{% for x in f.ai_written %}<li>{% if x.document %}{% if not printing %}<a href="/documents/{{ x.document }}/">{{ x.file }}</a>{% else %}{{ x.file }}{% endif %}{% if x.inject %} ({{ x.inject }}){% endif %}{% elif not printing %}<a href="/replies/{{ x.response }}/">{{ x.inject|default:"message" }}</a>{% else %}{{ x.inject|default:"message" }}{% endif %}: {{ x.band }}{% if x.signals %} ({{ x.signals }}){% endif %}{% if x.wpm %}, {{ x.wpm|num }} words a minute{% endif %}</li>{% endfor %}</ul>{% endif %}
 
 {% else %}
 <h4>Teams</h4>

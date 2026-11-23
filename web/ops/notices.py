@@ -60,6 +60,18 @@ def flag(a):
                team=r.team, response=r, test=r.kind == "test")
 
 
+def document(d):
+    """A file a team sent that reads as likely AI-assisted: one notice per team per hour, so a
+    batch of files (or turning the reading on mid-exercise) doesn't swamp the panel."""
+    from .ai_docs import LIKELY
+    if d.status != "done" or (d.ai_written or 0) < LIKELY:
+        return None
+    hour = timezone.localtime(d.updated_at or timezone.now()).strftime("%Y%m%d%H")
+    return add(f"docai:{d.team_id}:{hour}", "flag", f"⚑ {_team(d.team)}: a document reads as likely AI-assisted",
+               f"{d.filename}: {d.ai_signals}", d.summary, f"/documents/{d.id}/", team=d.team, response=d.response,
+               test=d.kind == "test")
+
+
 def inject(inj, status, error=""):
     """An inject that failed, partly failed or went overdue (once per attempt / due time)."""
     if status == "overdue":

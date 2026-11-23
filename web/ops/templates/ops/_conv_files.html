@@ -2,5 +2,7 @@
   {% for f in files %}<div class="conv-file">
     {% if f.image %}<a href="{{ f.url }}view/" target="_blank" rel="noopener"><img src="{{ f.url }}view/" alt="{{ f.name }}" loading="lazy"></a>{% endif %}
     <span class="small">📎 {% if f.url %}<a href="{{ f.url }}">{{ f.name }}</a>{% else %}{{ f.name }} <span class="muted">(too large, not stored)</span>{% endif %} <span class="muted">{{ f.size|kb }}</span></span>
+    {% if f.doc %}<span class="small">· <a href="/documents/{{ f.doc.id }}/">{% if f.doc.status == 'done' %}{% if f.band %}<b class="warn">{{ f.band }}</b>{% else %}AI-written {{ f.doc.ai_written }}%{% endif %} · {{ f.doc.doc_type }}{% elif f.doc.status == 'skipped' %}not read{% elif f.doc.status == 'failed' %}reading failed{% else %}reading queued{% endif %}</a></span>
+    {% elif f.team_id and f.sha and f.url %}<form method="post" action="/documents/queue/{{ f.team_id }}/{{ f.sha }}/" class="inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button class="btn small">Analyse document</button></form>{% endif %}
   </div>{% endfor %}
 </div>{% endif %}

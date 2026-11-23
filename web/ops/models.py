@@ -457,6 +457,11 @@ class PushSubscription(models.Model):
     last_ok_at = models.DateTimeField(null=True, blank=True)
 
 
+def file_hash(data):
+    import hashlib
+    return hashlib.sha256(bytes(data)).hexdigest()
+
+
 class MailAttachment(models.Model):
     """A file on a Mail: either a link to an inject Attachment (no copy) or its own data."""
     mail = models.ForeignKey(Mail, on_delete=models.CASCADE, related_name="files")
@@ -465,6 +470,12 @@ class MailAttachment(models.Model):
     content_type = models.CharField(max_length=120, default="application/octet-stream")
     size = models.IntegerField(default=0)
     data = models.BinaryField(null=True, blank=True)
+    sha256 = models.CharField(max_length=64, blank=True, default="", db_index=True)  # of its own data (ops/ai_docs.py)
+
+    def save(self, *args, **kwargs):
+        if self.data is not None and not self.sha256:
+            self.sha256 = file_hash(self.data)
+        super().save(*args, **kwargs)
 
     def content(self):
         if self.data is not None:
@@ -509,6 +520,12 @@ class ResponseAttachment(models.Model):
     content_type = models.CharField(max_length=120, default="application/octet-stream")
     size = models.IntegerField(default=0)
     data = models.BinaryField(null=True, blank=True)
+    sha256 = models.CharField(max_length=64, blank=True, default="", db_index=True)
+
+    def save(self, *args, **kwargs):
+        if self.data is not None and not self.sha256:
+            self.sha256 = file_hash(self.data)
+        super().save(*args, **kwargs)
 
 
 class RubricCriterion(models.Model):
@@ -626,6 +643,54 @@ class InjectReview(models.Model):
     issues = models.JSONField(default=list, blank=True)  # [{"severity": fix|check, "kind": ..., "detail": ...}]
     dismissed = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class DocumentAnalysis(models.Model):
+    """A file a team sent (attached by a member or the leader, in SIMEX Mail or by email) read
+    by the model (ops/ai_docs.py): what it is and an estimate of how likely it was written with
+    an AI assistant. One per team and file content (sha256): the copies of a file in several
+    mailboxes, and a file sent again, are read once. ExCon and the team's leader only."""
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="+")
+    sha256 = models.CharField(max_length=64)
+    filename = models.CharField(max_length=300, default="")
+    content_type = models.CharField(max_length=120, default="")
+    size = models.IntegerField(default=0)
+    kind = models.CharField(max_length=10, default="live")  # live | test (the Test team)
+    person = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")  # who first sent it
+    mail_file = models.ForeignKey(MailAttachment, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    response_file = models.ForeignKey(ResponseAttachment, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    response = models.ForeignKey(Response, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")  # its covering message
+    inject = models.ForeignKey(Inject, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    sent_at = models.DateTimeField(default=timezone.now)  # when the team first sent it
+    status = models.CharField(max_length=10, default="queued")  # queued | done | failed | skipped (not readable)
+    model = models.CharField(max_length=120, default="")
+    prompt_version = models.IntegerField(default=0)
+    attempts = models.IntegerField(default=0)
+    error = models.TextField(blank=True, null=True)
+    facts = models.JSONField(default=dict, blank=True)  # from the file itself (ops/docscan.py): app, author, editing time...
+    words = models.IntegerField(default=0)
+    pages = models.IntegerField(null=True, blank=True)
+    summary = models.TextField(blank=True, default="")
+    doc_type = models.CharField(max_length=60, blank=True, default="")
+    language = models.CharField(max_length=20, blank=True, default="")
+    answers_inject = models.CharField(max_length=10, blank=True, default="")  # yes | partly | no | unknown
+    ai_written = models.IntegerField(null=True, blank=True)  # 0..100, the model's estimate
+    ai_signals = models.TextField(blank=True, default="")
+    passages = models.JSONField(default=list, blank=True)  # [{"quote", "why"}]: the parts that read most like AI
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("team", "sha256")]
+        ordering = ["-sent_at", "-id"]
+
+    def file(self):
+        """A stored copy of the file (any of the team's: the first one may have been cleared)."""
+        if self.mail_file_id and self.mail_file and self.mail_file.data is not None:
+            return self.mail_file
+        if self.response_file_id and self.response_file and self.response_file.data is not None:
+            return self.response_file
+        return (MailAttachment.objects.filter(sha256=self.sha256).first()
+                or ResponseAttachment.objects.filter(sha256=self.sha256).first())
 
 
 class AiReport(models.Model):

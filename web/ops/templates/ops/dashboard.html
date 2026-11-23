@@ -133,6 +133,17 @@
 </section>
 </div>
 
+<section>
+<h2>Documents teams sent <a href="/documents/?kind={{ kind }}" class="small">all {{ documents|length }} read</a></h2>
+<table class="list small">
+  {% for d in documents_ai %}<tr><td class="nowrap"><a href="/documents/{{ d.id }}/">{{ d.sent_at|date:"D H:i" }}</a></td><td>{{ d.team.name }}{% if d.person %}<div class="muted">{{ d.person.name }}</div>{% endif %}</td>
+    <td><a href="/documents/{{ d.id }}/">{{ d.filename }}</a><div class="muted">{{ d.doc_type }}{% if d.words %} · {{ d.words }} words{% endif %}</div></td>
+    <td class="nowrap"><b>{{ d.ai_written }}%</b></td><td>{{ d.ai_signals }}</td></tr>
+  {% empty %}<tr><td class="muted">{% if documents %}None above 60%.{% else %}No documents read yet.{% endif %}</td></tr>{% endfor %}
+</table>
+<p class="muted small">Plans, reports, spreadsheets, PDFs and photos the teams attached, read from their text and what each file records about its editing (time spent, sessions, when it was created). Filled-in templates blur it: a hint to look closer, never proof.</p>
+</section>
+
 <div class="cols2">
 <section>
 <h2>What teams are asking for</h2>

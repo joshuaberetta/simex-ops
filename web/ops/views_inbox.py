@@ -810,6 +810,9 @@ def _team_notes(mails):
     sent = [m for m in mails if m.folder == "sent"]
     resp = {r.mail_id: r for r in Response.objects.filter(mail__in=sent)}
     tags = {a.response_id: a for a in ReplyAnalysis.objects.filter(response__in=resp.values(), status="done")}
+    from .models import DocumentAnalysis
+    docs = {(d.team_id, d.sha256): d for d in DocumentAnalysis.objects.filter(
+        status="done", sha256__in=[f.sha256 for m in sent for f in m.files.all() if f.sha256])}
     last_in = None
     for m in mails:
         if m.folder == "inbox":
@@ -823,7 +826,9 @@ def _team_notes(mails):
                   "band": ai_band(a.ai_written) if a else "",
                   "quality": round((a.clarity + a.completeness + a.actionability) / 3, 1)
                   if a and None not in (a.clarity, a.completeness, a.actionability) else None,
-                  "flags": [ai.FLAGS[f] for f in (a.flags if a else []) if f in ai.FLAGS]}
+                  "flags": [ai.FLAGS[f] for f in (a.flags if a else []) if f in ai.FLAGS],
+                  "docs": [{"d": d, "band": ai_band(d.ai_written)} for d in
+                           (docs.get((m.team_id, f.sha256)) for f in m.files.all()) if d]}
 
 
 @mailbox_view

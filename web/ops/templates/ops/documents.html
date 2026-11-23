@@ -1,0 +1,29 @@
+{% extends "ops/base.html" %}{% load ops %}
+{% block title %}Documents · SIMEX ops{% endblock %}
+{% block head %}<meta http-equiv="refresh" content="120">{% endblock %}
+{% block body %}
+<div class="bar">
+  <h1><a href="/dashboard/?kind={{ kind }}" class="muted">Dashboard</a> / Documents teams sent</h1>
+  <nav class="seg">
+    <a href="/documents/?kind=live" class="{% if kind == 'live' %}on{% endif %}">Exercise</a>
+    <a href="/documents/?kind=test" class="{% if kind != 'live' %}on{% endif %}">Test team</a>
+  </nav>
+  <form method="get"><input type="hidden" name="kind" value="{{ kind }}">
+    <select name="team" onchange="this.form.submit()"><option value="">Every team</option>{% for t in teams %}<option value="{{ t.id }}" {% if t.id == team %}selected{% endif %}>{{ t.name }}</option>{% endfor %}</select></form>
+  <span class="small muted">
+    {% if not ai_available %}AI analysis: no provider configured{% elif not ai_enabled %}AI analysis is off (<a href="/settings/#ai">Settings</a>){% elif not on %}Reading documents is off (<a href="/settings/#ai">Settings</a>){% else %}about ${{ ai_spent|floatformat:2 }} of ${{ ai_cap|num }} today{% if ai_pending %} · {{ ai_pending }} queued{% endif %}{% endif %}
+  </span>
+</div>
+<p class="small muted">Every file a member or team leader attached (in SIMEX Mail, to anyone, or to an email to a persona), each read once per team{% if not auto %}; automatic reading is off, so only the files you click Analyse on{% endif %}. Claude says what it is and estimates how likely it was written with an AI assistant, from its text and what the file records about itself (application, editing time, editing sessions, when it was created). Forwarded inject documents aren't the team's and are left out. An estimate to look closer, never proof; not shown to members.</p>
+<table class="list small">
+  <tr><th>Sent</th><th>Team</th><th>File</th><th>What it is</th><th>AI-written</th><th></th></tr>
+  {% for d in rows %}<tr>
+    <td class="nowrap">{{ d.sent_at|date:"D H:i" }}</td>
+    <td>{{ d.team.name }}{% if d.person %}<div class="muted">{{ d.person.name }}</div>{% endif %}</td>
+    <td><a href="/documents/{{ d.id }}/">{{ d.filename }}</a><div class="muted">{{ d.size|kb }}{% if d.inject %} · {{ d.inject.mel_id }}{% endif %}</div></td>
+    <td>{% if d.status == 'done' %}{{ d.doc_type }}<div class="muted">{{ d.summary|truncatechars:140 }}</div>{% elif d.status == 'skipped' %}<span class="muted">Not read: {{ d.error }}</span>{% elif d.status == 'failed' %}<span class="err">Failed: {{ d.error|truncatechars:120 }}</span>{% else %}<span class="muted">Queued</span>{% endif %}</td>
+    <td class="nowrap">{% if d.status == 'done' %}<b class="{% if d.ai_written >= 60 %}warn{% endif %}">{{ d.ai_written }}%</b>{% if d.band %}<div class="muted">{{ d.band }}</div>{% endif %}{% endif %}</td>
+    <td>{% if d.response %}<a href="/replies/{{ d.response_id }}/" class="small">Message</a>{% endif %}</td>
+  </tr>{% empty %}<tr><td class="muted" colspan="6">No files from the teams yet.</td></tr>{% endfor %}
+</table>
+{% endblock %}

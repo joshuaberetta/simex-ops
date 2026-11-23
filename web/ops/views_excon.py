@@ -21,7 +21,7 @@ from django.utils import timezone
 from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_POST
 
-from . import (activity, addresses, ai, legacy_import, backup, checks, reset, conf, simclock, delivery, desk, documents, importer, inbound, logins, mailer,
+from . import (activity, addresses, ai, ai_docs, legacy_import, backup, checks, reset, conf, simclock, delivery, desk, documents, importer, inbound, logins, mailer,
                notices, render as rnd, roster, signin)
 from .access import excon_required
 from .models import (CHANNELS, DELIVERY_MODES, ROLES, STATUSES, AiGrade, Attachment, AttachmentImport, Audit, Grade,
@@ -1599,6 +1599,12 @@ def reply_page(request, rid):
         elif kind_ == "answer":
             obj.shown = inbound.split_quoted(obj.body or obj.text or "")[0]
         obj.file_list = conv_files(kind_, obj)
+        if kind_ == "team" and obj.team_id:  # Claude's reading of each file the team sent (ops/ai_docs.py)
+            docs = ai_docs.by_sha(obj.team_id, [f["sha"] for f in obj.file_list])
+            for f in obj.file_list:
+                f["doc"], f["team_id"] = docs.get(f["sha"]), obj.team_id
+                if f["doc"]:
+                    f["band"] = ai_docs.band(f["doc"].ai_written)
     latest = max((o for k, _, o in conv if k == "team" and o.status != "ignored"), key=lambda o: o.received_at, default=r)
     new_part, quoted = inbound.split_quoted(r.text or "")
     return render(request, "ops/reply.html", {
@@ -1661,7 +1667,8 @@ def file_links(src, qs):
     """What a conversation item shows of its files: name, size, download link (none if the
     file was too large to keep) and whether it can be previewed as an image."""
     return [{"name": a.filename, "size": a.size, "url": f"/files/{src}/{a.id}/" if a.stored else None,
-             "image": a.stored and a.filename.lower().endswith(IMAGE_EXT)} for a in _with_stored(src, qs)]
+             "image": a.stored and a.filename.lower().endswith(IMAGE_EXT), "sha": getattr(a, "sha256", "")}
+            for a in _with_stored(src, qs)]
 
 
 def conv_files(kind_, o):

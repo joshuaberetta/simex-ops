@@ -60,6 +60,17 @@
   </table>
   <p class="small muted">Claude's estimate from the text and the time taken to write it. Short messages and non-native English make it unreliable: a hint to look closer, never proof. Participants never see it.</p>
 
+  <h2>Documents your team sent</h2>
+  <table class="gm-dtable">
+    {% for d in docs %}<tr><td class="nowrap">{{ d.sent_at|date:"D H:i" }}</td>
+      <td class="nowrap">{{ d.person.name|default:"" }}<div class="muted">{{ d.band|default:"" }}</div></td>
+      <td><b>{{ d.filename }}</b> <span class="muted">{{ d.doc_type }}{% if d.words %} · {{ d.words }} words{% endif %} · AI-written {{ d.ai_written }}%</span>
+        <details><summary>Claude's reading</summary><p>{{ d.summary }}</p>{% if d.band and d.ai_signals %}<p><b>Why it may be AI-written:</b> {{ d.ai_signals }}</p>{% endif %}
+        {% for p in d.passages %}<p class="muted"><q>{{ p.quote }}</q> {{ p.why }}</p>{% endfor %}</details></td></tr>
+    {% empty %}<tr><td class="muted">None read yet.</td></tr>{% endfor %}
+  </table>
+  <p class="small muted">Plans, reports and other files your team attached, read from their text and what each file records about its editing (time spent, sessions, when it was created). Filled-in templates blur it: a hint, never proof. Participants never see it.</p>
+
   <h2>Flags</h2>
   <table class="gm-dtable">
     {% for r in flagged %}<tr><td class="nowrap">{% if r.thread %}<a href="/inbox/team/t/{{ r.thread }}/?folder=replies">{{ r.received_at|date:"D H:i" }}</a>{% else %}{{ r.received_at|date:"D H:i" }}{% endif %}</td>

@@ -15,7 +15,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from . import ai, inbound, notices, render
-from .models import (AiCall, Event, ExerciseReport, Grade, Inject, InjectDraft, Mail, MailAction, MailLabel, Message,
+from .models import (AiCall, DocumentAnalysis, Event, ExerciseReport, Grade, Inject, InjectDraft, Mail, MailAction, MailLabel, Message,
                      Person, PushSubscription, Report, Response,
                      RubricCriterion, Team)
 
@@ -199,6 +199,11 @@ def team_figures(team, kind, grid=None):
     ai_written = [{"response": r.id, "inject": r.inject.mel_id if r.inject else None, "band": band(analyses[r.id].ai_written),
                    "signals": analyses[r.id].ai_signals, "wpm": analyses[r.id].wpm}
                   for r in mine if r.id in analyses and band(analyses[r.id].ai_written)]
+    # Files the team sent (ops/ai_docs.py), in the same list: an entry with "document".
+    ai_written += [{"document": d.id, "file": d.filename, "inject": d.inject.mel_id if d.inject else None,
+                    "band": band(d.ai_written), "signals": d.ai_signals, "wpm": None}
+                   for d in DocumentAnalysis.objects.filter(team=team, kind=kind, status="done").select_related("inject")
+                   .order_by("sent_at") if band(d.ai_written)]
 
     # What ExCon sent this team from an AI draft.
     drafted = _drafted_injects()
@@ -429,7 +434,8 @@ def exercise_figures(kind, team_figs, grid=None):
                   | {"grade_percent": f["grades"]["percent"], "writing": {k: f["writing"][k] for k in
                      ("clarity", "completeness", "actionability", "words_per_message")},
                      "asks": len(f["asks"]), "asks_unanswered": sum(1 for a in f["asks"] if not a["answered"]),
-                     "ai_assisted_replies": len(f["ai_written"]), "ai_suggested_percent": ai_pct.get(f["team"]),
+                     "ai_assisted_replies": sum(1 for x in f["ai_written"] if not x.get("document")),
+                     "ai_assisted_documents": sum(1 for x in f["ai_written"] if x.get("document")), "ai_suggested_percent": ai_pct.get(f["team"]),
                      "inbox": {k: f.get("inbox", {}).get(k) for k in (
                          "writing_share_top_member_percent", "replied_before_opening_documents",
                          "read_but_never_answered", "messages_with_cc", "at_the_end", "starred_threads",
@@ -557,9 +563,9 @@ are fine, no headings.
 TEAM_SYSTEM = ai.EXERCISE + "\n\n" + TEAM_RULES
 
 NO_AI_WRITTEN = """
-- Don't comment on whether messages were written with AI tools."""
+- Don't comment on whether messages or documents were written with AI tools."""
 WITH_AI_WRITTEN = """
-- FIGURES.ai_written is an estimate of which messages were written with AI help. Mention it only as an \
+- FIGURES.ai_written is an estimate of which messages (and documents: the entries with a file) were written with AI help. Mention it only as an \
 estimate, in its bands and with the reason given, never as a finding or "detection"."""
 
 TEAM_SCHEMA = {

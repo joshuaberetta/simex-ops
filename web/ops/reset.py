@@ -6,7 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from . import conf
-from .models import (AiGrade, AiReport, ExerciseReport, Grade, Inject, Mail, MailAction, MailLabel, Message, Notice,
+from .models import (AiGrade, AiReport, DocumentAnalysis, ExerciseReport, Grade, Inject, Mail, MailAction, MailLabel, Message, Notice,
                      Person, Response, TestRun)
 
 SCOPES = {"all": "Every mailbox: the team inbox, the leader's and each member's own",
@@ -22,7 +22,7 @@ def _members(team):
 def clear_team(team, scope="all", deliveries=False):
     """Empty a team's mailboxes. scope "all": every mailbox of the team (the shared inbox, the
     leader's and each member's own: received, sent, drafts, labels, what was done in them), its
-    replies with their AI analysis, the persona answers to them, its grades and the desk's copies;
+    replies with their AI analysis and the readings of the files it sent, the persona answers to them, its grades and the desk's copies;
     "members": the members' own mailboxes only (the replies, whose copy is in the team inbox,
     stay). deliveries: also the team's deliveries in the Log, with their read and download
     events, so its delivery and reading figures on the Dashboard start from zero.
@@ -36,6 +36,8 @@ def clear_team(team, scope="all", deliveries=False):
             mails.delete()
             MailLabel.objects.filter(team=team, owner__in=owners).delete()
             MailAction.objects.filter(team=team, owner__in=owners).delete()
+            from . import ai_docs
+            ai_docs.prune(team)  # readings of files no longer in any mailbox
         else:
             reps = Response.objects.filter(team=team)
             n["answers"] = Message.objects.filter(kind="reply", response__in=reps).delete()[0]
@@ -47,6 +49,7 @@ def clear_team(team, scope="all", deliveries=False):
             MailLabel.objects.filter(team=team).delete()
             MailAction.objects.filter(team=team).delete()
             n["grades"] = Grade.objects.filter(team=team).delete()[0] + AiGrade.objects.filter(team=team).delete()[0]
+            DocumentAnalysis.objects.filter(team=team).delete()  # the readings of the files it sent
         if deliveries:
             msgs = Message.objects.filter(Q(team=team) | Q(inbox_team=team)).exclude(kind="login")
             if scope == "members":
@@ -58,7 +61,7 @@ def clear_team(team, scope="all", deliveries=False):
 
 def start_afresh(reschedule=True):
     """Everything that happened in the exercise so far, gone, for every team: every mailbox
-    (teams, leaders, members, the persona desk), replies, answers, grades, AI analyses, the
+    (teams, leaders, members, the persona desk), replies, answers, grades, AI analyses (documents' too), the
     exercise summary and reports, test runs, notifications, role-play progress (every sitting
     pending again), and every delivery in the Log with
     its read/download events (login emails are kept). reschedule: injects already sent (or
@@ -77,6 +80,7 @@ def start_afresh(reschedule=True):
         Message.objects.exclude(kind="login").delete()  # with their Events
         Grade.objects.all().delete()
         AiGrade.objects.all().delete()
+        DocumentAnalysis.objects.all().delete()
         AiReport.objects.all().delete()
         ExerciseReport.objects.all().delete()
         TestRun.objects.all().delete()

@@ -12,9 +12,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from . import ai, checks, conf, delivery
+from . import ai, ai_docs, checks, conf, delivery
 from .access import excon_required
-from .models import (AiCall, AiGrade, AiReport, Event, Grade, Inject, InjectDraft, InjectReview, MailAction, Message,
+from .models import (AiCall, AiGrade, AiReport, DocumentAnalysis, Event, Grade, Inject, InjectDraft, InjectReview, MailAction, MailAttachment, Message,
                      Person, ReplyAnalysis, Response, Sender, Team, TeamRole, audit)
 from .views_excon import _int, _u, from_local_input, reply_grid, safe_next
 
@@ -113,8 +113,12 @@ def dashboard_data(kind, team=None):
                         key=lambda r: -(r.ai.ai_written or 0))[:30]
     commitments = [(r, c) for r in reversed(reps) if r.ai for c in r.ai.commitments][:30]
     asks = [(r, c) for r in reversed(reps) if r.ai for c in r.ai.asks][:30]
+    documents = list(ai_docs.readings([t.id for t in teams], kind))
+    for d in documents:
+        d.band = ai_docs.band(d.ai_written)
     return {"teams": teams, "tiles": tiles, "matrix": matrix, "reps": reps, "analyses": analyses, "flagged": flagged,
-            "ai_written": ai_written, "commitments": commitments, "asks": asks, "t0": t0, "t1": t1,
+            "ai_written": ai_written, "documents": documents,
+            "documents_ai": sorted([d for d in documents if (d.ai_written or 0) >= 60], key=lambda d: -(d.ai_written or 0))[:30], "commitments": commitments, "asks": asks, "t0": t0, "t1": t1,
             "by_role": by_team_role(teams, reps, msg_kinds)}
 
 
@@ -211,7 +215,8 @@ def dashboard(request):
 def ai_status(reps=None, analyses=None):
     return {"ai_available": ai.available(), "ai_enabled": ai.enabled(), "ai_provider": ai.provider(),
             "ai_spent": ai.spent_today(), "ai_cap": ai.cap(),
-            "ai_pending": ReplyAnalysis.objects.filter(status="queued").count() + AiGrade.objects.filter(status="queued").count(),
+            "ai_pending": ReplyAnalysis.objects.filter(status="queued").count() + AiGrade.objects.filter(status="queued").count()
+            + DocumentAnalysis.objects.filter(status="queued").count(),
             "ai_unanalysed": (sum(1 for r in reps if r.id not in analyses) if reps is not None else None)}
 
 
@@ -229,6 +234,59 @@ def dashboard_summary(request):
         audit("ai_summary", kind, _u(request))
         messages.success(request, "Writing the summary: this takes a minute. The page refreshes on its own.")
     return redirect(f"/dashboard/?kind={kind}#summary")
+
+
+@excon_required
+def documents(request):
+    """Every file the teams sent, with Claude's reading of it (ops/ai_docs.py)."""
+    kind = "test" if request.GET.get("kind") == "test" else "live"
+    rows = list(DocumentAnalysis.objects.filter(kind=kind).select_related("team", "person", "inject", "response"))
+    for d in rows:
+        d.band = ai_docs.band(d.ai_written) if d.status == "done" else ""
+    team = _int(request.GET.get("team"))
+    if team:
+        rows = [d for d in rows if d.team_id == team]
+    return render(request, "ops/documents.html", {
+        "tab": "dashboard", "kind": kind, "rows": rows, "teams": Team.objects.filter(active=True), "team": team,
+        "on": ai_docs.enabled(), "auto": conf.flag("ai_auto"), **ai_status()})
+
+
+@excon_required
+def document_page(request, did):
+    d = get_object_or_404(DocumentAnalysis.objects.select_related("team", "person", "inject", "response"), pk=did)
+    f = d.file()
+    src = "m" if isinstance(f, MailAttachment) else "r" if f else ""
+    d.band = ai_docs.band(d.ai_written) if d.status == "done" else ""
+    others = (DocumentAnalysis.objects.filter(team=d.team, kind=d.kind, status="done").exclude(pk=d.pk)
+              .order_by("-sent_at")[:10])
+    return render(request, "ops/document.html", {
+        "tab": "dashboard", "d": d, "url": f"/files/{src}/{f.id}/" if f else "", "others": others,
+        "on": ai_docs.enabled()})
+
+
+@excon_required
+@require_POST
+def document_analyse(request, did):
+    d = get_object_or_404(DocumentAnalysis, pk=did)
+    ai_docs.queue(d)
+    audit("ai_document", f"{d.team.name}: {d.filename}", _u(request))
+    messages.success(request, "Queued: the reading appears here within a minute." if ai_docs.enabled() else
+                     "Queued, but reading documents is off: turn it on in Settings → AI analysis.")
+    return redirect(f"/documents/{d.id}/")
+
+
+@excon_required
+@require_POST
+def document_queue(request, tid, sha):
+    """Analyse a file of a team's from the reply page (automatic reading off, or not read yet)."""
+    d = ai_docs.queue_file(tid, sha)
+    if not d:
+        messages.error(request, "That file isn't one the team sent (or it is no longer stored).")
+        return redirect(safe_next(request.POST.get("next"), "/documents/"))
+    audit("ai_document", f"{d.team.name}: {d.filename}", _u(request))
+    messages.success(request, "Queued: the reading appears within a minute." if ai_docs.enabled() else
+                     "Queued, but reading documents is off: turn it on in Settings → AI analysis.")
+    return redirect(safe_next(request.POST.get("next"), f"/documents/{d.id}/"))
 
 
 @excon_required
@@ -306,7 +364,7 @@ def grade_analyse(request, iid, tid):
 @require_POST
 def settings_ai(request):
     P = request.POST
-    for k in ("ai_enabled", "ai_auto", "ai_tests", "ai_injects"):
+    for k in ("ai_enabled", "ai_auto", "ai_tests", "ai_injects", "ai_documents", "ai_documents_deep"):
         conf.put(k, "1" if P.get(k) == "1" else "0")
     try:
         conf.put("ai_daily_usd", f"{max(0.0, float(P.get('ai_daily_usd') or 0)):g}")
