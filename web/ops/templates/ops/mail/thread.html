@@ -51,7 +51,7 @@
                   <tr><th>from:</th><td><b>{{ m.from_name }}</b> &lt;{{ m.from_addr }}&gt;</td></tr>
                   <tr><th>to:</th><td>{% if m.folder == 'inbox' and not v.desk %}{% if m.to_label %}{{ m.to_label }}{% else %}{{ team.name }}{% endif %}{% else %}{{ m.to_label }}{% endif %}</td></tr>
                   {% if m.cc_label %}<tr><th>cc:</th><td>{{ m.cc_label }}</td></tr>{% endif %}
-                  <tr><th>date:</th><td>{{ m.created_at|date:"M j, Y, H:i" }}</td></tr>
+                  {% detaildates m %}
                   <tr><th>subject:</th><td>{{ m.subject }}</td></tr>
                   <tr><th>mailed-by:</th><td>{{ m.from_addr|domain }}</td></tr>
                   <tr><th>signed-by:</th><td>{{ m.from_addr|domain }}</td></tr>
@@ -63,7 +63,7 @@
         </div>
         <div class="gm-msg-meta">
           {% if m.files.all %}<span class="gm-att">{% icon "attach" 18 %}</span>{% endif %}
-          <span class="gm-msg-date" title="{{ m.created_at|date:'D d M Y H:i' }}">{{ m.created_at|fulldate }}</span>
+          <span class="gm-msg-date">{% msgdate m %}</span>
           <button type="button" class="gm-star sm{% if m.starred %} on{% endif %}" data-star-mail="{{ m.id }}" aria-label="Star" {% if readonly %}disabled{% endif %}>{% if m.starred %}{% icon "star" 20 %}{% else %}{% icon "star_border" 20 %}{% endif %}</button>
           {% if not readonly %}
           {% if can_reply %}<button type="button" class="gm-icon-btn gm-open-only" data-reply="{{ m.id }}" title="Reply" aria-label="Reply">{% icon "reply" %}</button>{% endif %}

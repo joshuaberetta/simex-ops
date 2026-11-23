@@ -20,7 +20,7 @@ from django.db import IntegrityError, connection, transaction
 from django.db.models import F
 from django.utils import timezone
 
-from . import addresses, conf, mailer, notices, push, render
+from . import addresses, conf, mailer, notices, push, render, simclock
 from .models import (Attachment, Inject, Mail, MailAttachment, Message, MessageAttachment, Person, Team, TestRun,
                      TestRunItem, audit)
 
@@ -83,7 +83,7 @@ def _put_mail(m):
             team_id=m.inbox_team_id, owner=lead, folder="sent", thread=mail.thread, from_name=name, from_addr=addr,
             to_label=mail.to_label or mail.team.name, persona="", subject=m.subject, body=m.body, footer=m.footer,
             banner=m.banner, message=m, inject_id=m.inject_id, is_test=mail.is_test, read_at=timezone.now(),
-            author_id=m.author_id)
+            author_id=m.author_id, sim_at=mail.sim_at)
         _attach(sent, m)
     from . import desk
     desk.on_delivered(m, mail)  # the persona desk's Sent
@@ -92,7 +92,8 @@ def _put_mail(m):
 
 # What a copy of a Mail in another mailbox keeps (the mailbox state, star, read..., starts afresh).
 COPIED = ["thread", "from_name", "from_addr", "to_label", "cc_label", "to_person_id", "persona", "to_team_id", "subject",
-          "body", "footer", "banner", "author_id", "message_id", "inject_id", "is_test", "recipients", "created_at"]
+          "body", "footer", "banner", "author_id", "message_id", "inject_id", "is_test", "recipients", "created_at",
+          "sim_at"]
 
 
 def copy_mail(src, **over):
@@ -176,6 +177,8 @@ def deliver(msgs, dry_run=False, respect_pause=True):
                     elif not m.inbox_team_id:
                         Message.objects.filter(pk=m.pk).update(status="failed", error="No inbox.")
                     else:
+                        if m.kind == "live":
+                            simclock.follow(m.inject)
                         _put_mail(m)
                         Message.objects.filter(pk=m.pk).update(status="sent", sent_at=timezone.now(),
                                                                delivery="delivered", delivery_at=timezone.now())
@@ -201,6 +204,8 @@ def deliver(msgs, dry_run=False, respect_pause=True):
         try:
             rid = m_.send(mailer.payload(m, atts, m.extra_headers), m.idem_key)
             Message.objects.filter(pk=m.pk).update(status="sent", sent_at=timezone.now(), error=None, resend_id=rid)
+            if m.kind == "live":
+                simclock.follow(m.inject)
             from . import desk
             if not m.target.endswith(render.PERSONAL):  # the desk has the in-app delivery of a personal copy
                 desk.on_delivered(m)  # the persona desk's Sent

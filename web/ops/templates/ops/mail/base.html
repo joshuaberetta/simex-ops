@@ -34,6 +34,11 @@
     {% if q %}<a class="gm-icon-btn" href="{{ base }}/?folder={{ folder }}" aria-label="Clear search">{% icon "close" 22 %}</a>{% endif %}
   </form>{% endblock %}
   <div class="gm-top-right">
+    {% if sim.on %}<div class="gm-simclock{% if sim.both %} both{% endif %}" data-simclock title="{% if sim.both %}Simulation date and time (what the teams see), and the real time{% else %}Date and time in the exercise scenario{% endif %}">
+      <span class="gm-cal" aria-hidden="true"><span data-sim-mon>{{ sim.now|date:"M" }}</span><b data-sim-day>{{ sim.now|date:"j" }}</b></span>
+      <span class="gm-simtext"><b data-sim-time>{{ sim.now|date:"H:i" }}</b><small data-sim-date>{{ sim.now|date:"D j M Y" }}</small></span>
+      {% if sim.both %}<span class="gm-realtext"><small>Real time</small><b data-real-time>{% now "H:i" %}</b><small data-real-date>{% now "D j M" %}</small></span>{% endif %}
+    </div>{{ sim.js|json_script:"simex-clock" }}{% endif %}
     {% if readonly and not leader_tabs and v %}<a class="gm-viewas" href="{{ back_url|default:'/inboxes/' }}" title="{% if desk_tabs %}Back to the teams{% else %}Back to ExCon{% endif %}">{% icon "eye" 18 %} {% if box %}{% if desk_tabs %}Back to the teams{% else %}Back to ExCon{% endif %}{% else %}Viewing {% if v.leader_box %}{{ team.name }}'s team leader{% elif v.member_box %}{{ v.owner.name }} ({{ team.name }}){% else %}as {{ team.name }}{% endif %} · read-only{% endif %}</a>{% endif %}
     <a class="gm-icon-btn" href="{{ base }}/help/" title="Help" aria-label="Help">{% icon "help" 22 %}</a>
     <button class="gm-icon-btn" data-sound title="Notification sound" aria-label="Notification sound">{% icon "bell" 22 %}</button>

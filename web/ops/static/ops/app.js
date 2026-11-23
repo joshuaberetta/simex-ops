@@ -59,6 +59,33 @@ if (clock) {
   setInterval(tick, 1000);
 }
 
+// The simulation clock (Settings → Simulation clock): ticks from the time the page was given at
+// its speed; ExCon's poll brings it back in line (window.exconSim), e.g. after following an inject.
+const simBox = document.querySelector("[data-excon-sim-box]");
+if (simBox) {
+  const cfgEl = document.getElementById("excon-sim");
+  let sim = cfgEl ? JSON.parse(cfgEl.textContent) : null, t0 = Date.now();
+  const q = (s) => simBox.querySelector(s);
+  const tick = () => {
+    if (!sim) return;
+    const at = new Date(sim.sim + (Date.now() - t0) * sim.rate);
+    const part = (o) => new Intl.DateTimeFormat("en-GB", { timeZone: sim.tz, ...o }).format(at).replace(/,/g, "");
+    q("[data-xsim-mon]").textContent = part({ month: "short" });
+    q("[data-xsim-day]").textContent = part({ day: "numeric" });
+    q("[data-xsim-time]").textContent = part({ hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
+    q("[data-xsim-date]").textContent = part({ weekday: "short", day: "numeric", month: "short", year: "numeric" });
+    q("[data-xsim-rate]").textContent = sim.rate === 1 ? "" : `×${sim.rate}`;
+  };
+  window.exconSim = (c) => {
+    simBox.hidden = !c;
+    const off = document.querySelector("[data-excon-sim-off]");
+    if (off) off.hidden = !!c;
+    if (c) { sim = c; t0 = Date.now(); tick(); }
+  };
+  tick();
+  setInterval(tick, 1000);
+}
+
 // Grade page: copy the AI's suggested points into the radios (the grader still saves).
 const fill = document.querySelector("[data-ai-fill]");
 if (fill) {
@@ -223,6 +250,7 @@ if (window.simexNotify && panel) {
       const j = await r.json();
       if (j.notices) { items = j.notices; version = j.v; render(); alertNew(); }
       count(j.unread);
+      if ("clock" in j && window.exconSim) window.exconSim(j.clock);
       // the Replies tab badge and the tab title / icon
       const tab = document.querySelector('.tabs a[href="/replies/"]');
       if (tab) {

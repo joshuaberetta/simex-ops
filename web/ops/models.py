@@ -346,6 +346,8 @@ class Mail(models.Model):
     is_test = models.BooleanField(default=False)
     read_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
+    # Its date and time in the scenario (ops/simclock.py), stamped when it lands; None: the clock was off.
+    sim_at = models.DateTimeField(null=True, blank=True)
     # Mail-client state (per team): star, archive (out of the Inbox, still in All mail), trash.
     starred = models.BooleanField(default=False)
     archived = models.BooleanField(default=False)
@@ -366,6 +368,9 @@ class Mail(models.Model):
     def save(self, *args, **kwargs):
         if not self.thread:
             self.thread = uuid.uuid4().hex
+        if self._state.adding and self.sim_at is None:
+            from . import simclock
+            self.sim_at = simclock.stamp(self)
         super().save(*args, **kwargs)
 
 

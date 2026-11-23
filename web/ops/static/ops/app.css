@@ -56,6 +56,21 @@ code { background: #f1f3f5; padding: 1px 4px; border-radius: 4px; font-size: 12p
 
 .statusbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 20px; background: #fff; border-bottom: 1px solid var(--line); font-size: 13px; box-shadow: var(--shadow); }
 .statusbar .clock { font-variant-numeric: tabular-nums; font-weight: 650; }
+.statusbar [hidden] { display: none !important; }
+.statusbar .realclock { display: inline-flex; flex-direction: column; line-height: 1.2; }
+.statusbar .realclock small { font-size: 10.5px; }
+/* The simulation clock: a desk-calendar tile with the scenario's time, as in SIMEX Mail. */
+.statusbar .simwidget { display: inline-flex; align-items: center; gap: 8px; padding: 3px 10px 3px 4px; border-radius: 10px;
+  background: #e8f0fe; color: #174ea6; text-decoration: none; line-height: 1.15; white-space: nowrap; }
+.statusbar .simwidget:hover { text-decoration: none; filter: brightness(.97); }
+.statusbar .simwidget .cal { display: flex; flex-direction: column; width: 32px; border-radius: 5px; overflow: hidden; text-align: center;
+  background: #fff; box-shadow: 0 0 0 1px #c6d4f0; }
+.statusbar .simwidget .cal > span { background: #d93025; color: #fff; font-size: 9px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; padding: 1px 0; }
+.statusbar .simwidget .cal > b { font-size: 15px; font-weight: 650; color: #17202c; padding: 0 0 1px; }
+.statusbar .simwidget .simtext { display: flex; flex-direction: column; }
+.statusbar .simwidget .simtext b { font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.statusbar .simwidget .simtext small { font-size: 10.5px; }
 .right { margin-left: auto; }
 .statusbar .sb-actions { display: flex; align-items: center; gap: 8px; }
 .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 18px; }

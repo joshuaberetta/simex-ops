@@ -53,6 +53,23 @@
   </form>
   <p class="hint">Before switching to SIMEX Mail: create participant logins (People &amp; logins → paste roster, print the credentials sheet) and give teams the address of this site.</p>
 </div>
+<div class="card" id="sim">
+  <h3>Simulation clock</h3>
+  <p class="small">SIMEX Mail dates every message at the scenario's date and time instead of the real one, and shows a calendar and clock
+  of the simulation time at the top. Team members see only the simulation time; team leaders, the persona desk and ExCon see both.
+  An inject's delivery is dated at its <b>Scenario time</b> (if it has one); everything else at the clock's time when it arrives.
+  Mail keeps the date it got: changing the clock later doesn't re-date it. Email is not affected.</p>
+  <form method="post" action="/settings/sim/" class="form">{% csrf_token %}
+    <label class="chk"><input type="checkbox" name="enabled" value="1" {% if cfg.sim_enabled == '1' %}checked{% endif %}> show the simulation time in SIMEX Mail</label>
+    <label>The simulation time now <input type="datetime-local" name="sim_time" value="{{ sim_value }}">
+      <input type="hidden" name="sim_shown" value="{{ sim_value }}">
+      <span class="hint">Change it to set the clock{% if sim_first %}; the injects' earliest Scenario time is <a href="#" onclick="this.closest('form').sim_time.value='{{ sim_first_value }}'; return false">{{ sim_first|date:"D d M Y H:i" }}</a>{% endif %}. Exercise timezone.</span></label>
+    <label>Speed <input type="number" name="rate" value="{{ cfg.sim_rate }}" min="0" max="1000" step="any" class="narrow">
+      <span class="hint">1 = real time; 4 = four simulation minutes per real minute; 0 = the clock stands still.</span></label>
+    <label class="chk"><input type="checkbox" name="follow" value="1" {% if cfg.sim_follow == '1' %}checked{% endif %}> follow the injects: a live inject delivered with a later Scenario time moves the clock forward to it (never back)</label>
+    <button class="btn primary">Save clock</button>
+  </form>
+</div>
 <div class="card" id="ai">
   <h3>AI analysis</h3>
   <p class="small">Claude reads each reply (summary, tone, quality, flags, how likely it is AI-written) and suggests rubric points for each

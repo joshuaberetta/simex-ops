@@ -54,7 +54,7 @@
         <span class="gm-s">{{ r.subject|default:"(no subject)" }}</span>{% with sn=m.body|snippet:140 %}{% if sn %}<span class="gm-snip"> - {{ sn }}</span>{% endif %}{% endwith %}
       </span>
       <span class="gm-att">{% if r.has_files %}{% icon "attach" 18 %}{% endif %}</span>
-      <span class="gm-date">{{ m.created_at|maildate }}</span>
+      <span class="gm-date">{% listdate m %}</span>
       {% if not readonly %}
       <span class="gm-hover" onclick="event.stopPropagation()">
         {% if folder == 'trash' %}<button type="button" class="gm-icon-btn" data-row-action="restore" title="Move to Inbox">{% icon "restore" %}</button>

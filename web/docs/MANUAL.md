@@ -38,7 +38,7 @@ The tabs come in two groups: what you use while the exercise runs (**Injects**, 
 | **Senders** | The personas: username (`cnn`), display name ("CNN Breaking News"). Participants write to them (their address book grows with use). |
 | **AI personas** | Only while Settings → AI personas is on: personas that answer the teams on their own, in character (5.9). |
 | **Test runs** | Replays injects on a fast clock into the **Test team** mailbox (and, for email injects, to a test address). |
-| **Settings** | **Delivery channel**, footer, subject prefix and inject code in the subject, **AI analysis** and **AI instructions**, team-to-team messaging, attachment limit, email options, grace period, **live sending switch**, backup and restore, and **Start afresh** before going live (6.2). |
+| **Settings** | **Delivery channel**, **Simulation clock**, footer, subject prefix and inject code in the subject, **AI analysis** and **AI instructions**, team-to-team messaging, attachment limit, email options, grace period, **live sending switch**, backup and restore, and **Start afresh** before going live (6.2). |
 | **Help** | This manual (top right, next to your name). |
 
 The status bar under the tabs shows the Nairobi clock, **Live disarmed** (green) or **LIVE ARMED** (red), **ALL SENDING PAUSED** when paused, when the scheduler last ran (red if it stopped), the next inject due, counts of overdue and failed injects, and the **Pause all sending** button.
@@ -118,6 +118,11 @@ When you import the MEL, the check page offers to give senders without a domain 
 - **Max attachments per message:** what participants may attach (default 10 MB).
 - **Email channel:** reply-to (leave empty), ExCon Bcc, test addresses. Only matters for injects on the email channel.
 - **Grace period:** 10 minutes by default (see 7.3).
+- **Simulation clock:** off by default. On, SIMEX Mail dates every message in the scenario's timeline and shows a calendar and clock of the simulation date and time at the top. **Team members see only the simulation time; team leaders, the persona desk and ExCon see both** (the real time, with the simulation time under it, marked with a small clock; the top shows both clocks). The ops status bar shows it too, next to the real time: a calendar tile with the simulation time and date (and its speed when it isn't 1×), ticking and kept in step when the clock follows an inject, or *Simulation clock off*; click either to come here.
+  - **The simulation time now:** set it to start the clock (the link under it fills in the injects' earliest Scenario time); change it at any time to jump the clock. Saving the card without touching it leaves the clock running as it is.
+  - **Speed:** 1 = real time, 4 = four scenario minutes per real minute, 0 = the clock stands still (to pause it between days).
+  - **Follow the injects:** a live inject delivered with a later **Scenario time** than the clock moves the clock forward to it (never back, as injects aren't always in scenario order).
+  - An inject's delivery is dated at its own **Scenario time** (when it has one); everything else (follow-ups, answers, what the teams and the desk write) at the clock's time when it arrives. A message keeps its date: changing the clock later doesn't re-date mail already in the mailboxes. Mail from before the clock was on, or while it's off, shows the real time. Quoted text in replies and forwards uses the simulation date. Email isn't affected (the mail client sets the date).
 
 ### 3.5 Go through the injects
 Start with **Needs attention** ticked: it lists only the unsent injects with something to fix, each with tags under its subject (hover a tag for the detail):

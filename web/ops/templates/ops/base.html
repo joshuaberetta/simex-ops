@@ -40,7 +40,12 @@
 </header>
 {% if excon %}
 <div class="statusbar">
-  <span class="clock" data-tz="{{ TIME_ZONE|default:'Africa/Nairobi' }}">{% now "D d M H:i" %}</span> <span class="muted">Africa/Nairobi</span>
+  <span class="realclock"><small class="muted">Real time · Africa/Nairobi</small><span class="clock" data-tz="{{ TIME_ZONE|default:'Africa/Nairobi' }}">{% now "D d M H:i" %}</span></span>
+  <a href="/settings/#sim" class="simwidget{% if not sim.on %} off{% endif %}" data-excon-sim-box title="{% if sim.on %}The simulation clock: the date and time SIMEX Mail shows the teams{% if sim.js.rate != 1 %} (×{{ sim.js.rate }} real speed){% endif %}{% else %}Simulation clock off: SIMEX Mail shows the real time. Click to set it.{% endif %}"{% if not sim.on %} hidden{% endif %}>
+    <span class="cal" aria-hidden="true"><span data-xsim-mon>{% if sim.on %}{{ sim.now|date:"M" }}{% endif %}</span><b data-xsim-day>{% if sim.on %}{{ sim.now|date:"j" }}{% endif %}</b></span>
+    <span class="simtext"><small>Simulation{% if sim.on and sim.js.rate != 1 %} <span data-xsim-rate>×{{ sim.js.rate }}</span>{% else %} <span data-xsim-rate></span>{% endif %}</small><b data-xsim-time>{% if sim.on %}{{ sim.now|date:"H:i" }}{% endif %}</b><small data-xsim-date>{% if sim.on %}{{ sim.now|date:"D j M Y" }}{% endif %}</small></span>
+  </a>{% if sim.on %}{{ sim.js|json_script:"excon-sim" }}{% endif %}
+  <a href="/settings/#sim" class="pill safe" data-excon-sim-off{% if sim.on %} hidden{% endif %}>Simulation clock off</a>
   {% if cfg.live_armed == '1' %}<span class="pill live">LIVE ARMED</span>{% else %}<span class="pill safe">Live disarmed</span>{% endif %}
   <a href="/settings/#channel" class="pill {% if channel_mode == 'inapp' %}warn{% else %}safe{% endif %}" title="How injects are delivered">via {% if channel_mode == 'inapp' %}SIMEX Mail{% elif channel_mode == 'email' %}email{% else %}per-inject channel{% endif %}</a>
   {% if channel_mode != 'inapp' and mailer_name != 'resend' %}<span class="pill warn">Mailer: {{ mailer_name }} (emails are not really sent)</span>{% endif %}

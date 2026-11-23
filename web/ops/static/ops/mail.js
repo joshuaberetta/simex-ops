@@ -699,6 +699,33 @@
     paintSetup();
   }
 
+  // The simulation clock (ops/simclock.py): ticks from the time the server gave and its speed;
+  // each poll brings it back in line (ExCon may set it, change its speed or turn it off).
+  const simEl = $("[data-simclock]");
+  const simCfg = document.getElementById("simex-clock");
+  let sim = simCfg ? JSON.parse(simCfg.textContent) : null, simT0 = Date.now();
+  function simTick() {
+    if (!simEl || !sim) return;
+    const tz = sim.tz, at = new Date(sim.sim + (Date.now() - simT0) * sim.rate);
+    const part = (o) => new Intl.DateTimeFormat("en-GB", { timeZone: tz, ...o }).format(at);
+    $("[data-sim-mon]", simEl).textContent = part({ month: "short" });
+    $("[data-sim-day]", simEl).textContent = part({ day: "numeric" });
+    $("[data-sim-time]", simEl).textContent = part({ hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+    $("[data-sim-date]", simEl).textContent = part({ weekday: "short", day: "numeric", month: "short", year: "numeric" }).replace(/,/g, "");
+    const real = $("[data-real-time]", simEl);
+    if (real) {
+      const now = new Date(), r = (o) => new Intl.DateTimeFormat("en-GB", { timeZone: tz, ...o }).format(now);
+      real.textContent = r({ hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+      $("[data-real-date]", simEl).textContent = r({ weekday: "short", day: "numeric", month: "short" }).replace(/,/g, "");
+    }
+  }
+  function simSync(c) {
+    if (!simEl) return;
+    simEl.hidden = !c;
+    if (c) { sim = c; simT0 = Date.now(); simTick(); }
+  }
+  if (simEl) { simTick(); setInterval(simTick, 1000); }
+
   const seenKey = `simex-latest:${BASE}`;
   let latest = localStorage.getItem(seenKey) === null ? null : Number(localStorage.getItem(seenKey));
   let pollSignedOut = false;
@@ -709,6 +736,7 @@
       pollSignedOut = false;
       if (!r.ok) return;
       const j = await r.json();
+      if ("clock" in j) simSync(j.clock);
       const n = j.unread;
       $$("[data-unread-count]").forEach((el) => el.textContent = n ? n : "");
       const inboxLink = $('[data-folder="inbox"]'); if (inboxLink) inboxLink.classList.toggle("bold", n > 0);

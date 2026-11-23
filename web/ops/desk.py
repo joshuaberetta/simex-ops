@@ -137,7 +137,7 @@ def _on_delivered(m, mail):
         team=None, owner=None, folder="sent", thread=thread, from_name=name, from_addr=addr, to_label=m.target,
         persona=m.persona, desk_team=team, subject=m.subject, body=m.body or "", footer=m.footer, banner=m.banner,
         message=m, inject_id=m.inject_id, is_test=m.kind in ("test", "oneoff") or bool(team and team.is_test),
-        read_at=timezone.now(), author_id=m.author_id)
+        read_at=timezone.now(), author_id=m.author_id, sim_at=mail.sim_at if mail is not None else None)
     _files(desk_mail, mail=mail) if mail is not None else _files(desk_mail, m=m)
     return desk_mail
 
@@ -174,7 +174,7 @@ def _on_response(r, personas_):
         to_label=", ".join(f"{describe(p, team, memo)['name']} <{render.persona_addr(p, r.channel)}>" for p in to),
         cc_label=src.cc_label if src else ", ".join(r.cc or []), persona=to[0], desk_team=team, desk_response=r,
         subject=r.subject, body=body, inject_id=r.inject_id, is_test=r.kind == "test" or bool(team and team.is_test),
-        created_at=r.received_at, author_id=r.person_id)
+        created_at=r.received_at, author_id=r.person_id, sim_at=src.sim_at if src else None)
     _files(mail, mail=src) if src else _files(mail, response=r)
     push.notify_mail(mail)
     return mail

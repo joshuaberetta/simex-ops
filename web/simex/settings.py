@@ -97,6 +97,7 @@ TEMPLATES = [{
         "django.contrib.messages.context_processors.messages",
         "ops.context.status",
         "ops.context.source",
+        "ops.context.sim",
     ]},
 }]
 WSGI_APPLICATION = "simex.wsgi.application"

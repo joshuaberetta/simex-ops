@@ -520,3 +520,30 @@ body[class*="box-"] .gm-search { flex: 1 1 400px; min-width: 180px; }
   body[class*="box-"] .gm-top { box-shadow: none; border: 2px solid var(--accent); }
   body[class*="box-"] .gm-tabs { background: var(--top-bg); }
 }
+
+/* The simulation clock (ops/simclock.py): the scenario's date and time, a desk calendar beside it;
+   team leaders, the persona desk and ExCon also see the real time. */
+.gm-simclock { display: flex; align-items: center; gap: 10px; padding: 4px 12px 4px 6px; margin-right: 6px; border-radius: 12px;
+  background: #fff; border: 1px solid #dadce0; line-height: 1.15; white-space: nowrap; flex: none; }
+.gm-cal { display: flex; flex-direction: column; width: 34px; border-radius: 6px; overflow: hidden; text-align: center;
+  box-shadow: 0 0 0 1px #dadce0; background: #fff; }
+.gm-cal > span { background: #d93025; color: #fff; font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  padding: 1px 0; }
+.gm-cal > b { font-size: 16px; font-weight: 600; color: var(--ink); padding: 1px 0 2px; }
+.gm-simtext, .gm-realtext { display: flex; flex-direction: column; }
+.gm-simtext b { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
+.gm-simtext small, .gm-realtext small { font-size: 11px; color: var(--ink2); }
+.gm-realtext { padding-left: 10px; border-left: 1px solid #dadce0; }
+.gm-realtext b { font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink2); }
+.gm-simdate { display: flex; justify-content: flex-end; align-items: center; gap: 3px; font-size: 11px; color: var(--accent, #0b57d0);
+  font-weight: 400; white-space: nowrap; }
+.gm-simdate .ic { flex: none; fill: currentColor; position: static; }
+@media (max-width: 1100px) { .gm-simclock .gm-realtext small:first-child { display: none; } }
+@media (max-width: 760px) {
+  .gm-simclock { padding: 2px 6px 2px 2px; gap: 6px; margin-right: 0; border: 0; background: none; }
+  .gm-cal { width: 28px; }
+  .gm-cal > b { font-size: 13px; }
+  .gm-simtext b { font-size: 14px; }
+  .gm-simtext small, .gm-realtext { display: none; }
+}
+.gm-date:has(.gm-simdate) { line-height: 1.25; white-space: nowrap; }

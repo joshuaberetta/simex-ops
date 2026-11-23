@@ -151,6 +151,7 @@ urlpatterns = [
     path("settings/arm/", x.settings_arm),
     path("settings/pause/", x.settings_pause),
     path("settings/channel/", x.settings_channel),
+    path("settings/sim/", x.settings_sim),
     path("settings/ai/", a.settings_ai),
     path("settings/ai/prompts/", a.settings_ai_prompts),
     path("settings/npc/", npc.settings_npc),

@@ -10,6 +10,8 @@ You are your team's **team leader**: part of ExCon, not of the team. You play th
 - **AI personas** (read-only, when ExCon has them on): some personas answer on their own, with answers written by Claude in character after a delay of their own. Here you see every conversation your team has had with one, both ways, with when the persona's answer is due, and the AI personas your team can write to. Your team isn't told which personas these are.
 - **Dashboard**: your team's replies in figures, and Claude's reading of them.
 
+**Simulation time.** When ExCon runs the simulation clock, the calendar and clock at the top show the scenario's date and time (what your team sees), with the real time beside it. Messages show the real time, with their simulation time under it (marked with a small clock). Your members see only the simulation time.
+
 You only ever see your own team's inbox. The other teams are independent of yours.
 
 ## My mail

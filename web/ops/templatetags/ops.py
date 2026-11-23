@@ -65,12 +65,9 @@ def initial(name):
     return (name[:1] or "?").upper()
 
 
-@register.filter
-def maildate(dt):
-    """Gmail list style: 14:05 today, Nov 23 this year, 23/11/2034 otherwise."""
-    if not dt:
-        return ""
-    loc, today = timezone.localtime(dt), timezone.localdate()
+def _maildate(dt, ref=None):
+    loc = timezone.localtime(dt)
+    today = timezone.localtime(ref).date() if ref else timezone.localdate()
     if loc.date() == today:
         return loc.strftime("%H:%M")
     if loc.year == today.year:
@@ -78,14 +75,12 @@ def maildate(dt):
     return loc.strftime("%d/%m/%Y")
 
 
-@register.filter
-def fulldate(dt):
-    """Thread header style: Mon, Nov 23, 14:05 (2 hours ago)."""
-    if not dt:
-        return ""
+def _fulldate(dt, ref=None):
     loc = timezone.localtime(dt)
-    secs = int((timezone.now() - dt).total_seconds())
-    if secs < 60:
+    secs = int(((ref or timezone.now()) - dt).total_seconds())
+    if secs < 0:
+        rel = ""
+    elif secs < 60:
         rel = "just now"
     elif secs < 3600:
         rel = f"{secs // 60} minute{'s' if secs // 60 != 1 else ''} ago"
@@ -93,7 +88,71 @@ def fulldate(dt):
         rel = f"{secs // 3600} hour{'s' if secs // 3600 != 1 else ''} ago"
     else:
         rel = f"{secs // 86400} day{'s' if secs // 86400 != 1 else ''} ago"
-    return f"{loc.strftime('%a, %b %-d, %H:%M')} ({rel})"
+    year = f", {loc.year}" if ref and loc.year != timezone.localtime(ref).year else ""
+    return f"{loc.strftime('%a, %b %-d')}{year}, {loc.strftime('%H:%M')}" + (f" ({rel})" if rel else "")
+
+
+@register.filter
+def maildate(dt):
+    """Gmail list style: 14:05 today, Nov 23 this year, 23/11/2034 otherwise."""
+    return _maildate(dt) if dt else ""
+
+
+@register.filter
+def fulldate(dt):
+    """Thread header style: Mon, Nov 23, 14:05 (2 hours ago)."""
+    return _fulldate(dt) if dt else ""
+
+
+# --- the simulation clock (ops/simclock.py): context "sim" from views_inbox.sim_context ------------
+
+def _sim(context, m):
+    """(sim on for this mail, show the real time too, the simulation time now)."""
+    sim = context.get("sim") or {}
+    return bool(sim.get("on") and m.sim_at), bool(sim.get("both")), sim.get("now")
+
+
+def simlong(dt):
+    return timezone.localtime(dt).strftime("%a, %b %-d, %Y, %H:%M") if dt else ""
+
+
+@register.simple_tag(takes_context=True)
+def listdate(context, m):
+    """A list row's date: the simulation date for participants; for leaders, the desk and
+    ExCon the real one with the simulation one under it."""
+    on, both, ref = _sim(context, m)
+    if not on:
+        return _maildate(m.created_at)
+    if not both:
+        return format_html('<span title="{}">{}</span>', simlong(m.sim_at), _maildate(m.sim_at, ref))
+    return format_html('{}<small class="gm-simdate" title="Simulation time: {}">{} {}</small>', _maildate(m.created_at),
+                       simlong(m.sim_at), mark_safe(icon("clock", 12)), _maildate(m.sim_at, ref))
+
+
+@register.simple_tag(takes_context=True)
+def msgdate(context, m):
+    """A message's date in a conversation (as listdate)."""
+    on, both, ref = _sim(context, m)
+    if not on:
+        return format_html('<span title="{}">{}</span>', timezone.localtime(m.created_at).strftime("%a %d %b %Y %H:%M"),
+                           _fulldate(m.created_at))
+    if not both:
+        return format_html('<span title="{}">{}</span>', simlong(m.sim_at), _fulldate(m.sim_at, ref))
+    return format_html('<span title="Real time">{}</span><span class="gm-simdate" title="Simulation time">{} {}</span>',
+                       _fulldate(m.created_at), mark_safe(icon("clock", 14)), _fulldate(m.sim_at, ref))
+
+
+@register.simple_tag(takes_context=True)
+def detaildates(context, m):
+    """The date rows of a message's details."""
+    on, both, _ = _sim(context, m)
+    real = timezone.localtime(m.created_at).strftime("%b %-d, %Y, %H:%M")
+    if not on:
+        return format_html("<tr><th>date:</th><td>{}</td></tr>", real)
+    sim = timezone.localtime(m.sim_at).strftime("%b %-d, %Y, %H:%M")
+    if not both:
+        return format_html("<tr><th>date:</th><td>{}</td></tr>", sim)
+    return format_html("<tr><th>date:</th><td>{}</td></tr><tr><th>simulation:</th><td>{}</td></tr>", real, sim)
 
 
 @register.filter
@@ -159,6 +218,7 @@ ICONS = {
     "lock": "M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z",
     "label": "M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16z",
     "restore": "M19 4h-3.5l-1-1h-5l-1 1H5v2h14zM6 7v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6zm8 7v4h-4v-4H8l4-4 4 4h-2z",
+    "clock": "M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z",
     "bell": "M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z",
     "file": "M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z",
     "download": "M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z",

@@ -6,6 +6,8 @@ You are on the **persona desk**: part of ExCon, playing the exercise's personas 
 - **Persona desk**: the shared mailbox. Its **Inbox** has every message a team writes to a persona (in SIMEX Mail or by email); its **Sent**, everything the personas sent the teams (the injects, ExCon's follow-ups and answers, the AI personas' answers and what the desk writes). The red number is unread conversations.
 - **Teams & team leaders** (read-only): each team's inbox, its team leader's mailbox and (when members have their own) each member's, exactly as they see them. Opening mail there does **not** mark it read for them. The side bar switches between teams.
 
+**Simulation time.** When ExCon runs the simulation clock, the calendar and clock at the top show the scenario's date and time, with the real time beside it. Messages show the real time, with their simulation time under it (marked with a small clock): the teams see only the simulation time, so use that one when a persona mentions a time.
+
 ## Telling the personas apart
 - Every conversation shows a **coloured tag for each persona** in it and a grey tag for the **team** on the other side (and **Test** for the Test team). The colours are the same everywhere: the tag, the coloured edge of the row and of each message, the dot in the side bar and the **From** of your message. ExCon can change a persona's colour on the Senders tab.
 - In a conversation, each message from a persona says who sent it: **Inject**, **Follow-up (ExCon)**, **Sent by** a desk member, **Sent by ExCon** or **Written by the AI persona**. A team's message shows which persona it went **to**.

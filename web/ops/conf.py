@@ -38,6 +38,14 @@ DEFAULTS = {
     # only ("test") until ExCon widens it to every team ("all").
     "npc_enabled": "0",
     "npc_scope": "test",
+    # The simulation clock (ops/simclock.py; Settings → Simulation clock): SIMEX Mail shows the
+    # scenario's date and time. sim_anchor (scenario time, exercise timezone) was the time at
+    # sim_anchor_real (real, UTC ISO); it runs sim_rate times real speed.
+    "sim_enabled": "0",
+    "sim_anchor": "",
+    "sim_anchor_real": "",
+    "sim_rate": "1",
+    "sim_follow": "1",  # a live inject delivered with a later Scenario time moves the clock forward to it
     "reset_at": "",  # Settings → Start afresh (ops/reset.py): received email from before it is not synced back
 }
 CHANNEL_MODES = {"email": "Email (Resend)", "inapp": "SIMEX Mail (in-app inboxes)", "per_inject": "Per inject"}

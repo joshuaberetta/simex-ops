@@ -21,7 +21,7 @@ from django.utils import timezone
 from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_POST
 
-from . import (addresses, ai, legacy_import, backup, checks, reset, conf, delivery, desk, documents, importer, inbound, logins, mailer,
+from . import (addresses, ai, legacy_import, backup, checks, reset, conf, simclock, delivery, desk, documents, importer, inbound, logins, mailer,
                notices, render as rnd, roster, signin)
 from .access import excon_required
 from .models import (CHANNELS, DELIVERY_MODES, ROLES, STATUSES, AiGrade, Attachment, AttachmentImport, Audit, Grade,
@@ -1192,6 +1192,7 @@ def excon_poll(request):
     out = {"new": Response.objects.filter(status="new", kind="live").count(),
            "overdue": counts.get("overdue", 0), "failed": counts.get("failed", 0) + counts.get("partial", 0),
            "paused": conf.flag("paused"), "v": notices.version(request.user), "unread": notices.unread(request.user)}
+    out["clock"] = simclock.js()  # the status bar's simulation clock
     if request.GET.get("v") != out["v"]:
         out["notices"] = notices.listing(request.user)
     return JsonResponse(out)
@@ -1874,7 +1875,53 @@ def settings_page(request):
     from .views_ai import ai_settings_context
     return render(request, "ops/settings.html", {"tab": "settings", "resend_configured": bool(settings.RESEND_API_KEY),
                                                  "mailer_name": mailer.get().name, "MAIL_DOMAIN": settings.MAIL_DOMAIN,
-                                                 **ai_settings_context()})
+                                                 **_sim_settings(), **ai_settings_context()})
+
+
+def _sim_settings():
+    """The Simulation clock card: the time it reads (as a datetime-local value) and the injects'
+    earliest Scenario time, to start from."""
+    current = simclock.now() or simclock.parse(conf.get("sim_anchor"))
+    first = (Inject.objects.exclude(status="cancelled").exclude(scenario_dt__isnull=True).exclude(scenario_dt="")
+             .order_by("scenario_dt").values_list("scenario_dt", flat=True).first())
+    return {"sim_value": timezone.localtime(current).strftime("%Y-%m-%dT%H:%M") if current else "",
+            "sim_first": simclock.parse(first), "sim_first_value": (first or "")[:16]}
+
+
+@excon_required
+@require_POST
+def settings_sim(request):
+    """Settings → Simulation clock: on or off, the time it reads (only if changed: the form's
+    value is the time when the page was shown), its speed, and whether it follows the injects."""
+    P = request.POST
+    try:
+        speed = float((P.get("rate") or "1").replace(",", "."))
+        if not 0 <= speed <= 1000:
+            raise ValueError
+    except ValueError:
+        messages.error(request, "Speed: a number from 0 (stopped) to 1000; 1 is real time.")
+        return redirect("/settings/#sim")
+    on = P.get("enabled") == "1"
+    conf.put("sim_follow", "1" if P.get("follow") == "1" else "0")
+    text = (P.get("sim_time") or "").strip()
+    at = simclock.parse(text)
+    if text and not at:
+        messages.error(request, f"Simulation time: '{text}' is not a date and time.")
+        return redirect("/settings/#sim")
+    if at and (text != (P.get("sim_shown") or "") or not conf.get("sim_anchor")):
+        simclock.set_clock(at, speed, enabled_=on)
+    elif on and not conf.get("sim_anchor"):
+        messages.error(request, "Give the simulation date and time to start the clock from.")
+        return redirect("/settings/#sim")
+    else:
+        if speed != simclock.rate():
+            simclock.set_rate(speed)  # from the time it reads now
+        conf.put("sim_enabled", "1" if on else "0")
+    state = (f"on, reading {timezone.localtime(simclock.now()).strftime('%a %d %b %Y %H:%M')} at ×{simclock.rate():g}"
+             if simclock.enabled() else "off")
+    audit("sim_clock", state, _u(request))
+    messages.success(request, f"Simulation clock {state}.")
+    return redirect("/settings/#sim")
 
 
 @excon_required

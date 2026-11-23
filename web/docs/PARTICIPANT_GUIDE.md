@@ -23,6 +23,7 @@ SIMEX Mail is your team's mailbox for the exercise. Everything here is **exercis
 - Click a conversation to open it. Earlier messages are folded: click one to unfold it. Click **to me ▾** to see all the details (from, to, date).
 - **Attachments** are at the bottom of a message: click one to download it.
 - **Search** (top bar) looks through subjects, text and senders.
+- **Dates and times are the scenario's.** When ExCon runs the simulation clock, the calendar and clock at the top show the date and time in the exercise scenario, and every message is dated in that timeline, not by the real clock.
 - Folders on the left: **Inbox**, **Starred**, **Sent**, **Drafts**, **All mail** (everything, including archived), **Trash**.
 - Tidy up with the icons that appear when you point at a conversation, or tick several and use the toolbar (on a phone, tap the round picture next to a conversation to select it; while some are selected, tapping a conversation selects it too): **archive** (out of the Inbox, still in All mail), **delete** (to Trash, restorable), **mark as read / unread**, **star**.
 

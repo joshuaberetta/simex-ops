@@ -38,7 +38,7 @@ from django.utils.http import content_disposition_header
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import addresses, conf, delivery, desk, inbound, push, render as rnd, signin
+from . import addresses, conf, delivery, desk, inbound, push, render as rnd, signin, simclock
 from .access import desk_of, is_excon, leader_of, login_required_any, participant_of
 from .models import (Mail, MailAction, MailAttachment, MailLabel, MessageAttachment, Person, PushSubscription, Response,
                      Sender, Team, ThreadLabel, audit)
@@ -719,6 +719,11 @@ def box_theme(v=None, kind="", title="", sub=""):
 
 
 
+def sees_sim_only(v):
+    """A team member: SIMEX Mail shows them the simulation time only (ops/simclock.py)."""
+    return bool(v.person) and not v.leader and not v.desk and not v.desk_person
+
+
 def _ctx(v, **extra):
     choices = from_choices(v)
     c = {"v": v, "team": DESK if v.desk else v.team, "base": v.base, "readonly": v.readonly, "folders": v.folders,
@@ -868,7 +873,7 @@ def thread_view(request, v, thread):
     thread_js = {"subject": subject, "thread": thread, "last": last.id,
                  "reply": [k for k in reply_to if k], "replyAll": [k for k in reply_all if k],
                  "msgs": {str(m.id): {"from": m.from_name, "addr": m.from_addr, "body": m.body, "subject": m.subject,
-                                      "date": timezone.localtime(m.created_at).strftime("%a, %b %-d, %Y at %H:%M"),
+                                      "date": timezone.localtime(m.sim_at or m.created_at).strftime("%a, %b %-d, %Y at %H:%M"),
                                       "to": m.to_label,
                                       "reply": ([f"t:{m.desk_team_id}"] if m.desk_team_id else []) if v.desk
                                       else [_key_for_sender(m, memo)] if m.folder == "inbox"
@@ -1095,11 +1100,12 @@ def draft_save(request, v):
     d.in_reply_to = parent
     d.forward_of = v.mails().filter(pk=_id(P.get("forward_of"))).first()
     d.thread = parent.thread if parent else (d.thread or "")
-    d.created_at = timezone.now()
+    d.created_at, d.sim_at = timezone.now(), simclock.now()
     d.save()
     if new:
         track(v, "draft", [d.thread], draft=d.id)
-    return JsonResponse({"id": d.id, "saved": timezone.localtime(d.created_at).strftime("%H:%M")})
+    shown = d.sim_at if d.sim_at and sees_sim_only(v) else d.created_at
+    return JsonResponse({"id": d.id, "saved": timezone.localtime(shown).strftime("%H:%M")})
 
 
 @mailbox_view
@@ -1455,6 +1461,7 @@ def poll(request, as_team=None, box="", pid=None):
         out.update(me_unread=_unread(v.team, v.person), team_unread=_unread(v.team, None))
     if v.desk_person:  # the desk tab's badge
         out.update(desk_unread=_unread(None, None))
+    out["clock"] = simclock.js()  # the simulation clock widget follows ExCon's changes
     return JsonResponse(out)
 
 
