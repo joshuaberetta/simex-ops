@@ -1,4 +1,4 @@
-"""QR sign-in: the login slips' codes sign a member or team leader in on any device, set it up,
+"""QR sign-in: the login slips' codes sign a member, team leader or persona desk member in on any device, set it up,
 and stop working when the password is reset or the login disabled; never for ExCon."""
 
 from django.contrib.auth import get_user_model
@@ -27,6 +27,25 @@ def test_qr_signs_in_and_sets_up_the_device():
     c2 = Client()
     c2.get(signin.path(la.person.user))
     assert c2.get("/inbox/").context["v"].owner == la.person
+
+
+def test_qr_signs_the_persona_desk_in():
+    from ops.tests.test_desk import desk_client
+    p = desk_client("Anna Desk").person
+    assert signin.can_use(p.user)
+    c = Client()
+    r = c.get(signin.path(p.user))
+    assert r.status_code == 302 and r["Location"] == "/inbox/desk/setup/"
+    page = c.get("/inbox/desk/setup/")
+    html = page.content.decode()
+    assert page.status_code == 200 and "Welcome, Anna Desk" in html and "the persona desk" in html
+    assert "data-setup-alerts" in html and 'href="/inbox/desk/"' in html
+    assert page.context["app_url"].startswith("/inbox/go/") and page.context["app_url"].endswith("?app=1")
+    assert c.get("/inbox/setup/")["Location"] == "/inbox/desk/"
+    assert c.get("/inbox/manifest.webmanifest").json()["start_url"] == page.context["app_url"]
+    assert c.get(page.context["app_url"])["Location"] == "/inbox/"  # the home-screen app, signed in already
+    # A member's setup page isn't the desk's.
+    assert participant("a").get("/inbox/desk/setup/").status_code == 403
 
 
 def test_qr_stops_working():
@@ -90,4 +109,8 @@ def test_slips(excon):
     r = excon.post("/people/credentials/", {"rows": '[["Nobody", "", "nobody", "pw"]]'})
     assert b"<svg" not in r.content
     assert pa.get("/people/slips/").status_code == 403
+    from ops.tests.test_desk import desk_client
+    d = desk_client("Anna Desk").person
+    r = excon.post("/people/credentials/", {"rows": f'[["Anna Desk", "", "{d.user.username}", "pw-2"]]'})
+    assert b"<svg" in r.content
     assert b"/people/slips/?person=" in excon.get("/people/").content

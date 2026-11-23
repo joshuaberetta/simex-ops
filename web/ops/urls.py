@@ -61,6 +61,7 @@ urlpatterns = [
     path("inbox/me/", include(mail_patterns), {"box": "me"}),
     path("inbox/desk/teams/", p.desk_teams),
     path("inbox/desk/presence/", p.desk_presence),
+    path("inbox/desk/setup/", p.setup, {"box": "desk"}),
     path("inbox/desk/", include(mail_patterns), {"box": "desk"}),
     path("inbox/", include(mail_patterns)),
     # ExCon
