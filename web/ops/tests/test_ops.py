@@ -654,7 +654,9 @@ def test_xlsx_and_json_import_agree():
     a = importer.parse_upload("MEL-MIL.xlsx", MEL.read_bytes())
     b = importer.parse_upload("injects.json", JSON.read_bytes())
     strip = lambda rs: [{k: v for k, v in r.items() if k != "seq"} for r in rs]  # noqa: E731
-    assert strip(a) == strip(b) and len(a) == 102
+    # The MEL changes between versions (injects added and removed): the two sources must agree
+    # with each other, whatever their number.
+    assert a and strip(a) == strip(b)
 
 
 # --- global delivery channel switch -------------------------------------------------------------
