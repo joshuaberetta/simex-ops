@@ -162,9 +162,19 @@ def test_team_inbox_read_only_with_the_ai_reading(excon):
     for path in ("action/", "send/", "star/1/", "draft/", "labels/", "push/"):
         assert la.post(f"/inbox/team/{path}").status_code == 404  # not mounted: nothing to change
     assert Person.objects.get(pk=la.person.pk).lead_seen >= team_mail.id
-    # Nobody else sees Claude's reading in SIMEX Mail.
-    for c, url in ((pa, f"/inbox/t/{team_mail.thread}/"), (excon, f"/inbox/as/{team_mail.team_id}/t/{team_mail.thread}/")):
-        assert "Uniform structure" not in c.get(url).content.decode()
+    # The list flags the conversation (the leader and ExCon); members, other leaders and the desk never see it.
+    from ops.tests.test_desk import desk_client
+    row = la.get("/inbox/team/").context["rows"][0]
+    assert row["ai"]["level"] == "likely" and row["ai"]["pct"] == 82 and "Uniform structure" in row["ai"]["why"]
+    assert 'class="gm-label gm-ai likely"' in la.get("/inbox/team/").content.decode()
+    as_url = f"/inbox/as/{team_mail.team_id}/"
+    assert excon.get(as_url).context["rows"][0]["ai"]["pct"] == 82
+    assert "Uniform structure" in excon.get(f"{as_url}t/{team_mail.thread}/").content.decode()
+    dc = desk_client()
+    for c, url in ((pa, "/inbox/"), (pa, f"/inbox/t/{team_mail.thread}/"), (dc, as_url), (dc, f"{as_url}t/{team_mail.thread}/"),
+                   (leader("b"), f"/inbox/leaders/{team_mail.team_id}/")):
+        html = c.get(url).content.decode()
+        assert "Uniform structure" not in html and "gm-ai" not in html, url
     # The team leader's Dashboard: their team only, no grades.
     d = la.get("/inbox/dashboard/")
     assert d.status_code == 200 and d.context["likely"] == 1 and d.context["members"] == [("Amina Diallo", "", 1)]

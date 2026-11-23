@@ -50,6 +50,7 @@
       <span class="gm-subj">
         {% if r.desk %}{% for p in r.desk.personas %}<span class="gm-label gm-persona" style="background: {{ p.colour }}; color: {{ p.fg }}" title="{{ p.addr }}">{{ p.name }}</span>{% endfor %}{% for t in r.desk.teams %}<span class="gm-label gm-teamchip">{{ t }}</span>{% endfor %}{% if r.desk.test %}<span class="gm-label test">Test</span>{% endif %}{% endif %}
         {% if folder != 'inbox' and m.folder == 'inbox' and not m.archived %}<span class="gm-label">Inbox</span>{% endif %}
+        {% if r.ai %}<span class="gm-label gm-ai {{ r.ai.level }}" title="{{ r.ai.level|capfirst }} AI-assisted ({{ r.ai.pct }} %, Claude's estimate, never proof). {{ r.ai.why }}">AI?</span>{% endif %}
         {% for l in r.labels %}<span class="gm-label"{% if l.colour %} style="background: {{ l.colour }}; color: {{ l.fg }}"{% endif %}>{{ l.name }}</span>{% endfor %}
         <span class="gm-s">{{ r.subject|default:"(no subject)" }}</span>{% with sn=m.body|snippet:140 %}{% if sn %}<span class="gm-snip"> - {{ sn }}</span>{% endif %}{% endwith %}
       </span>

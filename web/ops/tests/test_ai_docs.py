@@ -8,7 +8,7 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from ops import ai, ai_docs, conf, docscan, reset
-from ops.models import AiCall, DocumentAnalysis, Mail, MailAttachment, Notice, Response
+from ops.models import AiCall, DocumentAnalysis, Mail, MailAttachment, Notice, ReplyAnalysis, Response
 from ops.tests.test_ai import FakeClient, answers
 from ops.tests.test_ops import SAMPLE, arm, deliver_now, do_import, participant
 
@@ -201,6 +201,30 @@ def test_leader_sees_the_reading_and_reports_carry_it(excon, fake):
     assert docs == [{"document": d.id, "file": "plan.docx", "inject": "1-15", "band": "likely AI-assisted",
                      "signals": d.ai_signals, "wpm": None}]
     assert "ai_written" not in report.for_team(fig, False)
+
+
+def test_inbox_lists_flag_ai_documents(excon, fake):
+    from ops.tests.test_leaders import leader
+    la = leader("a")
+    conf.put("personal_mailboxes", "1")
+    do_import(excon, SAMPLE)
+    arm()
+    deliver_now("1-15")
+    pa = participant("a", "Jane")
+    pa.post("/inbox/me/send/", {"to": "p:undac-a-tl", "subject": "Our plan", "body": "Attached",
+                                "files": SimpleUploadedFile("plan.docx", docx())})  # from her own mailbox
+    ai.tick()
+    d = DocumentAnalysis.objects.get()
+    ReplyAnalysis.objects.filter(response=d.response).update(ai_written=10)  # the message itself reads as human
+    for c, url in ((la, "/inbox/team/?folder=sent"), (excon, f"/inbox/as/{d.team_id}/?folder=sent"),
+                   (excon, f"/inbox/as/{d.team_id}/member/{pa.person.id}/?folder=sent"),
+                   (la, f"/inbox/members/{pa.person.id}/?folder=sent")):
+        rows = [r for r in c.get(url).context["rows"] if r.get("ai")]
+        assert rows and rows[0]["ai"]["pct"] == 88 and rows[0]["ai"]["why"].startswith("plan.docx"), url
+    thread = excon.get(f"/inbox/as/{d.team_id}/member/{pa.person.id}/t/{d.response.mail.thread}/").content.decode()
+    assert "Claude's reading of the document" in thread and "Written by <b>Jane</b>" in thread
+    assert "gm-ai" not in pa.get("/inbox/?folder=sent").content.decode()
+    assert "gm-ai" not in pa.get("/inbox/me/?folder=sent").content.decode()
 
 
 def test_a_teams_file_is_its_own(excon, fake):

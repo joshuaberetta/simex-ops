@@ -164,6 +164,8 @@ body.side-collapsed .gm-labels-head, body.side-collapsed .gm-lmore { display: no
 .gm-label { display: inline-block; background: #ddd; color: #444; border-radius: 4px; font-size: 12px; line-height: 18px;
   padding: 0 4px; margin-right: 6px; font-weight: 400; vertical-align: 1px; }
 .gm-label.test { background: #fce8b2; color: #7a4f01; }
+.gm-label.gm-ai.likely { background: #fce8e6; color: #a50e0e; font-weight: 600; }
+.gm-label.gm-ai.possibly { background: #fef7e0; color: #7a4f01; }
 .gm-att { color: var(--muted); padding: 0 8px; display: inline-flex; }
 .gm-date { width: 64px; flex: none; text-align: right; font-size: 12px; color: var(--ink2); }
 .gm-hover { display: none; position: absolute; right: 8px; top: 0; height: 40px; align-items: center; background: inherit; padding-left: 8px; }

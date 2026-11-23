@@ -218,6 +218,10 @@ class Viewer:
         else:
             raise Http404
         self.box = {"team": self.team, "owner": self.owner}
+        # Claude's readings (replies, documents): a leader reading their own team, ExCon staff
+        # reading a team's mailboxes. Never members, other leaders or the persona desk.
+        self.sees_ai = bool(self.leader_mode or (box == "member" and self.leader and not as_team)
+                            or (as_team is not None and not self.peer and is_excon(request.user)))
         self.folders = TEAM_FOLDERS if self.leader_mode else PEER_FOLDERS if self.peer or box == "member" and self.leader \
             else FOLDERS
 
@@ -583,12 +587,38 @@ def conversations(v, folder, q=""):
                      "has_files": any(m.files.all() for m in threads[t]), "draft": False,
                      "labels": sorted(on.get(t, []), key=lambda x: x["name"].lower()), "all_labels": ids_on.get(t, []),
                      "desk": desk_chips(conv, memo, team_names) if v.desk else None})
+    if v.sees_ai:
+        flags = ai_flags(v.team, {t: threads[t] for t in order})
+        for r in rows:
+            r["ai"] = flags.get(r["thread"])
     if folder == "replies":  # newest team reply first
         last_sent = {}
         for th, at in v.mails().filter(folder="sent", thread__in=order).values_list("thread", "created_at"):
             last_sent[th] = max(at, last_sent.get(th, at))
         rows.sort(key=lambda r: last_sent.get(r["thread"]) or r["latest"].created_at, reverse=True)
     return rows
+
+
+def ai_flags(team, threads):
+    """{thread: {"pct", "level", "why"}} for conversations holding a message the team wrote, or a
+    file it sent, that Claude reads as possibly (40 %) or likely (70 %) AI-assisted: the highest
+    one. threads: {thread: [Mail]} with their files. For the readers of Viewer.sees_ai only."""
+    from .models import DocumentAnalysis, ReplyAnalysis
+    if not team or not threads:
+        return {}
+    best = {}
+
+    def keep(t, pct, why):
+        if pct is not None and pct >= 40 and pct > best.get(t, {}).get("pct", -1):
+            best[t] = {"pct": pct, "level": "likely" if pct >= 70 else "possibly", "why": why}
+
+    for t, pct, sig, subj in (ReplyAnalysis.objects.filter(status="done", response__team=team, response__mail__thread__in=list(threads))
+                              .values_list("response__mail__thread", "ai_written", "ai_signals", "response__subject")):
+        keep(t, pct, f"Message: {sig or subj}")
+    shas = {f.sha256: t for t, ms in threads.items() for m in ms for f in m.files.all() if f.sha256}
+    for d in DocumentAnalysis.objects.filter(team=team, status="done", sha256__in=list(shas)):
+        keep(shas[d.sha256], d.ai_written, f"{d.filename}: {d.ai_signals}")
+    return best
 
 
 def desk_chips(mails, memo, team_names):
@@ -802,17 +832,25 @@ def ai_band(score):
     return "Likely AI-assisted" if score >= 70 else "Possibly AI-assisted" if score >= 40 else ""
 
 
-def _team_notes(mails):
+def _team_notes(mails, team):
     """A leader reading the team inbox: for each mail the team sent, who wrote it, minutes
-    since the message it answers, and Claude's reading of it. Leaders only (ExCon side)."""
+    since the message it answers, and Claude's reading of it and of its files. Viewer.sees_ai
+    only: the team's leader, ExCon."""
     from . import ai
     from .models import ReplyAnalysis
     sent = [m for m in mails if m.folder == "sent"]
     resp = {r.mail_id: r for r in Response.objects.filter(mail__in=sent)}
+    if any(m.id not in resp for m in sent):  # a member's own copy: its Response is on the team inbox's
+        twins = {}
+        for r in Response.objects.filter(team=team, mail__thread__in={m.thread for m in sent}).select_related("mail"):
+            twins[(r.mail.thread, r.mail.body, r.mail.author_id)] = r
+        for m in sent:
+            if m.id not in resp and (m.thread, m.body, m.author_id) in twins:
+                resp[m.id] = twins[(m.thread, m.body, m.author_id)]
     tags = {a.response_id: a for a in ReplyAnalysis.objects.filter(response__in=resp.values(), status="done")}
     from .models import DocumentAnalysis
-    docs = {(d.team_id, d.sha256): d for d in DocumentAnalysis.objects.filter(
-        status="done", sha256__in=[f.sha256 for m in sent for f in m.files.all() if f.sha256])}
+    docs = {d.sha256: d for d in DocumentAnalysis.objects.filter(
+        team=team, status="done", sha256__in=[f.sha256 for m in sent for f in m.files.all() if f.sha256])}
     last_in = None
     for m in mails:
         if m.folder == "inbox":
@@ -828,7 +866,7 @@ def _team_notes(mails):
                   if a and None not in (a.clarity, a.completeness, a.actionability) else None,
                   "flags": [ai.FLAGS[f] for f in (a.flags if a else []) if f in ai.FLAGS],
                   "docs": [{"d": d, "band": ai_band(d.ai_written)} for d in
-                           (docs.get((m.team_id, f.sha256)) for f in m.files.all()) if d]}
+                           (docs.get(f.sha256) for f in m.files.all()) if d]}
 
 
 @mailbox_view
@@ -846,8 +884,8 @@ def thread_view(request, v, thread):
         if not v.desk:  # the desk reading isn't a team reading
             inbound.record_read([m for m in mails if m.folder == "inbox" and m.message_id], v.person,
                                 request.META.get("HTTP_USER_AGENT", ""))
-    if v.leader_mode:
-        _team_notes(mails)
+    if v.sees_ai:
+        _team_notes(mails, v.team)
         _seen(v)
     # Neighbours in the folder list, for j/k and the arrows.
     rows = conversations(v, folder)
