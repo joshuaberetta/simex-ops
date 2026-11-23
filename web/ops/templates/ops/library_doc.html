@@ -1,0 +1,14 @@
+{% extends "ops/base.html" %}
+{% block title %}{{ d.title }} · Library · SIMEX ops{% endblock %}
+{% block body %}
+<h1><a href="/library/" class="muted">Library</a> / {{ d.title }}</h1>
+<div class="card">
+  <p class="small muted">{{ d.path }} · {{ d.category }}</p>
+  <form method="post" action="/library/{{ d.id }}/" class="rowform">{% csrf_token %}<input type="hidden" name="next" value="/library/">
+    <select name="release">{% for k, v in RELEASES.items %}<option value="{{ k }}"{% if d.release == k %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+    <input name="serial" value="{{ d.serial }}" size="7" placeholder="serial">
+    <button class="btn small">Save</button>
+    <button class="btn small danger" name="delete" value="1" onclick="return confirm('Remove this document from the library?')">Remove</button></form>
+</div>
+<pre class="card" style="white-space: pre-wrap">{{ d.text }}</pre>
+{% endblock %}

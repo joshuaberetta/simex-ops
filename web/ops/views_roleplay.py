@@ -318,7 +318,10 @@ def import_page(request):
         up = request.FILES["file"]
         data = up.read()
         try:
-            sources = roleplay.read_workbook(data)
+            if up.name.lower().endswith((".docx", ".md", ".txt", ".markdown")):
+                sources = roleplay.read_scripts(data, up.name)  # the role players' scripts document
+            else:
+                sources = roleplay.read_workbook(data)
         except roleplay.RolePlayImportError as e:
             messages.error(request, f"{up.name}: {e}")
             return redirect("/roleplay/import/")
@@ -338,12 +341,17 @@ def import_page(request):
         return redirect("/roleplay/import/")
     recs = roleplay.records(state["sources"], set(state["sheets"]))
     rows, missing, new_names = roleplay.plan(recs)
+    if all(s["kind"] == "scripts" for s in state["sources"]):
+        missing = []  # a scripts document isn't the whole schedule
     counts = {a: sum(1 for r in rows if r["action"] == a) for a in ("new", "update", "conflict", "unchanged")}
-    days_used = sorted({roleplay.weekday(r["day"]) for r in recs if roleplay.weekday(r["day"])},
+    days_used = sorted({roleplay.weekday(r.get("day", "")) for r in recs if roleplay.weekday(r.get("day", ""))},
                        key=roleplay.WEEKDAYS.index)
     order = roleplay.team_order()
     for r in rows:
-        r["slots"] = roleplay.parse_slots(r["rec"]["time_text"], r["rec"]["duration"], r["rec"]["role"], order)
+        rec, play = r["rec"], r.setdefault("play", None)
+        val = lambda f: rec[f] if f in rec else getattr(play, f, "") if play else ""  # noqa: E731
+        r["slots"] = roleplay.parse_slots(val("time_text"), val("duration"), val("role"), order)
+        r["show"] = {f: val(f) for f in ("day", "title", "time_text")}  # a scripts document leaves these as they are
     return render(request, "ops/roleplay/import.html", {
         "tab": "roleplay", "state": state, "rows": rows, "missing": missing, "new_names": new_names, "counts": counts,
         "days": [(d, state["days"].get(d, "")) for d in days_used],
@@ -370,7 +378,9 @@ def import_apply(request):
             except ValueError:
                 pass
     recs = roleplay.records(state["sources"], set(state["sheets"]))
-    counts = roleplay.apply(recs, overwrite_local=P.get("overwrite") == "1", delete_missing=P.get("delete") == "1",
+    scripts_only = all(s["kind"] == "scripts" for s in state["sources"])
+    counts = roleplay.apply(recs, overwrite_local=P.get("overwrite") == "1",
+                            delete_missing=P.get("delete") == "1" and not scripts_only,
                             days=days, user=_u(request))
     roleplay.bump()
     messages.success(request, f"Role plays imported from {state['name']}: {counts['new']} new, {counts['updated']} "

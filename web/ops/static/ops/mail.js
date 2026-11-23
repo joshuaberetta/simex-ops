@@ -542,6 +542,12 @@
       $$("[data-reply-all]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); openInline("all", b.dataset.replyAll); });
       $$("[data-forward]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); openInline("forward", b.dataset.forward); });
       window.simexReply = (mode) => openInline(mode, String(tdata.last));
+      // Suggest a reply (suggest.js): answer that message with the suggested text.
+      window.simexReplyWith = (id, body) => {
+        openInline("reply", tdata.msgs[id] ? id : String(tdata.last));
+        const ta = $("[name=body]", box); ta.value = body; ta.dispatchEvent(new Event("input", { bubbles: true }));
+        ta.focus(); ta.setSelectionRange(0, 0); ta.scrollTop = 0;
+      };
     }
     // The persona desk: who else on the desk has this conversation open, or is answering it.
     const pres = $("[data-presence]");

@@ -24,6 +24,7 @@
       <button class="btn" name="scope" value="all" data-confirm="Have the AI read every unsent inject again?">Check all</button></form>{% endif %}
     {% if ai_on %}<a class="btn" href="/injects/drafts/">Draft with AI</a>{% endif %}
     <a class="btn" href="/import/">Import / update</a>
+    <a class="btn" href="/library/" title="The participants' documents, for suggested replies">Library</a>
     <form method="post" action="/injects/new/" class="inline">{% csrf_token %}<button class="btn">New inject</button></form>
   </div>
 </div>

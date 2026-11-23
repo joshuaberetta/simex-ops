@@ -931,9 +931,10 @@ class NpcSandbox(models.Model):
 
 
 # --- role play (ops/roleplay.py) ----------------------------------------------------------------
-# Control-side by nature (scripts, expected outcomes): read only by ExCon (views_roleplay.py) and
-# by the role players assigned (views_rp.py), never by participants' or leaders' mail views, the
-# AI, the AI personas or the reports (tests/test_roleplay.py scans those modules).
+# Control-side by nature (scripts, expected outcomes): read only by ExCon (views_roleplay.py), by
+# the role players assigned (views_rp.py) and by Suggest a reply (ops/suggest.py, its notes for
+# the persona desk and ExCon only), never by participants' or leaders' mail views, the other AI
+# readings, the AI personas or the reports (tests/test_roleplay.py scans those modules).
 
 RP_STATUSES = {"pending": "Pending", "ready": "In position", "done": "Done", "skipped": "Skipped"}
 
@@ -1007,3 +1008,55 @@ class RolePlaySeen(models.Model):
     """A role player has seen their schedule since its last change (ExCon's board ticks them)."""
     person = models.OneToOneField(Person, on_delete=models.CASCADE, related_name="rp_seen")
     at = models.DateTimeField(default=timezone.now)
+
+
+# --- the knowledge library and suggested answers (ops/kb.py, ops/suggest.py) -------------------
+
+KB_RELEASES = {"all": "Participants have it", "with": "Released with an inject or role play", "no": "Not given to participants"}
+
+
+class KbDocument(models.Model):
+    """A participant-facing document from the exercise package (baseline documents, inject
+    documents, maps), as text, exported from the knowledge base (../undac-simex,
+    scripts/export_ops.py) and uploaded on ExCon's Library page. Searched when Claude suggests a
+    persona's answer (ops/suggest.py), with whether the team has it yet: release "all" (the
+    participants have it from the start), "with" (it comes with the inject or role play
+    `serial`, so a team has it once that reached them) or "no" (not given, until ExCon says)."""
+    key = models.CharField(max_length=40, unique=True)  # the knowledge base's document id
+    path = models.CharField(max_length=500)
+    title = models.CharField(max_length=300)
+    category = models.CharField(max_length=40, blank=True, default="")
+    release = models.CharField(max_length=10, default="no")  # see KB_RELEASES
+    serial = models.CharField(max_length=40, blank=True, default="")
+    imported_release = models.CharField(max_length=60, blank=True, default="")  # release|serial as last imported
+    text = models.TextField(blank=True, default="")
+    chars = models.IntegerField(default=0)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["category", "path"]
+
+    def __str__(self):
+        return self.title
+
+
+class ReplySuggestion(models.Model):
+    """Claude's suggested answer to a team's message to a persona, for the persona desk or ExCon:
+    an answer the team may see and notes for the desk (sources, what the team has and hasn't
+    been given yet, what not to get ahead of). Nothing is sent from here; the desk copies the
+    answer into its reply. The notes may quote role-play scripts and planned injects, so they
+    are shown to the desk and ExCon only."""
+    response = models.ForeignKey(Response, on_delete=models.CASCADE, related_name="suggestions")
+    thread = models.CharField(max_length=40, blank=True, default="")  # the desk's conversation, if asked there
+    prompt = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=10, default="running")  # running | done | failed
+    model = models.CharField(max_length=120, default="")
+    body = models.JSONField(default=dict)
+    error = models.TextField(blank=True, null=True)
+    steps = models.IntegerField(default=0)  # model calls
+    user = models.CharField(max_length=150, blank=True, default="")
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-id"]

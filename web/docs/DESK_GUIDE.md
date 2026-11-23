@@ -19,6 +19,7 @@ How the desk is keeping up, refreshed every minute: what needs attention and how
 ## Answering a team
 - Open the conversation and click **Reply**. **From** is already the persona the team wrote to; **To** is that team. Your answer lands in the team's conversation, in SIMEX Mail or by email, like any other answer from that persona. It is also recorded as the persona's answer on ExCon's Replies tab.
 - You can change **From** to have another persona write in the same conversation (e.g. the press picking up on a government message). The team sees it in the same conversation.
+- **Suggest a reply** (under the bar at the top of a conversation): Claude looks up the documents, injects and role plays the team has had so far and suggests the persona's answer, with what it rests on, what the team got wrong, what isn't in the package and what is still to come for this team (so you don't give it away early). Add what the answer should do if you like (*keep it short*), wait about a minute, then **Reply with this** and read it before you send it. The notes can quote role-play scripts: they are for the desk, never paste them to a team.
 - If an AI persona was going to answer that conversation, your answer replaces its answer: its queued answer is cancelled.
 - **Someone else on it?** At the top of a conversation, a yellow bar says who else on the desk has it open, and a red one who is writing an answer, so two of you don't answer the same message. Read and starred are shared: a conversation one of you opened is no longer unread for the others.
 

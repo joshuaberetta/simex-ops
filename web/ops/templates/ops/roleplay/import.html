@@ -8,17 +8,18 @@
   <p>Upload the <b>MEL-MIL workbook</b> (.xlsx) and/or a <b>role-player schedule</b> sheet. Both can be in one workbook.</p>
   <ul class="small">
     <li><b>MEL-MIL sheet</b>: its rows played face to face, by phone or VTC (Inject method F2F, Phone, VTC, MS Teams, Signal) give each role play's serial, day, time, duration, title, script (Content), expected outcomes and supporting documents. Its email rows stay with the injects.</li>
+    <li><b>Role-play scripts document</b> (.docx, or its .md / .txt): the role players' scripts, one event after another (a bold line with the serial and title, the day, the time, the documents in italics, then the script). It sets each role play's script; an event not here yet also gets its title, day, time and documents.</li>
     <li><b>Role-player schedule</b> (columns Serial, Time, Duration, Role, Role player, Event; a Location column too if there is one): gives the role and who plays it. A serial on two rows (one role-player pair for teams A&amp;C, another for B&amp;D) makes two role plays.</li>
   </ul>
   <p class="small muted">You see what would change before anything is applied. Your own edits are kept on a re-import unless you choose otherwise; sittings that have started are never moved.</p>
-  <input type="file" name="file" accept=".xlsx,.xlsm" required> <button class="btn primary">Read the file</button>
+  <input type="file" name="file" accept=".xlsx,.xlsm,.docx,.md,.txt" required> <button class="btn primary">Read the file</button>
 </form>
 {% else %}
 <div class="card">
   <h3>{{ state.name }}</h3>
   <form method="get" class="rowform">
     <input type="hidden" name="sheets" value="1">
-    {% for s in sources %}<label class="chk"><input type="checkbox" name="sheet" value="{{ s.sheet }}" {% if s.on %}checked{% endif %} onchange="this.form.submit()"> {{ s.sheet }} <span class="small muted">({% if s.kind == 'mel' %}MEL-MIL{% else %}schedule{% endif %}, {{ s.n }} row{{ s.n|pluralize }})</span></label> {% endfor %}
+    {% for s in sources %}<label class="chk"><input type="checkbox" name="sheet" value="{{ s.sheet }}" {% if s.on %}checked{% endif %} onchange="this.form.submit()"> {{ s.sheet }} <span class="small muted">({% if s.kind == 'mel' %}MEL-MIL{% elif s.kind == 'scripts' %}scripts document{% else %}schedule{% endif %}, {{ s.n }} row{{ s.n|pluralize }})</span></label> {% endfor %}
   </form>
   <p class="small muted">Sheets whose serials aren't mostly the MEL-MIL's (an old schedule kept in the workbook) start unticked.</p>
   <p><b>{{ counts.new }}</b> new · <b>{{ counts.update }}</b> to update · {% if counts.conflict %}<span class="warn"><b>{{ counts.conflict }}</b> edited here and in the file</span> · {% endif %}{{ counts.unchanged }} unchanged{% if missing %} · {{ missing|length }} no longer in the file{% endif %}</p>
@@ -36,10 +37,10 @@
 <table class="list">
   <thead><tr><th>Serial</th><th>Action</th><th>Role play</th><th>Sittings read</th><th>Role players</th><th>Changes</th></tr></thead>
   {% for r in rows %}
-  <tr><td class="nowrap"><b>{{ r.rec.key }}</b><div class="small muted">{{ r.rec.day }}</div></td>
+  <tr><td class="nowrap"><b>{{ r.rec.key }}</b><div class="small muted">{{ r.show.day }}</div></td>
     <td><span class="status {% if r.action == 'new' %}scheduled{% elif r.action == 'conflict' %}failed{% elif r.action == 'update' %}draft{% else %}sent{% endif %}">{{ r.action }}</span></td>
-    <td>{{ r.rec.title|truncatechars:80 }}<div class="small muted">{{ r.rec.method }}{% if r.rec.role %} · {{ r.rec.role }}{% endif %}{% if r.rec.script %} · script{% endif %}{% if r.rec.outcomes %} · outcomes{% endif %}</div></td>
-    <td class="small nowrap"><div class="muted">{{ r.rec.time_text|linebreaksbr }}{% if r.rec.duration %} · {{ r.rec.duration }}{% endif %}</div>
+    <td>{{ r.show.title|truncatechars:80 }}<div class="small muted">{{ r.rec.method }}{% if r.rec.role %} · {{ r.rec.role }}{% endif %}{% if r.rec.script %} · script{% endif %}{% if r.rec.outcomes %} · outcomes{% endif %}</div></td>
+    <td class="small nowrap"><div class="muted">{{ r.show.time_text|linebreaksbr }}{% if r.rec.duration %} · {{ r.rec.duration }}{% endif %}</div>
       {% for h, m, mins, teams in r.slots %}<div>{{ h|stringformat:"02d" }}:{{ m|stringformat:"02d" }}{% if mins %} ({{ mins }}′){% endif %} {% for t in teams %}{{ t|upper }}{% if not forloop.last %}+{% endif %}{% empty %}all{% endfor %}</div>{% empty %}<span class="warn">no time read</span>{% endfor %}</td>
     <td class="small">{% for name, p in r.players %}{% if p %}{{ p.name }}{% else %}<span class="new">{{ name }} (new)</span>{% endif %}{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">{{ r.rec.players_text|default:"—" }}</span>{% endfor %}</td>
     <td class="small">{% for c in r.changes %}<div><b>{{ c.field }}</b>{% if c.local_edit %} <span class="warn">(edited here)</span>{% endif %}: <span class="old">{{ c.current|truncatechars:50|default:'—' }}</span> → <span class="new">{{ c.new|truncatechars:50 }}</span></div>{% endfor %}</td></tr>

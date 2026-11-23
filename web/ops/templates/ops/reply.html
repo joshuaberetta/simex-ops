@@ -47,6 +47,7 @@
 </div>
 
 {% if r.persona %}
+{% if latest.team_id %}{% include "ops/suggest/_panel.html" with url="/suggestions/" mode="excon" response=latest.id %}{% endif %}
 <form method="post" action="/replies/{{ latest.id }}/answer/" class="card form" id="answer" enctype="multipart/form-data">{% csrf_token %}
   <h3>Answer as {% if sender %}{{ sender.display_name }}{% else %}{{ r.persona }}{% endif %} &lt;{{ persona_addr }}&gt;</h3>
   {% if ai_draft %}<p class="small"><span class="flag ai">AI draft</span> Filled in from <a href="/injects/drafts/{{ ai_draft.id }}/">your AI draft</a>: read it before sending.</p>

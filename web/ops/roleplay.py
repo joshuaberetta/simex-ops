@@ -5,8 +5,12 @@ the role players on their phones (/inbox/rp/, views_rp.py), who are reminded by 
 email) before each sitting.
 
 Control-side by nature: scripts and expected outcomes live here and in the RolePlay models only,
-read by ExCon and the role players assigned, never by the participants' or leaders' mail
-views, the AI, the AI personas or the reports.
+read by ExCon and the role players assigned, and by Suggest a reply (ops/suggest.py), whose
+notes go to the persona desk and ExCon only; never by the participants' or leaders' mail views,
+the other AI readings, the AI personas or the reports.
+
+A role-play scripts document (the role players' scripts in Word, or its markdown) can be
+imported too (read_scripts): it sets each event's script, and adds the events not here yet.
 
 Times: a slot's start is a timezone-aware datetime. The sheets only name the day ("Monday"):
 conf rp_days maps day names to dates, guessed from the MEL's email rows (Day + Send date) and
@@ -37,6 +41,7 @@ FIELDS = ["serial", "seq", "day", "time_text", "duration", "title", "role", "pla
           "script", "outcomes", "documents", "optional"]
 MEL_ONLY = {"method", "script", "outcomes"}  # only the MEL-MIL has them
 SCHEDULE_ONLY = {"role", "players_text"}  # only a role-player schedule has them
+SCRIPTS_LACK = {"duration", "location"}  # a scripts document alone leaves them as they are
 NONE_WORDS = {"", "none", "n/a", "na", "-", "tbc", "tbd"}
 DEFAULT_LEAD = 15  # minutes before a slot its players are reminded
 
@@ -262,6 +267,121 @@ def _rows(grid, cols, kind, first_line):
     return rows
 
 
+# --- a role-play scripts document (Word, or its markdown) ---------------------------------------------
+
+SCRIPT_HEAD = re.compile(r"^(\d{1,2}-\d{1,3}[a-z]?(?:-\d+)?[a-z]?)(?:\s+(.*))?$")
+
+
+def _docx_lines(data):
+    """A .docx as markdown-like lines: a paragraph all in bold as **text**, all in italics as *text*."""
+    import zipfile
+    from xml.etree import ElementTree as ET
+    W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            root = ET.fromstring(z.read("word/document.xml"))
+    except Exception as e:
+        raise RolePlayImportError(f"Not a readable Word document ({e}).") from e
+
+    def on(rpr, tag):
+        el = rpr.find(W + tag) if rpr is not None else None
+        return el is not None and el.get(W + "val") not in ("0", "false")
+
+    out = []
+    for p in root.iter(W + "p"):
+        runs, bold, italic = [], True, True
+        for r in p.iter(W + "r"):
+            t = "".join((x.text or "") if x.tag == W + "t" else "\n" if x.tag in (W + "br", W + "cr") else "\t" if x.tag == W + "tab" else ""
+                        for x in r)
+            if not t:
+                continue
+            rpr = r.find(W + "rPr")
+            if t.strip():
+                bold, italic = bold and on(rpr, "b"), italic and on(rpr, "i")
+            runs.append(t)
+        text = "".join(runs)
+        for ln in text.split("\n"):
+            ln = ln.strip()
+            if not ln:
+                out.append("")
+            elif bold:
+                out.append(f"**{ln}**")
+            elif italic:
+                out.append(f"*{ln}*")
+            else:
+                out.append(ln)
+    return out
+
+
+def _md(s):
+    """Markdown escapes and emphasis out: "1430 \\- A" -> "1430 - A"."""
+    s = re.sub(r"\\([\\`*_{}\[\]()#+\-.!&<>|~])", r"\1", s)
+    return s.replace("**", "").strip()
+
+
+def read_scripts(data, name=""):
+    """A role-play scripts document (the role players' scripts, one event after another: a bold
+    "1-45   Oxfam visit the OSOCC" line, the day, the bold time(s), the documents in italics, then
+    the script) -> [{"sheet": name, "kind": "scripts", "rows"}]. .docx, .md or .txt."""
+    if name.lower().endswith(".docx") or data[:2] == b"PK":
+        lines = _docx_lines(data)
+    else:
+        try:
+            lines = data.decode("utf-8-sig").splitlines()
+        except UnicodeDecodeError:
+            lines = data.decode("latin-1").splitlines()
+    rows, cur, stage = [], None, ""
+    for n, raw in enumerate(lines, 1):
+        ln = raw.rstrip()
+        bold = ln.strip().startswith("**") and ln.strip().endswith("**") and len(ln.strip()) > 4
+        italic = not bold and re.fullmatch(r"\s*\*[^*].*\*\s*", ln or "") is not None
+        text = _md(ln.strip().strip("*")) if (bold or italic) else _md(ln)
+        head = SCRIPT_HEAD.match(text) if bold else None
+        if head:
+            if cur:
+                rows.append(cur)
+            cur = {"line": n, "serial": head.group(1)[:40], "title": head.group(2) or "", "day": "", "time": "",
+                   "duration": "", "location": "", "documents": "", "script": ""}
+            stage = "title"
+            continue
+        if cur is None:
+            continue
+        if stage in ("title", "day") and weekday(text) and len(text) < 30:
+            cur["day"], stage = weekday(text).capitalize(), "time"
+            continue
+        if stage == "title" and bold:  # "Task: draft initial PoA": the script's first line
+            if cur["title"]:
+                cur["script"] += ("\n" if cur["script"] else "") + text
+            else:
+                cur["title"] = text
+            continue
+        if stage == "time" and bold:
+            cur["time"] = (cur["time"] + "\n" + text).strip()
+            continue
+        if stage in ("time", "docs") and italic:
+            if not _none(text):
+                cur["documents"] = (cur["documents"] + "\n" + text).strip()
+            stage = "docs"
+            continue
+        if not text and stage != "script":
+            continue
+        if stage != "script":
+            stage = "script"
+            text = re.sub(r"^SCRIPT:\s*", "", text)
+            if not text:
+                continue
+        cur["script"] += ("\n" if cur["script"] else "") + (_md(re.sub(r"^\s*\*\*|\*\*\s*$", "", ln)) if bold else text)
+    if cur:
+        rows.append(cur)
+    for r in rows:
+        r["script"] = re.sub(r"\n{3,}", "\n\n", r["script"]).strip()
+        r["title"] = " ".join(r["title"].split())[:500]
+    if not rows:
+        raise RolePlayImportError("No role-play scripts found: expected a bold line with the serial and title "
+                                  "(1-45   Oxfam visit the OSOCC), the day, the time and the script.")
+    return [{"sheet": name or "Scripts", "kind": "scripts", "rows": rows}]
+
+
 def default_sheets(sources):
     """The sheets an import reads unless ExCon says otherwise: the MEL-MIL, and the schedule
     sheets whose serials are mostly the MEL's (a workbook keeps old schedules from past
@@ -321,6 +441,17 @@ def records(sources, sheets=None):
             if r["serial"] not in mel:
                 mel[r["serial"]] = r
                 order.append(r["serial"])
+    # A role-play scripts document (read_scripts): its script wins over the MEL's; on its own it
+    # also gives the title, day, time and documents of the events.
+    for s in chosen:
+        if s["kind"] != "scripts":
+            continue
+        for r in s["rows"]:
+            if r["serial"] in mel:
+                mel[r["serial"]] = {**mel[r["serial"]], "script": r["script"] or mel[r["serial"]].get("script", "")}
+            else:
+                mel[r["serial"]] = r
+                order.append(r["serial"])
     sched = defaultdict(list)
     for s in chosen:
         if s["kind"] != "schedule":
@@ -332,8 +463,11 @@ def records(sources, sheets=None):
     # A file with only one kind of sheet leaves the other kind's fields alone (the MEL and the
     # schedule may come in separate uploads).
     drop = set()
+    scripts_only = all(s["kind"] == "scripts" for s in chosen) and bool(chosen)
     if not any(s["kind"] == "mel" for s in chosen):
-        drop |= MEL_ONLY
+        drop |= MEL_ONLY - {"script"} if any(s["kind"] == "scripts" for s in chosen) else MEL_ONLY
+        if any(s["kind"] == "scripts" for s in chosen):
+            drop |= SCRIPTS_LACK
     if not any(s["kind"] == "schedule" for s in chosen):
         drop |= SCHEDULE_ONLY
     out = []
@@ -365,6 +499,12 @@ def records(sources, sheets=None):
             })
             for f in drop:
                 out[-1].pop(f, None)
+    if scripts_only:  # an event already here takes only its script from the document
+        known = set(RolePlay.objects.filter(key__in=[r["key"] for r in out]).values_list("key", flat=True))
+        for r in out:
+            if r["key"] in known:
+                for f in ("seq", "day", "time_text", "title", "documents", "optional"):
+                    r.pop(f, None)
     return out
 
 

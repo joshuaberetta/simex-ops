@@ -1,0 +1,32 @@
+{% extends "ops/base.html" %}
+{% block title %}Library · SIMEX ops{% endblock %}
+{% block body %}
+<h1><a href="/injects/" class="muted">Injects</a> / Library</h1>
+<div class="card">
+  <p>The documents the participants have or may be given (baseline documents, inject documents, maps), as text. When the persona desk or ExCon asks for a <b>suggested reply</b>, Claude searches them, with the injects and role plays, and is told for each one whether <b>this team has it yet</b>: it uses only what the team has, and tells the desk what not to get ahead of.</p>
+  <p class="small muted">{{ counts.total }} document{{ counts.total|pluralize }}: {{ counts.all }} the participants have, {{ counts.with }} released with an inject or role play, {{ counts.no }} not given.</p>
+  <form method="post" enctype="multipart/form-data" class="rowform">{% csrf_token %}
+    <input type="file" name="file" accept=".json,.gz" required>
+    <label class="chk"><input type="checkbox" name="delete" value="1"> remove documents no longer in the file</label>
+    <button class="btn primary">Upload the library</button>
+  </form>
+  <p class="small muted">The file comes from the knowledge base: <code>python3 -I scripts/export_ops.py</code> in <code>undac-simex</code> writes <code>work/ops-library.json.gz</code>. It holds only participant-facing documents, never the MEL, expected outcomes or role-player scripts (those are on the Role play tab). Re-uploading keeps the release you set here.</p>
+</div>
+<form method="get" class="rowform">
+  <input name="q" value="{{ q }}" placeholder="Title, folder or serial">
+  <select name="release"><option value="">Any release</option>{% for k, v in RELEASES.items %}<option value="{{ k }}"{% if release == k %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+  <button class="btn">Filter</button>
+</form>
+<table class="list">
+  <thead><tr><th>Document</th><th>Size</th><th>Do the participants have it?</th></tr></thead>
+  {% for d in page %}
+  <tr><td><a href="/library/{{ d.id }}/text/">{{ d.title }}</a><div class="small muted">{{ d.category }} · {{ d.path|truncatechars:110 }}</div></td>
+    <td class="small nowrap">{{ d.chars|filesizeformat }}</td>
+    <td><form method="post" action="/library/{{ d.id }}/" class="rowform">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <select name="release">{% for k, v in RELEASES.items %}<option value="{{ k }}"{% if d.release == k %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+      <input name="serial" value="{{ d.serial }}" size="7" placeholder="serial" title="The inject or role play it comes with (e.g. 3-14)">
+      <button class="btn small">Save</button></form></td></tr>
+  {% empty %}<tr><td colspan="3" class="muted">No documents{% if q or release %} match{% else %} yet: upload the knowledge base's export above{% endif %}.</td></tr>{% endfor %}
+</table>
+{% if page.has_other_pages %}<p>{% if page.has_previous %}<a href="?q={{ q|urlencode }}&release={{ release }}&page={{ page.previous_page_number }}">← Previous</a>{% endif %} Page {{ page.number }} of {{ page.paginator.num_pages }} {% if page.has_next %}<a href="?q={{ q|urlencode }}&release={{ release }}&page={{ page.next_page_number }}">Next →</a>{% endif %}</p>{% endif %}
+{% endblock %}
