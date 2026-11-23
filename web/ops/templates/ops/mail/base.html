@@ -49,7 +49,7 @@
       </div>
     </div>{{ desk_tabs.bell|json_script:"simex-dn" }}{% endif %}
     <a class="gm-icon-btn" href="{{ base }}/help/" title="Help" aria-label="Help">{% icon "help" 22 %}</a>
-    <button class="gm-icon-btn" data-sound title="Notification sound" aria-label="Notification sound">{% icon "bell" 22 %}</button>
+    <button class="gm-icon-btn" data-sound title="Alert sound and notifications" aria-label="Alert sound and notifications">{% icon "sound" 22 "gm-snd-on" %}{% icon "sound_off" 22 "gm-snd-off" %}</button>
     <div class="gm-account">
       <button class="gm-avatar big" style="background: {{ team.name|avatar_colour }}" data-account aria-label="Account">{% if me %}{{ me.name|initial }}{% else %}{{ team.name|initial }}{% endif %}</button>
       <div class="gm-account-card" hidden>

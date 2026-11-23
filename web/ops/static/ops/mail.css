@@ -383,6 +383,8 @@ body.readonly .gm-hover, body.readonly .gm-tb-selected { display: none !importan
 .gm-alerts[hidden] { display: none; }
 .gm-pill-btn.primary { background: #0b57d0; border-color: #0b57d0; color: #fff; }
 .gm-icon-btn[data-sound].on { color: #0b57d0; }
+.gm-icon-btn[data-sound] .gm-snd-on, .gm-icon-btn[data-sound].on .gm-snd-off { display: none; }
+.gm-icon-btn[data-sound].on .gm-snd-on { display: block; }
 .gm-snackbar.loud { background: #0b57d0; font-size: 15px; padding: 16px 24px; border-radius: 12px; animation: gm-pop .35s ease-out; }
 .gm-snackbar.loud a, .gm-snackbar.loud button { color: #fff; text-decoration: underline; }
 @media (max-width: 760px) {
