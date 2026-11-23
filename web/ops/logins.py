@@ -32,7 +32,7 @@ def problem(person):
     addr = (person.personal_email or "").strip()
     if not person.active:
         return f"{person.name} is inactive."
-    if person.role != "desk" and not person.team_id:
+    if person.role not in ("desk", "rp") and not person.team_id:
         return f"{person.name} has no team."
     if not addr:
         return f"{person.name} has no personal email."

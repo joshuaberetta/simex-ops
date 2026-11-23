@@ -1,0 +1,20 @@
+{% load ops %}<article class="rp-slot rp-{{ s.status }}{% if s.past %} rp-past{% endif %}{% if big %} big{% endif %}" id="slot-{{ s.id }}">
+  <div class="rp-when"><b>{{ s.local|date:"H:i"|default:"—" }}</b>{% if s.minutes %}<small>{{ s.minutes }} min</small>{% endif %}
+    {% if big and s.start %}<small data-countdown="{{ s.start|date:'c' }}"></small>{% endif %}</div>
+  <div class="rp-what">
+    <a href="/inbox/rp/play/{{ s.play.id }}/" class="rp-title"><b>{{ s.play.serial }}</b> {{ s.play.title|truncatechars:90 }}</a>
+    <div class="rp-meta">
+      {% if s.play.role %}<span>🎭 {{ s.play.role }}</span>{% endif %}
+      <span>👥 {% for t in s.team_list %}{{ t.name }}{% if not forloop.last %}, {% endif %}{% empty %}all teams{% endfor %}</span>
+      {% if s.play.location %}<span>📍 {{ s.play.location }}</span>{% endif %}
+      {% if s.play.method %}<span>{{ s.play.method }}</span>{% endif %}
+    </div>
+    {% if s.others %}<div class="rp-meta"><span>with {% for p in s.others %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</span></div>{% endif %}
+    <form method="post" action="/inbox/rp/slot/{{ s.id }}/status/" class="rp-actions">{% csrf_token %}<input type="hidden" name="back" value="/inbox/rp/#slot-{{ s.id }}">
+      {% if s.status == 'pending' %}<button name="status" value="ready" class="rp-btn primary">I'm in position</button> <button name="status" value="done" class="rp-btn">Done</button>
+      {% elif s.status == 'ready' %}<span class="rp-badge ok">In position</span> <button name="status" value="done" class="rp-btn primary">Done</button>
+      {% elif s.status == 'done' %}<span class="rp-badge">Done</span> <button name="status" value="pending" class="rp-link">undo</button>
+      {% else %}<span class="rp-badge">{{ statuses|get:s.status }}</span>{% endif %}
+    </form>
+  </div>
+</article>

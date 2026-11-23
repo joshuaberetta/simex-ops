@@ -1,0 +1,30 @@
+{% extends "ops/rp/base.html" %}
+{% block title %}Set up this device{% endblock %}
+{% block main %}
+<article class="rp-text" data-setup data-app-url="{{ app_url }}">
+  <h1 class="rp-h1">Welcome, {{ me.name }}</h1>
+  <p>You're signed in to your role plays on this device. One more step so you're reminded before each one:</p>
+  <section data-step="install" hidden>
+    <h2 class="rp-h">Add it to your home screen</h2>
+    <p>On an iPhone or iPad, alerts only work from the home-screen app. Tap <b>Share</b>, then <b>Add to Home Screen</b>, then <b>Add</b>. Then open it from your home screen: you're signed in there already.</p>
+  </section>
+  <section data-step="alerts" hidden>
+    <h2 class="rp-h">Turn on alerts</h2>
+    <p>A notification before each role play and when a time changes, even with the screen locked. Press the button, then <b>Allow</b>.</p>
+    <p><button type="button" class="rp-btn primary" data-alerts-on>Turn on alerts</button></p>
+  </section>
+  <section data-step="blocked" hidden>
+    <h2 class="rp-h">Alerts are blocked</h2>
+    <p>Notifications are off for this site on this device. Allow them in the browser's site settings (on a phone: Settings → Notifications), then open this page again.</p>
+  </section>
+  <section data-step="nonotify" hidden>
+    <h2 class="rp-h">Keep this page open</h2>
+    <p>This browser can't show notifications: keep your role plays open, and check the times.</p>
+  </section>
+  <section data-step="done" hidden>
+    <h2 class="rp-h">All set</h2>
+    <p>Alerts are on for this device.</p>
+  </section>
+  <p><a class="rp-btn primary" href="/inbox/rp/">Open my role plays</a></p>
+</article>
+{% endblock %}

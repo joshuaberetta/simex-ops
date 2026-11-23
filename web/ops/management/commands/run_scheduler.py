@@ -1,4 +1,4 @@
-"""The scheduler loop: overdue marking, due live injects, test-run items. Runs as its own
+"""The scheduler loop: overdue marking, due live injects, test-run items, role players' reminders. Runs as its own
 process (the DO worker component). Safe to run alongside the web process: rows are claimed
 with conditional UPDATEs (and SELECT ... FOR UPDATE SKIP LOCKED on Postgres).
 
@@ -15,7 +15,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import close_old_connections, connection
 
-from ops import ai, delivery, inbound, npc
+from ops import ai, delivery, inbound, npc, roleplay
 
 log = logging.getLogger("simex.scheduler")
 AI_IDLE_SECONDS = 15
@@ -66,6 +66,7 @@ class Command(BaseCommand):
         signal.signal(signal.SIGTERM, lambda *_: stop.update(now=True))
         if opts["once"]:
             delivery.tick()
+            roleplay.tick()
             if not opts["no_ai"]:
                 npc.tick()
                 ai.tick()
@@ -80,4 +81,8 @@ class Command(BaseCommand):
                 delivery.tick()
             except Exception:
                 log.exception("scheduler tick failed")
+            try:
+                roleplay.tick()  # role players' reminders, no-show notices
+            except Exception:
+                log.exception("role-play tick failed")
             time.sleep(settings.TICK_SECONDS)

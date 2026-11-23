@@ -173,6 +173,36 @@ def test_reimport_keeps_excon_edits_and_started_slots():
     assert timezone.localtime(imm.slots.first().start).strftime("%H:%M") == "14:40"
 
 
+def test_the_mel_and_the_schedule_in_separate_uploads():
+    teams4()
+    do_import(workbook(schedule=False))
+    rc = RolePlay.objects.get(key="9-04")
+    assert rc.script == "SCRIPT: you are the coordinator" and not rc.players.exists() and rc.slots.count() == 2
+    do_import(workbook(mel=False))  # the schedule, later: roles and players, the scripts stay
+    rc.refresh_from_db()
+    assert rc.script == "SCRIPT: you are the coordinator" and rc.role == "Coordinator - teams A&C"
+    assert [p.name for p in rc.players.order_by("name")] == ["Janet", "Peter"]
+    b = RolePlay.objects.get(key="9-04-b")
+    assert b.script == rc.script and b.outcomes == "Overview given"  # the second row takes the MEL's script
+    assert [[t.code for t in s.teams.all()] for s in b.slots.all()] == [["b"], ["d"]]
+    # 9-03: the schedule's "1440 - A\n1450 - B" is the MEL's; were it a plain "14:40", the MEL's per-team times stay.
+    assert RolePlay.objects.get(key="9-03").slots.count() == 2
+    do_import(workbook(schedule=False))  # the MEL again: the players stay
+    assert RolePlay.objects.get(key="9-04").players.count() == 2
+
+
+def test_a_plain_schedule_time_keeps_the_mels_per_team_times():
+    mel = {"serial": "9-03", "time": "1440 - A\n1450 - B", "duration": "10 min", "title": "x", "day": "Monday",
+           "location": "", "documents": "", "method": "F2F", "script": "", "outcomes": "", "line": 2}
+    sched = {"serial": "9-03", "time": "14:40", "duration": "", "title": "", "day": "Monday", "location": "",
+             "documents": "", "role": "Immigration", "players": "Ann", "line": 3}
+    pair = {**sched, "serial": "9-04", "time": "18:00 + 18:20", "role": "RC - teams A&C"}
+    mel4 = {**mel, "serial": "9-04", "time": "18:00 A - B\n18:20 C - D"}
+    recs = roleplay.records([{"sheet": "M", "kind": "mel", "rows": [mel, mel4]},
+                             {"sheet": "S", "kind": "schedule", "rows": [sched, pair]}])
+    assert [r["time_text"] for r in recs] == ["1440 - A\n1450 - B", "18:00 + 18:20"]
+
+
 def test_stale_sheets_are_left_out_on_request():
     teams4()
     sources = roleplay.read_workbook(workbook(stale=True))
@@ -187,9 +217,9 @@ def test_checks_find_double_bookings_and_gaps():
     teams4()
     do_import()
     peter = Person.objects.get(name="Peter")
-    texts = [c["text"] for c in roleplay.checks()]
-    assert any("9-03" in t and "no location" in t for t in texts)
-    assert not any("9-07" in t and "no role player" in t for t in texts)  # optional
+    found = [(c["kind"], c["play"].key) for c in roleplay.checks()]
+    assert ("location", "9-03") in found
+    assert ("unassigned", "9-07") not in found  # optional
     # Peter also takes the 18:00 hotline: double-booked.
     RolePlay.objects.get(key="9-06").slots.update(start=datetime.datetime(2026, 11, 23, 18, 5, tzinfo=TZ))
     texts = [c["text"] for c in roleplay.checks()]

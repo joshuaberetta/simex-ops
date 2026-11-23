@@ -59,7 +59,8 @@ def clear_team(team, scope="all", deliveries=False):
 def start_afresh(reschedule=True):
     """Everything that happened in the exercise so far, gone, for every team: every mailbox
     (teams, leaders, members, the persona desk), replies, answers, grades, AI analyses, the
-    exercise summary and reports, test runs, notifications, and every delivery in the Log with
+    exercise summary and reports, test runs, notifications, role-play progress (every sitting
+    pending again), and every delivery in the Log with
     its read/download events (login emails are kept). reschedule: injects already sent (or
     failed, or overdue) go back to scheduled, or draft without a send time, so they go out
     live. Injects, attachments, rubrics, personas, people, logins, settings and the audit trail
@@ -80,6 +81,8 @@ def start_afresh(reschedule=True):
         ExerciseReport.objects.all().delete()
         TestRun.objects.all().delete()
         Notice.objects.all().delete()
+        from . import roleplay
+        roleplay.reset()  # every role-play sitting pending again, no reminder sent
         if reschedule:
             sent = Inject.objects.filter(status__in=SENT_STATUSES)
             n["injects"] = sent.count()

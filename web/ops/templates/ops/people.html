@@ -21,12 +21,12 @@
 <p class="muted small">Every login slip has a QR code: scanning it with a phone's camera signs that person in and walks them through alerts (and, on an iPhone, adding SIMEX Mail to the home screen). <a href="/people/slips/" target="_blank">Sign-in slips for everyone</a> (QR code and username, passwords unchanged); a team's or one person's from their row. A code works on any number of devices for {{ SIGNIN_DAYS }} days, or until that password is reset.</p>
 <p class="small"><button type="button" class="link small" data-days="open">Expand all</button> · <button type="button" class="link small" data-days="close">Collapse all</button></p>
 {% for g in groups %}
-<details class="day" open data-day="{{ g.key }}" data-store="simex.people.closed">
+<details class="day" open data-day="{{ g.key }}" id="g-{{ g.key }}" data-store="simex.people.closed">
   <summary>
     <h2 class="day">{{ g.label }}</h2>
     <span class="day-stats">
       {% if g.team %}<b>{{ g.n_members }}</b> member{{ g.n_members|pluralize }} · {% if g.leader %}leader {{ g.leader.name }}{% elif not g.team.is_test %}<span class="warn">no leader</span>{% endif %}
-      {% else %}<b>{{ g.people|length }}</b> {% if g.key == "desk" %}on the desk{% else %}{{ g.people|length|pluralize:"person,people" }}{% endif %}{% endif %}
+      {% else %}<b>{{ g.people|length }}</b> {% if g.key == "desk" %}on the desk{% elif g.key == "rp" %}role player{{ g.people|length|pluralize }}{% else %}{{ g.people|length|pluralize:"person,people" }}{% endif %}{% endif %}
       {% if g.people %}<span class="status {% if g.unshared %}draft{% else %}sent{% endif %}">{{ g.shared }} shared</span>{% if g.unshared %} <span class="status overdue">{{ g.unshared }} not shared</span>{% endif %}
       {% if g.no_email %}<span class="warn small">{{ g.no_email }} without a personal email</span>{% endif %}
       {% if g.no_login %}<span class="warn small">{{ g.no_login }} without a login</span>{% endif %}{% endif %}

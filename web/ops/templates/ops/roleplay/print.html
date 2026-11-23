@@ -1,0 +1,51 @@
+{% load static ops %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ title }} · SIMEX ops</title>
+<style>
+  body { font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; margin: 24px; color: #111; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .ctl { margin-bottom: 14px; font-size: 12px; color: #555; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 18px; }
+  th, td { border: 1px solid #bbb; padding: 4px 6px; text-align: left; vertical-align: top; }
+  th { background: #eee; }
+  .play { break-inside: avoid; border-top: 2px solid #333; padding-top: 6px; margin-top: 16px; }
+  .play h2 { font-size: 15px; margin: 0 0 4px; }
+  pre { white-space: pre-wrap; font: inherit; margin: 4px 0 8px; }
+  .lbl { font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #444; margin-top: 6px; }
+  .cs { font-size: 11px; color: #a00; }
+  @media print { .ctl { display: none; } body { margin: 10mm; } }
+</style>
+</head>
+<body>
+<div class="ctl"><button onclick="print()">Print</button> · {% if scripts %}<a href="?{{ request.GET.urlencode }}&scripts=0">without scripts</a>{% else %}<a href="?{{ request.GET.urlencode }}&scripts=1">with scripts</a>{% endif %}</div>
+<h1>{{ title }}</h1>
+<p class="cs">EXERCISE CONTROL · ROLE PLAYERS ONLY · not for participants</p>
+{% if briefing %}<div>{{ briefing|md }}</div>{% endif %}
+<table>
+  <thead><tr><th>Time</th><th>Min</th><th>Serial</th><th>Role play</th><th>Team</th><th>Role · role players</th><th>Where</th><th>✓</th></tr></thead>
+  {% for s in slots %}
+  {% ifchanged s.local|date:"Y-m-d" %}<tr><th colspan="8">{{ s.local|date:"l j F"|default:"No time yet" }}</th></tr>{% endifchanged %}
+  <tr><td><b>{{ s.local|date:"H:i"|default:"—" }}</b></td><td>{{ s.minutes|default:"" }}</td><td>{{ s.play.serial }}</td><td>{{ s.play.title|linebreaksbr }}</td>
+    <td>{% for t in s.team_list %}{{ t.name }}{% if not forloop.last %}, {% endif %}{% empty %}all{% endfor %}</td>
+    <td>{{ s.play.role }}{% if s.play.role and s.players %}<br>{% endif %}{% for p in s.players %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+    <td>{{ s.play.location }}</td><td></td></tr>
+  {% empty %}<tr><td colspan="8">No sittings.</td></tr>
+  {% endfor %}
+</table>
+{% if scripts %}
+{% for p in plays %}
+<div class="play">
+  <h2>{{ p.serial }} · {{ p.title|linebreaksbr }}</h2>
+  <div>{% if p.role %}<b>{{ p.role }}</b> · {% endif %}{{ p.method }}{% if p.location %} · {{ p.location }}{% endif %}{% if p.duration %} · {{ p.duration }}{% endif %}</div>
+  {% if p.script %}<div class="lbl">Script</div><pre>{{ p.script }}</pre>{% endif %}
+  {% if p.outcomes %}<div class="lbl">Expected outcomes</div><pre>{{ p.outcomes }}</pre>{% endif %}
+  {% if p.documents %}<div class="lbl">Documents</div><pre>{{ p.documents }}</pre>{% endif %}
+  {% if p.notes %}<div class="lbl">Notes</div>{{ p.notes|md }}{% endif %}
+</div>
+{% endfor %}
+{% endif %}
+<p style="font-size:11px;color:#666;margin-top:24px">SIMEX ops is open source under the AGPL-3.0. <a href="{{ SOURCE_URL }}">Source code</a></p>
+</body>
+</html>

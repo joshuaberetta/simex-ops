@@ -1,7 +1,7 @@
 <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#111;max-width:560px">
 <p>Hello {{ first_name }},</p>
 <p>Here is your login for <b>SIMEX Mail</b>, the email system of the UNDAC simulation exercise (SIMEX).
-{% if p.role == "tl" %}You are {{ team.name }}'s team leader (Exercise Control): you have your own mailbox, play the team leader persona, and read your team's inbox.{% elif p.role == "desk" %}You are on the persona desk (Exercise Control): you answer the teams as the exercise's personas.{% else %}During the exercise, every message to and from <b>{{ team.name }}</b> arrives in SIMEX Mail, not in your usual email.{% endif %}</p>
+{% if p.role == "tl" %}You are {{ team.name }}'s team leader (Exercise Control): you have your own mailbox, play the team leader persona, and read your team's inbox.{% elif p.role == "desk" %}You are on the persona desk (Exercise Control): you answer the teams as the exercise's personas.{% elif p.role == "rp" %}You are a role player (Exercise Control): SIMEX Mail shows you where to be and when, for which team, with your script and documents, and reminds you before each role play.{% else %}During the exercise, every message to and from <b>{{ team.name }}</b> arrives in SIMEX Mail, not in your usual email.{% endif %}</p>
 <table cellpadding="0" cellspacing="0" style="border:1px solid #ccc;border-radius:6px;padding:12px 16px;margin:14px 0;background:#f7f7f7">
 <tr><td style="padding:2px 14px 2px 0;color:#555">Site</td><td><a href="{{ site }}">{{ site }}</a></td></tr>
 <tr><td style="padding:2px 14px 2px 0;color:#555">Username</td><td><code style="font-size:15px">{{ username }}</code></td></tr>

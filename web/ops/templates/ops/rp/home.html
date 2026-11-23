@@ -1,0 +1,15 @@
+{% extends "ops/rp/base.html" %}{% load ops %}
+{% block main %}
+{% if current %}<h2 class="rp-h">Now</h2>{% with s=current big=True %}{% include "ops/rp/_slot.html" %}{% endwith %}{% endif %}
+{% if next %}<h2 class="rp-h">Next</h2>{% with s=next big=True %}{% include "ops/rp/_slot.html" %}{% endwith %}{% endif %}
+{% if not current and not next %}<p class="rp-empty">{% if slots %}Nothing more for you to play. Thank you!{% else %}No role plays for you yet. Exercise Control will add them here.{% endif %}</p>{% endif %}
+
+{% if slots %}
+<h2 class="rp-h">My schedule <small>{{ n_plays }} role play{{ n_plays|pluralize }}, {{ slots|length }} sitting{{ slots|length|pluralize }}</small></h2>
+{% for s in slots %}
+{% ifchanged s.local|date:"Y-m-d" %}<h3 class="rp-day">{{ s.local|date:"l j F"|default:"Time to be confirmed" }}</h3>{% endifchanged %}
+{% include "ops/rp/_slot.html" %}
+{% endfor %}
+{% endif %}
+{% if briefing %}<p class="rp-more"><a href="/inbox/rp/help/">Read the role players' briefing and FAQ →</a></p>{% endif %}
+{% endblock %}

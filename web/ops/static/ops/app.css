@@ -316,3 +316,23 @@ a.toast:hover { text-decoration: none; background: #1f2b3a; }
 .report-section textarea { width: 100%; font-family: inherit; }
 table.list.fig td, table.list.fig th { padding: 5px 8px; }
 .fig-stats { grid-template-columns: repeat(2, 1fr); }
+
+/* Role play (views_roleplay.py) */
+.subtabs { display: flex; gap: 4px; margin: -4px 0 14px; flex-wrap: wrap; }
+.subtabs a { padding: 4px 10px; border-radius: 999px; font-size: 13px; color: var(--muted); }
+.subtabs a.on { background: var(--accent-soft); color: var(--accent-dark); font-weight: 600; }
+.rp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 8px; }
+.rp-next { margin: 6px 0 10px; padding: 6px 10px; background: var(--accent-soft); border-radius: var(--radius); }
+.rp-board tr.rp-done td { opacity: .55; }
+.rp-board tr.rp-skipped td { opacity: .45; text-decoration: line-through; }
+.rp-board tr.rp-late td:first-child { box-shadow: inset 3px 0 0 var(--err); }
+.rp-board tr.rp-now td { background: #fff8e1; }
+.rp-board tr.rp-ready td:first-child { box-shadow: inset 3px 0 0 var(--ok); }
+.rp-board tr.rp-day td { background: var(--subtle); font-weight: 650; }
+.rp-who { white-space: nowrap; }
+.rp-status .btn, .rp-status .link { margin-left: 4px; }
+.rp-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; margin: 16px 0; }
+.rp-form label { display: block; margin-bottom: 10px; }
+.rp-form textarea, .rp-form input:not([type=checkbox]) { width: 100%; }
+.rp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 14px; }
+.rp-players { display: flex; flex-wrap: wrap; gap: 4px 16px; }

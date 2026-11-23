@@ -239,3 +239,13 @@ def report_md(text):
 def icon(name, size=20, cls=""):
     return format_html('<svg class="ic {}" width="{}" height="{}" viewBox="0 0 24 24" aria-hidden="true">'
                        '<path d="{}"/></svg>', cls, size, size, ICONS.get(name, ICONS["file"]))
+
+
+@register.filter
+def md(text):
+    """ExCon's Markdown (role-play briefing, FAQ, notes), its HTML escaped first."""
+    import html
+
+    import markdown
+    from django.utils.safestring import mark_safe
+    return mark_safe(markdown.markdown(html.escape(text or "", quote=False), extensions=["tables", "sane_lists"]))

@@ -1,5 +1,5 @@
 """Sign-in links for the QR codes on the login slips. A link is a signed token for one
-participant's, team leader's or persona desk member's login: scanning it signs them in on that device (any number of
+participant's, team leader's, persona desk member's or role player's login: scanning it signs them in on that device (any number of
 devices) until their password is reset, their login is disabled or the link is TOKEN_DAYS old.
 Nothing is stored; an ExCon login never gets one."""
 
@@ -12,7 +12,7 @@ from django.core import signing
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare, salted_hmac
 
-from .access import desk_of, is_excon, leader_of, participant_of
+from .access import desk_of, is_excon, leader_of, participant_of, rp_of
 
 SALT = "ops.signin"
 TOKEN_DAYS = 14  # as long as a session
@@ -22,7 +22,7 @@ def can_use(user):
     """A QR sign-in only for an active member's, team leader's or persona desk member's login,
     never ExCon's."""
     return bool(user and user.is_active and not is_excon(user)
-                and (participant_of(user) or leader_of(user) or desk_of(user)))
+                and (participant_of(user) or leader_of(user) or desk_of(user) or rp_of(user)))
 
 
 def _stamp(user):
@@ -48,7 +48,7 @@ def user_for(tok):
 
 def setup_path(user):
     """Where a QR sign-in lands: the device setup of the login's mailbox."""
-    return "/inbox/desk/setup/" if desk_of(user) else "/inbox/setup/"
+    return "/inbox/desk/setup/" if desk_of(user) else "/inbox/rp/setup/" if rp_of(user) else "/inbox/setup/"
 
 
 def path(user):

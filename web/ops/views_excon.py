@@ -724,7 +724,9 @@ def people_page(request):
     groups = []  # People, by team (in team order), then the persona desk and those without a team
     for key, label, team, mine in ([(f"team-{t.id}", t.name, t, [p for p in people if p.team_id == t.id]) for t in teams]
                                    + [("desk", "Persona desk", None, [p for p in people if p.role == "desk"]),
-                                      ("none", "No team", None, [p for p in people if not p.team_id and p.role != "desk"])]):
+                                      ("rp", "Role players", None, [p for p in people if p.role == "rp"]),
+                                      ("none", "No team", None, [p for p in people if not p.team_id
+                                                                 and p.role not in ("desk", "rp")])]):
         if not mine and not team:
             continue
         mine.sort(key=lambda p: (p.role != "tl", not p.active, p.name.lower()))
@@ -855,7 +857,7 @@ def person_save(request):
     if "personal_email" in P:
         p.personal_email = personal
     p.role = P.get("role") if P.get("role") in ROLES else "member"
-    p.team_id = None if p.role == "desk" else _int(P.get("team_id"))  # the persona desk belongs to no team
+    p.team_id = None if p.role in ("desk", "rp") else _int(P.get("team_id"))  # the desk and role players: no team
     p.team_role = TeamRole.objects.filter(pk=_int(P.get("team_role_id"))).first() if p.role == "member" else None
     p.active = P.get("active") == "1" or not pid
     problem = _leader_problem(p)
@@ -873,7 +875,8 @@ def person_save(request):
         pw = ensure_account(p)
         _store_creds(request, [[p.name, p.team.name if p.team else "", p.user.username, pw]])
     audit("person_save", f"{name} <{email}>", _u(request))
-    return redirect("/people/")
+    back = P.get("back") or ""
+    return redirect(back if back.startswith("/roleplay/") else "/people/")
 
 
 @excon_required
@@ -929,7 +932,8 @@ def people_bulk(request):
         role_cell = row[3] if len(row) > 3 else ""
         personal = row[4].lower() if len(row) > 4 else ""
         role = ("tl" if role_cell.lower() in ("tl", "team leader", "leader")
-                else "desk" if role_cell.lower() in ("desk", "persona desk") else "member")
+                else "desk" if role_cell.lower() in ("desk", "persona desk")
+                else "rp" if role_cell.lower() in ("rp", "role player") else "member")
         team_role = role_cell if role == "member" and role_cell.lower() not in ("member", "team member") else ""
         bad = next((a for a in (email, personal) if a and not rnd.EMAIL.match(a)), None)
         if bad:
@@ -945,7 +949,7 @@ def people_bulk(request):
         p.name, p.email, p.role, p.active = name, email, role, True
         if personal:
             p.personal_email = personal
-        p.team = teams[code] if code and role != "desk" else None
+        p.team = teams[code] if code and role not in ("desk", "rp") else None
         problem = _leader_problem(p)
         if problem:
             errors.append(f"line {n}: {problem}")
@@ -1012,8 +1016,8 @@ def signin_slips(request):
 
 def _sharable(p):
     """Someone whose login is given out for the exercise: an active member or leader of a real
-    team, or the persona desk (the Test team's logins are ExCon's own)."""
-    return p.active and ((p.team and not p.team.is_test) or p.role == "desk")
+    team, the persona desk or a role player (the Test team's logins are ExCon's own)."""
+    return p.active and ((p.team and not p.team.is_test) or p.role in ("desk", "rp"))
 
 
 @excon_required

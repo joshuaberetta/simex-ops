@@ -6,6 +6,8 @@ from . import views_inbox as p
 from . import views_leader as lead
 from . import views_npc as npc
 from . import views_report as rp
+from . import views_roleplay as rpx
+from . import views_rp as rpp
 
 # The participant mail client, mounted on a mailbox: /inbox/ for the logged-in member (their
 # team's inbox) or team leader (their own mailbox), /inbox/me/ for a member's own mailbox,
@@ -63,6 +65,15 @@ urlpatterns = [
     path("inbox/desk/presence/", p.desk_presence),
     path("inbox/desk/setup/", p.setup, {"box": "desk"}),
     path("inbox/desk/", include(mail_patterns), {"box": "desk"}),
+    # A role player's (or a team leader's) role plays: their schedule, briefs and files.
+    path("inbox/rp/", rpp.home),
+    path("inbox/rp/setup/", rpp.setup),
+    path("inbox/rp/help/", rpp.briefing),
+    path("inbox/rp/poll/", rpp.poll),
+    path("inbox/rp/push/", rpp.push_subscribe),
+    path("inbox/rp/play/<int:pid>/", rpp.play),
+    path("inbox/rp/slot/<int:sid>/status/", rpp.slot_status),
+    path("inbox/rp/file/<int:fid>/", rpp.file_get),
     path("inbox/", include(mail_patterns)),
     # ExCon
     path("injects/", x.injects),
@@ -143,6 +154,23 @@ urlpatterns = [
     path("reports/part/<int:rid>/section/", rp.report_section),
     path("reports/part/<int:rid>/rewrite/", rp.report_rewrite),
     path("reports/part/<int:rid>/print/", rp.report_print),
+    path("roleplay/", rpx.board),
+    path("roleplay/poll/", rpx.poll),
+    path("roleplay/slip/", rpx.slip),
+    path("roleplay/new/", rpx.play_new),
+    path("roleplay/import/", rpx.import_page),
+    path("roleplay/import/apply/", rpx.import_apply),
+    path("roleplay/players/", rpx.players_page),
+    path("roleplay/briefing/", rpx.briefing_save),
+    path("roleplay/days/", rpx.days_save),
+    path("roleplay/print/", rpx.print_page),
+    path("roleplay/slot/<int:sid>/status/", rpx.slot_status),
+    path("roleplay/files/<int:fid>/", rpx.file_get),
+    path("roleplay/files/<int:fid>/delete/", rpx.file_delete),
+    path("roleplay/<int:pid>/", rpx.play_page),
+    path("roleplay/<int:pid>/slots/", rpx.slots_save),
+    path("roleplay/<int:pid>/files/", rpx.files_upload),
+    path("roleplay/<int:pid>/delete/", rpx.play_delete),
     path("help/", x.help_page),
     path("log/", x.log_page),
     path("log/<int:mid>/", x.message_page),

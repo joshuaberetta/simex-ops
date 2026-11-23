@@ -35,8 +35,15 @@ RP_METHODS = re.compile(r"^\s*(f2f|face|phone|vtc|ms ?teams|teams|signal|whatsap
 # Fields an import sets; their last imported values are kept in RolePlay.imported.
 FIELDS = ["serial", "seq", "day", "time_text", "duration", "title", "role", "players_text", "location", "method",
           "script", "outcomes", "documents", "optional"]
+MEL_ONLY = {"method", "script", "outcomes"}  # only the MEL-MIL has them
+SCHEDULE_ONLY = {"role", "players_text"}  # only a role-player schedule has them
 NONE_WORDS = {"", "none", "n/a", "na", "-", "tbc", "tbd"}
 DEFAULT_LEAD = 15  # minutes before a slot its players are reminded
+
+
+# Word's Symbol-font bullets pasted into the sheet (private-use characters), shown as boxes otherwise.
+WORD_BULLETS = str.maketrans({"\uf0b7": "•", "\uf0a7": "▪", "\uf0d8": "➢", "\uf0fc": "✓", "\uf076": "❖",
+                              "\uf0a8": "□", "\uf0e8": "➔", "\uf02d": "–"})
 
 
 class RolePlayImportError(ValueError):
@@ -56,7 +63,7 @@ def _text(v):
         return v.isoformat()
     if isinstance(v, float) and v.is_integer():
         v = int(v)
-    return str(v).strip()
+    return str(v).translate(WORD_BULLETS).strip()
 
 
 def _head(v):
@@ -322,17 +329,32 @@ def records(sources, sheets=None):
             if r["serial"] not in sched and r["serial"] not in mel:
                 order.append(r["serial"])
             sched[r["serial"]].append(r)
+    # A file with only one kind of sheet leaves the other kind's fields alone (the MEL and the
+    # schedule may come in separate uploads).
+    drop = set()
+    if not any(s["kind"] == "mel" for s in chosen):
+        drop |= MEL_ONLY
+    if not any(s["kind"] == "schedule" for s in chosen):
+        drop |= SCHEDULE_ONLY
     out = []
     for seq, serial in enumerate(order):
         m = mel.get(serial, {})
         for n, s in enumerate(sched.get(serial) or [{}]):
             title = s.get("title") or m.get("title") or ""
+            time, duration = s.get("time") or m.get("time"), s.get("duration") or m.get("duration")
+            if s.get("time") and m.get("time"):
+                # The schedule's own time, unless it is one plain time where the MEL has per-team ones
+                # ("15:25" against "15:25 - A / 15:45 - B..."); the schedule's pairs ("18:00 + 18:20",
+                # teams A&C) are its own.
+                ours = parse_slots(s["time"], s.get("duration") or "", s.get("role") or "")
+                mels = parse_slots(m["time"], m.get("duration") or "")
+                if len(ours) == 1 and not ours[0][3] and any(x[3] for x in mels):
+                    time, duration = m["time"], m.get("duration") or duration
             out.append({
                 "key": (serial if n == 0 else f"{serial}-{chr(ord('a') + n)}")[:40],
                 "serial": serial, "seq": seq * 10 + n,
                 "day": (s.get("day") or m.get("day") or "")[:40],
-                "time_text": (s.get("time") or m.get("time") or "")[:200],
-                "duration": (s.get("duration") or m.get("duration") or "")[:120],
+                "time_text": (time or "")[:200], "duration": (duration or "")[:120],
                 "title": title, "role": (s.get("role") or "")[:200],
                 "players_text": (s.get("players") or "")[:300],
                 "location": (s.get("location") or m.get("location") or "")[:200],
@@ -341,6 +363,8 @@ def records(sources, sheets=None):
                 "documents": documents_lines(s.get("documents") or m.get("documents")),
                 "optional": title.strip().lower().startswith("optional"),
             })
+            for f in drop:
+                out[-1].pop(f, None)
     return out
 
 
@@ -393,7 +417,8 @@ def plan(recs):
     rows, new_names = [], set()
     for r in recs:
         play = existing.pop(r["key"], None)
-        players = resolve_players(r["players_text"], people)
+        players = resolve_players(r["players_text"], people) if "players_text" in r else \
+            [(p.name, p) for p in play.players.all()] if play else []
         new_names.update(n for n, p in players if not p)
         if not play:
             rows.append({"rec": r, "action": "new", "changes": [], "players": players})
@@ -401,6 +426,8 @@ def plan(recs):
         snap = play.imported or {}
         changes = []
         for f in FIELDS:
+            if f not in r:
+                continue  # not in this file's sheets
             new, cur = r.get(f), _value(play, f)
             if f == "seq" or (f in snap and new == snap.get(f)) or new == cur:
                 continue
@@ -432,21 +459,30 @@ def build_slots(play, days=None, order=None):
 
 @transaction.atomic
 def apply(recs, overwrite_local=False, delete_missing=False, days=None, user=""):
-    if days is not None:
-        conf.put("rp_days", json.dumps(days))
+    if days:  # added to the days known (a schedule sheet alone names no dates)
+        conf.put("rp_days", json.dumps({**days_map(), **{k.lower(): v for k, v in days.items()}}))
     days = days_map()
     order = team_order()
     existing = {p.key: p for p in RolePlay.objects.all()}
     people = candidates()
     counts = {"new": 0, "updated": 0, "kept_local": 0, "players_added": 0, "deleted": 0}
+    by_serial = {}
+    for p in existing.values():
+        by_serial.setdefault(p.serial, p)
     for r in recs:
         play = existing.pop(r["key"], None)
         is_new = play is None
         if is_new:
             play = RolePlay(key=r["key"])
+            sibling = by_serial.get(r["serial"])  # 1-41-b from the schedule: 1-41's script, from the MEL
+            for f in FIELDS:
+                if f not in r and sibling is not None:
+                    setattr(play, f, getattr(sibling, f))
         snap = play.imported or {}
         changed = set()
         for f in FIELDS:
+            if f not in r:
+                continue  # not in this file's sheets: left as it is
             new = r.get(f)
             if not is_new and f in snap and new == snap.get(f):
                 continue  # not changed in the file since the last import: ExCon's edit (if any) stays
@@ -456,8 +492,9 @@ def apply(recs, overwrite_local=False, delete_missing=False, days=None, user="")
             if getattr(play, f) != new:
                 setattr(play, f, new)
                 changed.add(f)
-        play.imported = {f: r.get(f) for f in FIELDS}
+        play.imported = {**snap, **{f: r[f] for f in FIELDS if f in r}}
         play.save()
+        by_serial.setdefault(play.serial, play)
         if is_new or "players_text" in changed:
             assigned = []
             for name, p in resolve_players(play.players_text, people):
@@ -564,6 +601,21 @@ def version():
 
 # --- checks ------------------------------------------------------------------------------------
 
+CHECKS = {"double": "Role player double-booked", "time": "No time", "unassigned": "No role player",
+          "location": "No location", "team": "Team in two places at once (fine if it splits up)"}
+
+
+def _short(play):
+    return f"{play.serial} {(play.title.splitlines() or [''])[0][:50]}".strip()
+
+
+def grouped_checks(slots=None):
+    """checks() by kind, worst first: [{"kind", "label", "items"}]."""
+    found = checks(slots)
+    return [{"kind": k, "label": label, "items": [c for c in found if c["kind"] == k]}
+            for k, label in CHECKS.items() if any(c["kind"] == k for c in found)]
+
+
 def checks(slots=None):
     """What looks wrong on the schedule: [{"kind", "text", "play"}]."""
     if slots is None:
@@ -576,13 +628,13 @@ def checks(slots=None):
             continue
         seen_plays.add(p.id)
         if not p.players.all() and not p.optional:
-            out.append({"kind": "unassigned", "play": p, "text": f"{p.serial} {p.title[:60]}: no role player"})
+            out.append({"kind": "unassigned", "play": p, "text": _short(p)})
         if not p.location and p.method.lower().startswith("f2f"):
-            out.append({"kind": "location", "play": p, "text": f"{p.serial} {p.title[:60]}: no location"})
+            out.append({"kind": "location", "play": p, "text": _short(p)})
     for s in slots:
         if not s.start:
-            out.append({"kind": "time", "play": s.play, "text": f"{s.play.serial} {s.play.title[:60]}: no time "
-                                                                f"(\"{s.play.time_text}\", {s.play.day or 'no day'})"})
+            out.append({"kind": "time", "play": s.play, "text": f"{_short(s.play)} (\"{s.play.time_text}\", "
+                                                                f"{s.play.day or 'no day'})"})
     timed = [s for s in slots if s.start and s.status != "skipped"]
     by_person = defaultdict(list)
     by_team = defaultdict(list)
@@ -715,8 +767,12 @@ def email_reminder(person, title, body, key):
 
 
 def reset():
-    """Start afresh (ops/reset.py): every slot pending again, no reminders sent."""
-    RolePlaySlot.objects.update(status="pending", status_at=None, status_by="", reminded="", changed_at=None)
+    """Start afresh (ops/reset.py): every slot pending again at its imported time (slips
+    undone), no reminders sent."""
+    from django.db.models import F
+    from django.db.models.functions import Coalesce
+    RolePlaySlot.objects.update(status="pending", status_at=None, status_by="", reminded="", changed_at=None,
+                                was_start=None, start=Coalesce(F("imported_start"), F("start")))
     from .models import RolePlaySeen
     RolePlaySeen.objects.all().delete()
     bump()

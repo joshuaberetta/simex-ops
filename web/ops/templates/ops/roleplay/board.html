@@ -1,0 +1,98 @@
+{% extends "ops/base.html" %}{% load ops %}
+{% block title %}Role play · SIMEX ops{% endblock %}
+{% block body %}
+<h1>Role play</h1>
+{% with sub="board" %}{% include "ops/roleplay/_nav.html" %}{% endwith %}
+
+{% if not n_plays %}
+<div class="card">
+  <p>No role plays yet. <a href="/roleplay/import/">Import</a> the MEL-MIL (its F2F, phone and VTC rows) and the role-player schedule, or add one by hand.</p>
+  <form method="post" action="/roleplay/new/" class="rowform">{% csrf_token %}<input name="title" placeholder="Title" required> <button class="btn small">Add a role play</button></form>
+</div>
+{% else %}
+
+<div class="rp-bar">
+  <form method="get" class="filters rowform">
+    <select name="day" onchange="this.form.submit()">
+      {% for d in days %}<option value="{{ d|date:'Y-m-d' }}" {% if day == d|date:'Y-m-d' %}selected{% endif %}>{{ d|date:"D j M" }}</option>{% endfor %}
+      <option value="all" {% if day == 'all' %}selected{% endif %}>Every day</option>
+    </select>
+    <select name="player" onchange="this.form.submit()"><option value="">Every role player</option>{% for p in players %}<option value="{{ p.id }}" {% if f.player == p.id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select>
+    <select name="team" onchange="this.form.submit()"><option value="">Every team</option>{% for t in teams %}<option value="{{ t.id }}" {% if f.team == t.id %}selected{% endif %}>{{ t.name }}</option>{% endfor %}</select>
+    {% if locations %}<select name="location" onchange="this.form.submit()"><option value="">Every location</option>{% for l in locations %}<option {% if f.location == l %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>{% endif %}
+    <select name="status" onchange="this.form.submit()"><option value="">Any status</option>{% for k, label in statuses.items %}<option value="{{ k }}" {% if f.status == k %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    {% if f.player or f.team or f.location or f.status %}<a href="?day={{ day }}" class="small">clear</a>{% endif %}
+  </form>
+  <span class="small muted">{{ counts.pending }} pending · {{ counts.ready }} in position · {{ counts.done }} done{% if counts.skipped %} · {{ counts.skipped }} skipped{% endif %} · reminders {{ lead }} min before</span>
+</div>
+
+{% if next %}<p class="rp-next">Next: <b>{{ next.local|date:"H:i" }}</b> <a href="/roleplay/{{ next.play.id }}/">{{ next.play.serial }} {{ next.play.title|truncatechars:60 }}</a>{% for t in next.team_list %} · {{ t.name }}{% endfor %}{% if next.players %} · {% for p in next.players %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</p>{% endif %}
+
+<table class="list rp-board" data-rp-board data-v="{{ v }}">
+  <thead><tr><th>Time</th><th>Role play</th><th>Team</th><th>Role · role players</th><th>Where</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for s in slots %}
+  {% ifchanged s.local|date:"Y-m-d" %}{% if day == 'all' %}<tr class="rp-day"><td colspan="6">{{ s.local|date:"l j F" }}</td></tr>{% endif %}{% endifchanged %}
+  <tr class="rp-{{ s.status }}{% if s.late %} rp-late{% endif %}{% if s.now %} rp-now{% endif %}" id="slot-{{ s.id }}">
+    <td class="nowrap"><b>{{ s.local|date:"H:i"|default:"—" }}</b>{% if s.minutes %}<div class="small muted">{{ s.minutes }} min</div>{% endif %}</td>
+    <td><a href="/roleplay/{{ s.play.id }}/"><b>{{ s.play.serial }}</b> {{ s.play.title|linebreaksbr|truncatechars_html:90 }}</a>
+      <div class="small muted">{{ s.play.method }}{% if s.play.optional %} · optional{% endif %}</div></td>
+    <td class="nowrap">{% for t in s.team_list %}<span class="pill">{{ t.name }}</span> {% empty %}<span class="muted small">all teams</span>{% endfor %}</td>
+    <td>{% if s.play.role %}<div class="small">{{ s.play.role }}</div>{% endif %}
+      {% for p in s.players %}<span class="rp-who" title="{% if p.alerts %}Alerts on{% else %}No alerts on any device{% endif %}{% if p.seen %} · opened their schedule {{ p.seen|date:'D H:i' }}{% endif %}">{{ p.name }}{% if p.alerts %} 🔔{% endif %}</span>{% if not forloop.last %}, {% endif %}{% empty %}<span class="warn small">nobody assigned{% if s.play.players_text %} ({{ s.play.players_text }}){% endif %}</span>{% endfor %}</td>
+    <td class="small">{{ s.play.location|default:"—" }}</td>
+    <td class="nowrap">
+      <form method="post" action="/roleplay/slot/{{ s.id }}/status/" class="inline rp-status">{% csrf_token %}<input type="hidden" name="back" value="{{ request.get_full_path }}#slot-{{ s.id }}">
+        <span class="status {% if s.status == 'done' %}sent{% elif s.status == 'ready' %}scheduled{% elif s.late %}failed{% elif s.status == 'skipped' %}cancelled{% else %}draft{% endif %}">{% if s.late %}late{% else %}{{ statuses|get:s.status }}{% endif %}</span>
+        {% if s.status == 'pending' %}<button name="status" value="ready" class="btn small">In position</button>{% endif %}
+        {% if s.status != 'done' %}<button name="status" value="done" class="btn small primary">Done</button>{% endif %}
+        {% if s.status == 'pending' %}<button name="status" value="skipped" class="link small">skip</button>{% else %}<button name="status" value="pending" class="link small">undo</button>{% endif %}
+        {% if s.status_by %}<div class="small muted">{{ s.status_by }} {{ s.status_at|date:"H:i" }}</div>{% endif %}
+      </form></td>
+  </tr>
+  {% empty %}<tr><td colspan="6" class="muted">No sittings {% if f.player or f.team or f.location or f.status %}match{% else %}on this day{% endif %}.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{% if untimed %}
+<h3>No time yet</h3>
+<table class="list">{% for s in untimed %}<tr><td><a href="/roleplay/{{ s.play.id }}/#slots"><b>{{ s.play.serial }}</b> {{ s.play.title|truncatechars:80 }}</a></td><td class="small muted">"{{ s.play.time_text }}" · {{ s.play.day|default:"no day" }}</td></tr>{% endfor %}</table>
+{% endif %}
+
+<div class="rp-cols">
+  <form method="post" action="/roleplay/slip/" class="card rowform" id="slip">{% csrf_token %}
+    <h3>Slip the schedule</h3>
+    <p class="small muted">Moves every <b>pending</b> sitting from that time, to the end of that day, by the minutes given (negative: earlier). Done and in-position sittings stay. The role players affected get a notification.</p>
+    <input type="date" name="day" value="{% if day != 'all' %}{{ day }}{% endif %}" required>
+    from <input type="time" name="from" required value="{{ now|date:'H:i' }}">
+    by <input type="number" name="minutes" value="15" min="-600" max="600" step="5" style="width:5em"> min
+    <input type="hidden" name="back" value="{{ request.get_full_path }}">
+    <button class="btn primary small" data-confirm="Move the pending sittings? The role players are told.">Slip</button>
+  </form>
+  <div class="card checks">
+    <h3>Checks</h3>
+    {% for g in checks %}<details class="rp-check" {% if g.kind == 'double' or g.kind == 'time' %}open{% endif %}><summary><span class="flag {% if g.kind == 'double' %}err{% else %}check{% endif %}">{{ g.label }}</span> <span class="small muted">{{ g.items|length }}</span></summary>
+      {% for c in g.items %}<div class="small"><a href="/roleplay/{{ c.play.id }}/">{{ c.text }}</a></div>{% endfor %}</details>
+    {% empty %}<p class="small muted">Nothing to report: everyone is assigned, timed and in one place at a time.</p>{% endfor %}
+  </div>
+</div>
+<form method="post" action="/roleplay/new/" class="rowform">{% csrf_token %}<input name="title" placeholder="Title of a new role play" required> <button class="btn small">Add a role play</button></form>
+{% endif %}
+<script>
+// Reload when the schedule changes (a role player in position, a slip), unless a form is in use.
+(function () {
+  const t = document.querySelector("[data-rp-board]");
+  if (!t) return;
+  let v = t.dataset.v;
+  setInterval(async () => {
+    if (document.hidden || document.activeElement.closest("form input, form select, form textarea")) return;
+    try {
+      const r = await fetch(`/roleplay/poll/?v=${encodeURIComponent(v)}`, { headers: { "x-requested-with": "fetch" } });
+      const j = await r.json();
+      if (j.changed) location.reload();
+    } catch (e) { /* offline: next time */ }
+  }, 20000);
+})();
+</script>
+{% endblock %}

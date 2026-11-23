@@ -1,0 +1,16 @@
+{% extends "ops/rp/base.html" %}{% load ops %}
+{% block title %}Briefing &amp; FAQ{% endblock %}
+{% block main %}
+<h1 class="rp-h1">Briefing</h1>
+<div class="rp-text">{% if briefing %}{{ briefing|md }}{% else %}<p class="rp-empty">Exercise Control hasn't written a briefing yet.</p>{% endif %}</div>
+{% if faq %}<h1 class="rp-h1">FAQ</h1><div class="rp-text">{{ faq|md }}</div>{% endif %}
+<h2 class="rp-h">How this works</h2>
+<div class="rp-text">
+  <ul>
+    <li><b>My role plays</b> shows what's next, then your whole schedule. Tap a role play for its script, what the teams should do, documents and files.</li>
+    <li>You get an alert before each sitting and at its start. If a time changes, you're told.</li>
+    <li>When you're in place, tap <b>I'm in position</b>; when it's over, <b>Done</b>. Exercise Control sees both on its board.</li>
+    <li>Everything here is for Exercise Control: never show it to a team.</li>
+  </ul>
+</div>
+{% endblock %}

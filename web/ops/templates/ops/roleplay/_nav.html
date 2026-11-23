@@ -1,0 +1,6 @@
+<nav class="subtabs" aria-label="Role play">
+  <a href="/roleplay/" class="{% if sub == 'board' %}on{% endif %}">Board</a>
+  <a href="/roleplay/players/" class="{% if sub == 'players' %}on{% endif %}">Role players &amp; briefing</a>
+  <a href="/roleplay/import/" class="{% if sub == 'import' %}on{% endif %}">Import</a>
+  <a href="/roleplay/print/?day={{ day|default:'all' }}" target="_blank" rel="noopener">Print run sheets</a>
+</nav>

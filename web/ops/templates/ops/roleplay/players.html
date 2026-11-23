@@ -1,0 +1,43 @@
+{% extends "ops/base.html" %}{% load ops %}
+{% block title %}Role players · SIMEX ops{% endblock %}
+{% block body %}
+<h1><a href="/roleplay/" class="muted">Role play</a> / Role players &amp; briefing</h1>
+{% with sub="players" %}{% include "ops/roleplay/_nav.html" %}{% endwith %}
+
+<table class="list">
+  <thead><tr><th>Role player</th><th>Login</th><th>Alerts</th><th>Role plays</th><th>Next</th><th></th></tr></thead>
+  {% for p in people %}
+  <tr><td><b>{{ p.name }}</b><div class="small muted">{% if p.role == 'tl' %}{{ p.team.name }} leader{% elif p.role == 'desk' %}persona desk{% else %}role player{% endif %}{% if p.personal_email %} · {{ p.personal_email }}{% endif %}{% if not p.active %} · inactive{% endif %}</div></td>
+    <td class="small">{% if p.user %}{{ p.user.username }}{% if p.login_shared_at %}<div class="muted">shared {{ p.login_shared_at|date:"D H:i" }}</div>{% else %}<div class="warn">not shared yet</div>{% endif %}{% else %}<span class="warn">no login</span>{% endif %}</td>
+    <td class="small">{% if p.n_subs %}🔔 {{ p.n_subs }} device{{ p.n_subs|pluralize }}{% else %}<span class="muted">none</span>{% endif %}{% if p.seen %}<div class="muted">opened {{ p.seen|date:"D H:i" }}</div>{% endif %}</td>
+    <td>{{ p.n_plays }} <span class="small muted">({{ p.slots|length }} sitting{{ p.slots|length|pluralize }})</span></td>
+    <td class="small">{% if p.next %}{{ p.next.start|date:"D H:i" }} · <a href="/roleplay/{{ p.next.play.id }}/">{{ p.next.play.serial }}</a>{% else %}—{% endif %}</td>
+    <td class="small nowrap"><a href="/roleplay/?player={{ p.id }}&day=all">board</a> · <a href="/roleplay/print/?player={{ p.id }}" target="_blank" rel="noopener">run sheet</a></td></tr>
+  {% empty %}<tr><td colspan="6" class="muted">No role players yet. Import the schedule, or add them below.</td></tr>
+  {% endfor %}
+</table>
+<p class="small muted">Logins, login emails and QR slips: <a href="/people/#g-rp">People &amp; logins → Role players</a>. Signing in with the QR code opens their role plays on their phone and turns on alerts.</p>
+<form method="post" action="/people/save/" class="card rowform">{% csrf_token %}<b>Add a role player</b>
+  <input type="hidden" name="role" value="rp"><input type="hidden" name="back" value="/roleplay/players/">
+  <input name="name" placeholder="Name" required> <input name="personal_email" type="email" placeholder="Personal email (login, reminders)">
+  <label class="chk"><input type="checkbox" name="account" value="1" checked> create a login</label>
+  <button class="btn small primary">Add</button></form>
+
+<form method="post" action="/roleplay/briefing/" class="card" id="briefing">{% csrf_token %}
+  <h3>Briefing and FAQ for every role player</h3>
+  <p class="small muted">Shown on their phones above their role plays (Markdown: <code>**bold**</code>, <code>- lists</code>, <code>## headings</code>). Control-side: never shown to the teams.</p>
+  <label>Briefing <textarea name="rp_briefing" rows="10" placeholder="Who you are in this exercise, how the day runs, where ExCon sits, how to reach us…">{{ briefing }}</textarea></label>
+  <label>FAQ <textarea name="rp_faq" rows="8" placeholder="## What if a team asks something not in my script?&#10;Stay in character, say you'll find out, and tell ExCon.">{{ faq }}</textarea></label>
+  <h3>Reminders</h3>
+  <label>Remind <input type="number" name="rp_lead" value="{{ lead }}" min="0" max="120" style="width:5em"> minutes before each sitting (and again at its start, unless in position)</label>
+  <label class="chk"><input type="checkbox" name="rp_email" value="1" {% if rp_email %}checked{% endif %}> also email the reminders to role players with no alerts on any device (their personal email)</label>
+  <p><button class="btn primary">Save</button></p>
+</form>
+
+<form method="post" action="/roleplay/days/" class="card rowform" id="days">{% csrf_token %}
+  <h3>Exercise days</h3>
+  <p class="small muted">The dates the schedule's day names stand for. Changing one moves that day's pending sittings to the new date.</p>
+  {% for d, date in days %}<label>{{ d|capfirst }} <input type="date" name="day-{{ d }}" value="{{ date }}"></label> {% empty %}<span class="small muted">No days yet: import the schedule.</span>{% endfor %}
+  {% if days %}<button class="btn small" data-confirm="Move the pending sittings to these dates?">Save days</button>{% endif %}
+</form>
+{% endblock %}

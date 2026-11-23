@@ -1,7 +1,7 @@
 {% autoescape off %}Hello {{ first_name }},
 
 Here is your login for SIMEX Mail, the email system of the UNDAC simulation exercise (SIMEX).
-{% if p.role == "tl" %}You are {{ team.name }}'s team leader (Exercise Control): you have your own mailbox, play the team leader persona, and read your team's inbox.{% elif p.role == "desk" %}You are on the persona desk (Exercise Control): you answer the teams as the exercise's personas.{% else %}During the exercise, every message to and from {{ team.name }} arrives in SIMEX Mail, not in your usual email.{% endif %}
+{% if p.role == "tl" %}You are {{ team.name }}'s team leader (Exercise Control): you have your own mailbox, play the team leader persona, and read your team's inbox.{% elif p.role == "desk" %}You are on the persona desk (Exercise Control): you answer the teams as the exercise's personas.{% elif p.role == "rp" %}You are a role player (Exercise Control): SIMEX Mail shows you where to be and when, for which team, with your script and documents, and reminds you before each role play.{% else %}During the exercise, every message to and from {{ team.name }} arrives in SIMEX Mail, not in your usual email.{% endif %}
 
 YOUR LOGIN
 Site:     {{ site }}

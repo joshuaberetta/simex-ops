@@ -1,0 +1,23 @@
+{% extends "ops/rp/base.html" %}{% load ops %}
+{% block title %}{{ play.serial }}{% endblock %}
+{% block main %}
+<p><a href="/inbox/rp/">← My role plays</a></p>
+<h1 class="rp-h1">{{ play.serial }} · {{ play.title|linebreaksbr }}</h1>
+<div class="rp-meta big">
+  {% if play.role %}<span>🎭 <b>{{ play.role }}</b></span>{% endif %}
+  {% if play.location %}<span>📍 {{ play.location }}</span>{% endif %}
+  {% if play.method %}<span>{{ play.method }}</span>{% endif %}
+  {% if play.duration %}<span>⏱ {{ play.duration }}</span>{% endif %}
+  {% if play.optional %}<span>optional</span>{% endif %}
+</div>
+{% if others %}<p class="rp-meta">Played with {% for p in others %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+
+<h2 class="rp-h">My sittings</h2>
+{% for s in slots %}{% include "ops/rp/_slot.html" %}{% empty %}<p class="rp-empty">No sittings for you in this one yet.</p>{% endfor %}
+
+{% if play.script %}<h2 class="rp-h">Script</h2><div class="rp-text">{{ play.script|linebreaks }}</div>{% endif %}
+{% if play.outcomes %}<h2 class="rp-h">What the teams should do</h2><div class="rp-text">{{ play.outcomes|linebreaks }}</div>{% endif %}
+{% if play.documents %}<h2 class="rp-h">Documents to have with you</h2><div class="rp-text">{{ play.documents|linebreaks }}</div>{% endif %}
+{% if files %}<h2 class="rp-h">Files</h2><ul class="rp-files">{% for f in files %}<li><a href="/inbox/rp/file/{{ f.id }}/">{{ f.filename }}</a> <small>{{ f.size|kb }}</small></li>{% endfor %}</ul>{% endif %}
+{% if play.notes %}<h2 class="rp-h">Notes</h2><div class="rp-text">{{ play.notes|md }}</div>{% endif %}
+{% endblock %}

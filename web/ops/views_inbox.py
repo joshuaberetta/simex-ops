@@ -39,7 +39,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from . import addresses, conf, delivery, desk, inbound, push, render as rnd, signin, simclock
-from .access import desk_of, is_excon, leader_of, login_required_any, participant_of
+from .access import desk_of, is_excon, leader_of, login_required_any, participant_of, rp_of
 from .models import (Mail, MailAction, MailAttachment, MailLabel, MessageAttachment, Person, PushSubscription, Response,
                      Sender, Team, ThreadLabel, audit)
 
@@ -136,6 +136,8 @@ def home(request):
         return redirect("/inbox/")
     if desk_of(request.user):
         return redirect("/inbox/desk/")
+    if rp_of(request.user):
+        return redirect("/inbox/rp/")
     logout(request)
     messages.error(request, "This account has no team. Ask ExCon.")
     return redirect("/login/")
@@ -253,6 +255,8 @@ def mailbox_view(view):
         if as_team is None and box != "desk" and not participant_of(request.user) and not leader_of(request.user):
             if desk_of(request.user):
                 return redirect("/inbox/desk/")
+            if rp_of(request.user):
+                return redirect("/inbox/rp/")  # a role player has no mailbox: their role plays
             if is_excon(request.user):
                 return redirect("/inboxes/")  # ExCon: choose a team to view as
         if box == "me" and not conf.flag("personal_mailboxes") and participant_of(request.user):
@@ -657,11 +661,12 @@ def _unread(team, owner):
 def leader_tabs(leader, current):
     """The tab bar a team leader sees above SIMEX Mail: their mail, the team inbox, their team's
     members (with their team roles and, read-only, their own mailboxes), the other team
-    leaders' mailboxes, the Dashboard, and with AI personas on, their team's conversations with them."""
+    leaders' mailboxes, the Dashboard, with AI personas on, their team's conversations with them,
+    and the role plays they play (ops/roleplay.py), if any."""
     team = leader.team
-    from . import npc
+    from . import npc, roleplay
     return {"current": current, "team": team, "peers": list(peer_teams(leader)), "mail_unread": _unread(team, leader),
-            "npcs": npc.shown_to(team),
+            "npcs": npc.shown_to(team), "roleplay": roleplay.has_role_plays(leader),
             "team_new": Mail.objects.filter(team=team, owner=None, id__gt=leader.lead_seen).exclude(folder="drafts").count(),
             "members": list(team_members(team).filter(active=True)), "personal": conf.flag("personal_mailboxes")}
 

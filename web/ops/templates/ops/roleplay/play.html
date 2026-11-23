@@ -1,0 +1,59 @@
+{% extends "ops/base.html" %}{% load ops %}
+{% block title %}{{ play.serial }} · Role play · SIMEX ops{% endblock %}
+{% block body %}
+<h1><a href="/roleplay/" class="muted">Role play</a> / {{ play.serial }} {{ play.title|truncatechars:60 }}</h1>
+{% for c in checks %}<div class="flash warn"><b>{{ c.label }}</b>{% if c.kind == 'double' or c.kind == 'team' or c.kind == 'time' %}: {{ c.text }}{% endif %}</div>{% endfor %}
+<p class="small muted">Control-side: what you write here is shown to ExCon and to the role players playing it (their phone, <code>/inbox/rp/</code>), never to the teams.</p>
+
+<form method="post" class="card rp-form">{% csrf_token %}
+  <div class="rp-grid">
+    <label>Serial <input name="serial" value="{{ play.serial }}" maxlength="40"></label>
+    <label>Day <input name="day" value="{{ play.day }}" maxlength="40" placeholder="Monday"></label>
+    <label>Time (as the sheet says) <textarea name="time_text" rows="2" maxlength="200">{{ play.time_text }}</textarea></label>
+    <label>Duration <input name="duration" value="{{ play.duration }}" maxlength="120" placeholder="4 x 5 min (D C B A)"></label>
+    <label>Method <input name="method" value="{{ play.method }}" maxlength="60" placeholder="F2F, Phone, VTC"></label>
+    <label>Location <input name="location" value="{{ play.location }}" maxlength="200" placeholder="Arrivals hall"></label>
+  </div>
+  <label>Title <textarea name="title" rows="2">{{ play.title }}</textarea></label>
+  <label>Role (the character) <input name="role" value="{{ play.role }}" maxlength="200" placeholder="Immigration officers x 2"></label>
+  <fieldset><legend>Role players {% if play.players_text %}<span class="small muted">(the sheet says: {{ play.players_text }})</span>{% endif %}</legend>
+    <div class="rp-players">{% for p in candidates %}<label class="chk"><input type="checkbox" name="players" value="{{ p.id }}" {% if p.chosen %}checked{% endif %}> {{ p.name }} <span class="small muted">{% if p.role == 'tl' %}{{ p.team.name }} leader{% elif p.role == 'desk' %}desk{% endif %}</span></label>{% empty %}<span class="muted small">No role players yet: add them on <a href="/roleplay/players/">Role players</a>.</span>{% endfor %}</div>
+    <p class="small muted">A team leader plays only their own team's sittings (or those for every team).</p>
+  </fieldset>
+  <label>Script <textarea name="script" rows="10">{{ play.script }}</textarea></label>
+  <label>Expected outcomes <textarea name="outcomes" rows="5">{{ play.outcomes }}</textarea></label>
+  <label>Documents to bring or print (one per line) <textarea name="documents" rows="3">{{ play.documents }}</textarea></label>
+  <label>Notes and FAQ for the role players (Markdown) <textarea name="notes" rows="5">{{ play.notes }}</textarea></label>
+  <label class="chk"><input type="checkbox" name="optional" value="1" {% if play.optional %}checked{% endif %}> optional (played only if needed)</label>
+  <p><button class="btn primary">Save</button></p>
+</form>
+
+<h2 id="slots">Sittings</h2>
+<form method="post" action="/roleplay/{{ play.id }}/slots/" class="card">{% csrf_token %}
+  <table class="list">
+    <thead><tr><th>Start</th><th>Minutes</th><th>Teams (none = all together)</th><th>Status</th><th></th></tr></thead>
+    {% for s in slots %}
+    <tr><td><input type="datetime-local" name="start-{{ s.id }}" value="{{ s.local|date:'Y-m-d\TH:i' }}"></td>
+      <td><input type="number" name="minutes-{{ s.id }}" value="{{ s.minutes|default:'' }}" min="0" max="600" style="width:5em"></td>
+      <td>{% for t in teams %}<label class="chk"><input type="checkbox" name="teams-{{ s.id }}" value="{{ t.id }}" {% if t in s.team_list %}checked{% endif %}> {{ t.name }}</label> {% endfor %}</td>
+      <td>{{ statuses|get:s.status }}{% for p in s.players %}{% if forloop.first %}<div class="small muted">{% endif %}{{ p.name }}{% if not forloop.last %}, {% else %}</div>{% endif %}{% endfor %}</td>
+      <td><label class="chk small"><input type="checkbox" name="delete-{{ s.id }}" value="1"> delete</label></td></tr>
+    {% endfor %}
+    <tr><td><input type="datetime-local" name="start-new"></td><td><input type="number" name="minutes-new" min="0" max="600" style="width:5em"></td>
+      <td>{% for t in teams %}<label class="chk"><input type="checkbox" name="teams-new" value="{{ t.id }}"> {{ t.name }}</label> {% endfor %}</td><td colspan="2" class="small muted">add a sitting</td></tr>
+  </table>
+  <p><button class="btn primary">Save sittings</button>
+    <button name="rebuild" value="1" class="btn" data-confirm="Replace every sitting with those read from &quot;{{ play.time_text }}&quot; ({{ play.duration }})?">Rebuild from the time text</button></p>
+</form>
+
+<h2 id="files">Files</h2>
+<div class="card">
+  {% for f in files %}<div class="rowform"><a href="/roleplay/files/{{ f.id }}/">{{ f.filename }}</a> <span class="small muted">{{ f.size|kb }}</span>
+    <form method="post" action="/roleplay/files/{{ f.id }}/delete/" class="inline">{% csrf_token %}<button class="link small" data-confirm="Delete {{ f.filename }}?">delete</button></form></div>
+  {% empty %}<p class="small muted">No files. Add the script handouts, signs or documents the role players need: they download them from their phone.</p>{% endfor %}
+  <form method="post" action="/roleplay/{{ play.id }}/files/" enctype="multipart/form-data" class="rowform">{% csrf_token %}
+    <input type="file" name="files" multiple required> <button class="btn small">Upload</button> <span class="small muted">up to {{ max_mb }} MB each</span></form>
+</div>
+
+<form method="post" action="/roleplay/{{ play.id }}/delete/" class="inline">{% csrf_token %}<button class="btn danger small" data-confirm="Delete the role play {{ play.serial }} with its sittings and files? A re-import brings it back.">Delete this role play</button></form>
+{% endblock %}

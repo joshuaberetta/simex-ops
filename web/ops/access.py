@@ -41,6 +41,39 @@ def desk_of(user):
     return person if person and person.active and person.role == "desk" else None
 
 
+def rp_of(user):
+    """The role player (a Person, role rp) behind a login, or None. Not ExCon staff: a role
+    player's login reaches their role-play pages in SIMEX Mail only (/inbox/rp/)."""
+    if not user.is_authenticated:
+        return None
+    person = getattr(user, "person", None)
+    return person if person and person.active and person.role == "rp" else None
+
+
+def role_player_of(user):
+    """Who opens the role-play pages: a role player, or a team leader with role plays to play."""
+    person = rp_of(user) or leader_of(user)
+    if person and person.role == "tl":
+        from .roleplay import has_role_plays
+        return person if has_role_plays(person) else None
+    return person
+
+
+def rp_required(view):
+    """A role player's own pages (/inbox/rp/): role players, and team leaders who play role plays."""
+    @wraps(view)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path())
+        person = role_player_of(request.user)
+        if not person:
+            raise PermissionDenied("Role players only.")
+        request.rp_person = person
+        return view(request, *args, **kwargs)
+    wrapper.rp_only = True
+    return wrapper
+
+
 def excon_required(view):
     @wraps(view)
     def wrapper(request, *args, **kwargs):

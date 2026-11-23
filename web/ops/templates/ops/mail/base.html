@@ -62,6 +62,7 @@
   {% if lt.peers %}<a href="/inbox/leaders/" class="{% if lt.current == 'peer' %}on{% endif %}">{% icon "eye" 20 %} Team leaders <span class="gm-tab-ro">read-only</span></a>{% endif %}
   {% if lt.npcs %}<a href="/inbox/personas/" class="{% if lt.current == 'npcs' %}on{% endif %}">{% icon "eye" 20 %} AI personas <span class="gm-tab-ro">read-only</span></a>{% endif %}
   <a href="/inbox/dashboard/" class="{% if lt.current == 'dashboard' %}on{% endif %}">{% icon "all" 20 %} Dashboard</a>
+  {% if lt.roleplay %}<a href="/inbox/rp/" class="{% if lt.current == 'roleplay' %}on{% endif %}">{% icon "label" 20 %} My role plays</a>{% endif %}
 </nav>
 {% endwith %}{% elif desk_tabs %}{% with dt=desk_tabs %}
 <nav class="gm-tabs" aria-label="Persona desk">
