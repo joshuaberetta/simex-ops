@@ -1,0 +1,136 @@
+{% extends "ops/mail/base.html" %}{% load ops %}
+{% block title %}Desk dashboard{% endblock %}
+{% block search %}<div class="gm-search-space">Persona desk · Dashboard</div>{% endblock %}
+{% block head %}<meta http-equiv="refresh" content="60">{% endblock %}
+{% block side %}{% endblock %}
+{% block main %}
+<div class="gm-dash gm-deskdash">
+  <div class="gm-dd-head">
+    <h2>Keeping up with the teams</h2>
+    {% if have|length > 1 or kind not in have %}<span class="gm-dd-kind">
+      <a href="?kind=live" class="{% if kind == 'live' %}on{% endif %}">Exercise teams</a>
+      <a href="?kind=test" class="{% if kind == 'test' %}on{% endif %}">Test team</a></span>{% endif %}
+  </div>
+
+  <div class="gm-cards">
+    <a class="gm-card gm-dd-card{% if d.attention %} alert{% endif %}" href="/inbox/desk/"><div class="n">{{ d.attention }}</div>
+      <div class="lab">need attention now{% if d.untaken %} · <b>{{ d.untaken }}</b> nobody has taken{% endif %}</div></a>
+    <div class="gm-card{% if d.target and d.longest and d.longest >= d.target %} alert{% endif %}"><div class="n">{% if d.longest is not None %}{{ d.longest }}<span> min</span>{% else %}—{% endif %}</div>
+      <div class="lab">longest a team is waiting{% if d.over_target %} · <b>{{ d.over_target }}</b> over {{ d.target }} min{% endif %}</div></div>
+    <div class="gm-card"><div class="n">{% if d.median_hour is not None %}{{ d.median_hour }}<span> min</span>{% else %}—{% endif %}</div>
+      <div class="lab">median time to answer, last hour{% if d.median is not None %} · {{ d.median }} min overall{% endif %}</div></div>
+    <div class="gm-card"><div class="n">{% if d.within_pct is not None %}{{ d.within_pct }}<span> %</span>{% else %}—{% endif %}</div>
+      <div class="lab">answered within {{ d.target|default:"—" }} min{% if d.p90 is not None %} · 9 in 10 within {{ d.p90 }} min{% endif %}</div></div>
+    <div class="gm-card"><div class="n">{{ d.received_hour }}<span> last hour · {{ d.received }} in all</span></div>
+      <div class="lab">messages from the teams</div></div>
+    <div class="gm-card"><div class="n">{{ d.answered }}<span> answered · {{ d.closed }} no reply needed</span></div>
+      <div class="lab">of the teams' messages</div></div>
+    <div class="gm-card"><div class="n">{{ d.follow_due }}<span> due · {{ d.follow_later }} later</span></div>
+      <div class="lab">follow-ups</div></div>
+    <div class="gm-card{% if d.npc.held or d.npc.failed %} alert{% endif %}"><div class="n">{{ d.npc.queued }}<span> queued{% if d.npc.held %} · {{ d.npc.held }} held{% endif %}{% if d.npc.failed %} · {{ d.npc.failed }} failed{% endif %}</span></div>
+      <div class="lab">AI persona answers</div></div>
+  </div>
+
+  <h2>Activity, last {{ d.hours|length }} hours</h2>
+  <div class="gm-dd-bars" role="img" aria-label="Team messages in and persona answers out per hour">
+    {% for h in d.hours %}<div class="gm-dd-hour" title="{{ h.at|date:'H:i' }}: {{ h.in }} in, {{ h.out }} answered">
+      <span class="in" style="height:{{ h.in_pct }}%"></span><span class="out" style="height:{{ h.out_pct }}%"></span></div>{% endfor %}
+  </div>
+  <div class="small muted gm-dd-axis"><span>{{ d.hours.0.at|date:"H:i" }}</span><span><i class="sw in"></i> from the teams <i class="sw out"></i> answered by the desk, ExCon or an AI persona</span><span>now</span></div>
+
+  <h2>Waiting longest</h2>
+  <table class="gm-dtable">
+    {% for o in d.oldest %}<tr>
+      <td class="nowrap"><b class="{% if d.target and o.mins >= d.target %}gm-dd-late{% endif %}">{{ o.mins }} min</b><div class="muted">since {{ o.since|time:"H:i" }}</div></td>
+      <td class="nowrap">{% if o.team %}<span class="gm-label gm-teamchip">{{ o.team.name }}</span>{% endif %}
+        {% if o.persona %}<span class="gm-label gm-persona" style="background: {{ o.persona.colour }}; color: {{ o.persona.fg }}">{{ o.persona.name }}</span>{% endif %}</td>
+      <td><a href="/inbox/desk/t/{{ o.thread }}/">{{ o.subject|default:"(no subject)" }}</a>
+        {% if o.triage %}{% if o.triage.urgency == 'high' %} <span class="gm-label gm-st-urgent">Urgent</span>{% endif %}{% if o.triage.ask %}<div class="muted">{{ o.triage.ask }}</div>{% endif %}{% endif %}</td>
+      <td class="nowrap">{% if o.owner %}<span class="gm-label gm-st-owner">{{ o.owner }}</span>{% else %}<span class="muted">nobody has it</span>{% endif %}</td>
+    </tr>{% empty %}<tr><td class="muted">No team is waiting for an answer.</td></tr>{% endfor %}
+  </table>
+
+  <h2>Requests to the personas</h2>
+  {% if not d.read_n %}<p class="small muted">{% if d.readable_n %}Claude hasn't read the teams' messages yet{% else %}No team message to read yet{% endif %}: what the teams ask each persona appears here once Claude has read them (ExCon, Settings → AI analysis).</p>
+  {% else %}<div class="gm-dd-requests">
+    {% for p in d.requests %}<section class="gm-dd-req"{% if p.persona %} style="--persona: {{ p.persona.colour }}"{% endif %}>
+      <h3>{% if p.persona %}<span class="gm-label gm-persona" style="background: {{ p.persona.colour }}; color: {{ p.persona.fg }}">{{ p.persona.name }}</span>{% endif %}
+        <span class="muted">{{ p.n }} request{{ p.n|pluralize }}{% if p.open %} · <b class="gm-dd-late">{{ p.open }} not answered</b>{% endif %}</span></h3>
+      <ul>{% for a in p.asks %}<li class="{{ a.status }}"><a href="/inbox/desk/t/{{ a.thread }}/">{{ a.text }}</a>
+        <span class="muted">{% if a.team %}{{ a.team.name }} · {% endif %}{{ a.at|time:"H:i" }}{% if a.status == 'open' %} · not answered{% elif a.status == 'closed' %} · no reply needed{% endif %}</span></li>{% endfor %}</ul>
+    </section>{% empty %}<p class="muted">No requests so far.</p>{% endfor %}
+  </div>{% endif %}
+
+  <div class="gm-cols">
+    <section>
+      <h2>Teams</h2>
+      <table class="gm-dtable">
+        <tr><th></th><th>wrote</th><th>waiting</th><th>longest</th><th>median answer</th><th>last wrote</th></tr>
+        {% for r in d.teams %}<tr>
+          <td><a href="/inbox/desk/?folder=t{{ r.team.id }}">{{ r.team.name }}</a></td><td>{{ r.received }}</td>
+          <td>{% if r.waiting %}<b>{{ r.waiting }}</b>{% else %}0{% endif %}</td>
+          <td>{% if r.longest is not None %}<span class="{% if d.target and r.longest >= d.target %}gm-dd-late{% endif %}">{{ r.longest }} min</span>{% else %}—{% endif %}</td>
+          <td>{% if r.median is not None %}{{ r.median }} min{% else %}—{% endif %}</td>
+          <td class="nowrap">{% if r.last_in %}{{ r.last_in|time:"H:i" }}{% else %}—{% endif %}</td></tr>
+        {% empty %}<tr><td class="muted">No teams.</td></tr>{% endfor %}
+      </table>
+      <p class="small muted">Every team should get answers at the same pace: a team waiting much longer than the others is being left behind.</p>
+    </section>
+    <section>
+      <h2>Personas</h2>
+      <table class="gm-dtable">
+        <tr><th></th><th>written to</th><th>waiting</th><th>median answer</th><th>sent</th></tr>
+        {% for p in d.personas %}<tr>
+          <td>{% if p.id %}<a href="/inbox/desk/?folder=a{{ p.id }}">{% endif %}<span class="gm-label gm-persona" style="background: {{ p.colour }}; color: {{ p.fg }}">{{ p.name }}</span>{% if p.id %}</a>{% endif %}</td>
+          <td>{{ p.received }}</td><td>{% if p.waiting %}<b>{{ p.waiting }}</b>{% else %}0{% endif %}</td>
+          <td>{% if p.median is not None %}{{ p.median }} min{% else %}—{% endif %}</td><td>{{ p.sent }}</td></tr>
+        {% empty %}<tr><td class="muted">No team has written to a persona yet.</td></tr>{% endfor %}
+      </table>
+      <p class="small muted"><i>Sent</i> counts everything from the persona: injects, follow-ups and answers. The busiest personas may need a second person.</p>
+    </section>
+  </div>
+
+  <div class="gm-cols">
+    <section>
+      <h2>Who is answering</h2>
+      <table class="gm-dtable">
+        <tr><th></th><th>answers</th><th>median</th><th>has now</th><th>last answer</th></tr>
+        {% for p in d.people %}<tr>
+          <td>{% if p.desk %}<span class="gm-dd-dot{% if p.online %} on{% endif %}" title="{% if p.online %}Online{% elif p.seen %}Last seen {{ p.seen|time:'H:i' }}{% else %}Not signed in yet{% endif %}"></span>{% endif %}{{ p.name }}</td>
+          <td>{{ p.answers }}</td><td>{% if p.median is not None %}{{ p.median }} min{% else %}—{% endif %}</td>
+          <td>{% if p.taken %}{{ p.taken }}{% elif not p.machine %}0{% endif %}</td>
+          <td class="nowrap">{% if p.last %}{{ p.last|time:"H:i" }}{% else %}—{% endif %}</td></tr>
+        {% empty %}<tr><td class="muted">Nobody has answered yet.</td></tr>{% endfor %}
+      </table>
+      <p class="small muted"><i>ExCon</i>: answers from the Replies tab or Compose. Injects and follow-ups that came next count as answered but not in the times. <i>Has now</i>: conversations taken and not answered.</p>
+    </section>
+    <section>
+      <h2>Flags for the desk</h2>
+      <table class="gm-dtable">
+        {% for f in d.flags %}<tr><td class="nowrap">{% if f.team %}{{ f.team.name }}{% endif %}<div class="muted">{{ f.at|time:"H:i" }}</div></td>
+          <td>{% for x in f.flags %}<span class="gm-flag">{{ x }}</span> {% endfor %}<div><a href="/inbox/desk/t/{{ f.thread }}/">{{ f.text }}</a></div>
+            {% if f.persona %}<div class="muted">to {{ f.persona.name }}{% if f.status == 'open' %} · <b>not answered</b>{% endif %}</div>{% endif %}</td></tr>
+        {% empty %}<tr><td class="muted">No flags.</td></tr>{% endfor %}
+      </table>
+      <p class="small muted">Claude's flags on the teams' messages to the personas: needs ExCon attention, safety or duty of care, sent to the wrong persona, steps out of the exercise.</p>
+    </section>
+  </div>
+  {% if d.read_n %}<div class="gm-cols">
+    <section>
+      <h2>Decisions and commitments</h2>
+      <table class="gm-dtable">{% for c in d.commitments %}<tr><td class="nowrap">{% if c.team %}{{ c.team.name }}{% endif %}<div class="muted">{{ c.at|time:"H:i" }}</div></td>
+        <td><a href="/inbox/desk/t/{{ c.thread }}/">{{ c.text }}</a>{% if c.persona %}<div class="muted">to {{ c.persona.name }}</div>{% endif %}</td></tr>
+        {% empty %}<tr><td class="muted">Nothing yet.</td></tr>{% endfor %}</table>
+      <p class="small muted">What the teams told the personas they will do: worth a follow-up from the persona when it falls due.</p>
+    </section>
+    <section>
+      <h2>Figures and facts the teams state</h2>
+      <table class="gm-dtable">{% for c in d.facts %}<tr><td class="nowrap">{% if c.team %}{{ c.team.name }}{% endif %}<div class="muted">{{ c.at|time:"H:i" }}</div></td>
+        <td><a href="/inbox/desk/t/{{ c.thread }}/">{{ c.text }}</a>{% if c.persona %}<div class="muted">to {{ c.persona.name }}</div>{% endif %}</td></tr>
+        {% empty %}<tr><td class="muted">Nothing yet.</td></tr>{% endfor %}</table>
+      <p class="small muted">Numbers, places and times the teams gave the personas, so the personas' answers stay consistent with them.</p>
+    </section>
+  </div>{% endif %}
+  <p class="small muted">From the persona desk's own mailbox: a team's message counts as answered by the first persona message to that team after it in the conversation. The page refreshes every minute.</p>
+</div>
+{% endblock %}

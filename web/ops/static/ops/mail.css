@@ -587,3 +587,33 @@ body[class*="box-"] .gm-search { flex: 1 1 400px; min-width: 180px; }
   .gm-simtext small, .gm-realtext { display: none; }
 }
 .gm-date:has(.gm-simdate) { line-height: 1.25; white-space: nowrap; }
+
+/* The persona desk's Dashboard (ops/desk_stats.py) */
+.gm-dd-head { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.gm-dd-kind a { margin-right: 6px; padding: 4px 12px; border-radius: 14px; border: 1px solid var(--line); color: inherit; text-decoration: none; font-size: 13px; }
+.gm-dd-kind a.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.gm-card.alert { border-color: #f6aea9; background: #fef6f5; }
+.gm-card.alert .n { color: #a50e0e; }
+a.gm-dd-card { color: inherit; text-decoration: none; }
+.gm-dd-bars { display: flex; align-items: flex-end; gap: 6px; height: 90px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.gm-dd-hour { flex: 1; display: flex; align-items: flex-end; gap: 2px; height: 100%; }
+.gm-dd-hour span { flex: 1; border-radius: 3px 3px 0 0; min-height: 1px; }
+.gm-dd-hour .in, .gm-dd-axis .sw.in { background: #f28b82; }
+.gm-dd-hour .out, .gm-dd-axis .sw.out { background: #00696b; }
+.gm-dd-axis { display: flex; justify-content: space-between; margin-top: 4px; }
+.gm-dd-axis .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 10px; vertical-align: -1px; }
+.gm-dd-late { color: #a50e0e; font-weight: 600; }
+.gm-dd-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #c4c7c5; margin-right: 6px; vertical-align: 1px; }
+.gm-dd-dot.on { background: #1e8e3e; }
+.gm-deskdash .gm-cards { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.gm-deskdash .gm-cols { margin-top: 8px; }
+.gm-dd-requests { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.gm-dd-req { background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--persona, var(--line)); border-radius: 12px; padding: 10px 14px; }
+.gm-dd-req h3 { margin: 0 0 6px; font-size: 14px; font-weight: 500; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.gm-dd-req ul { margin: 0; padding-left: 18px; font-size: 13px; }
+.gm-dd-req li { margin: 4px 0; }
+.gm-dd-req li .muted { display: block; font-size: 12px; }
+.gm-dd-req li.open::marker { color: #d93025; }
+.gm-dd-req li.answered a, .gm-dd-req li.closed a { color: var(--muted); }
+.gm-deskdash .gm-flag { display: inline-block; background: #fce8e6; color: #a50e0e; border-radius: 4px; padding: 0 6px; font-size: 12px; font-weight: 600; }
+.gm-dd-requests { margin-bottom: 8px; }

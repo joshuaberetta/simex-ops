@@ -184,3 +184,57 @@ def test_excon_hears_of_a_team_waiting_too_long(excon):
     assert not Notice.objects.exists()
     assert excon.post("/settings/", {"desk_wait_minutes": "30", "grace_minutes": "10", "max_upload_mb": "10"}).status_code == 302
     assert conf.get("desk_wait_minutes") == "30"
+
+
+def test_desk_dashboard(excon):
+    from ops import desk_stats
+    setup(excon)
+    deliver_now("3-13")
+    ta, tb = Team.objects.get(code="a"), Team.objects.get(code="b")
+    got_a, _ = team_writes(participant("a"), ta, "Where is the convoy?")
+    got_b, _ = team_writes(participant("b"), tb, "Thanks, noted.")
+    Mail.objects.filter(team=None, folder="inbox").update(created_at=timezone.now() - timedelta(minutes=30))
+    d = desk_client()
+    d.post("/inbox/desk/mark/", {"threads": got_b.thread, "act": "done"})
+    answer(d, Mail.objects.get(team=None, folder="inbox", desk_team=ta), ta)
+    got_c, _ = team_writes(participant("c"), Team.objects.get(code="c"), "Road status?")
+    Mail.objects.filter(team=None, folder="inbox", desk_team__code="c").update(created_at=timezone.now() - timedelta(minutes=25))
+    s = desk_stats.compute("live")
+    assert (s["received"], s["answered"], s["closed"], s["waiting"], s["attention"]) == (3, 1, 1, 1, 1)
+    assert s["median"] == 30 and s["longest"] == 25 and s["over_target"] == 1 and s["untaken"] == 1
+    assert s["oldest"][0]["thread"] == got_c.thread and s["oldest"][0]["team"].code == "c"
+    rows = {r["team"].code: r for r in s["teams"]}
+    assert rows["a"]["answered"] == 1 and rows["a"]["median"] == 30 and rows["c"]["waiting"] == 1
+    assert s["teams"][0]["team"].code == "c"  # the team waiting longest first
+    people = {p["name"]: p for p in s["people"]}
+    assert people["Anna Desk"]["answers"] == 1 and people["Anna Desk"]["online"]
+    assert s["personas"][0]["local"] == "donotreply" and s["personas"][0]["waiting"] == 1
+    assert desk_stats.compute("test")["received"] == 0
+    page = d.get("/inbox/desk/dashboard/")
+    assert page.status_code == 200 and b"Keeping up with the teams" in page.content and b"Waiting longest" in page.content
+    assert page.context["desk_tabs"]["current"] == "dashboard"
+    assert excon.get("/inbox/desk/dashboard/").status_code == 200
+    assert participant("d").get("/inbox/desk/dashboard/").status_code == 403
+
+
+def test_desk_dashboard_requests_to_the_personas(excon):
+    from ops import desk_stats
+    from ops.models import ReplyAnalysis
+    setup(excon)
+    deliver_now("3-13")
+    ta = Team.objects.get(code="a")
+    _, resp = team_writes(participant("a"), ta, "We need 3 trucks. We will deploy at 14:00.")
+    ReplyAnalysis.objects.create(response=resp, summary="Asks for trucks.", asks=["3 trucks"], commitments=["Deploy at 14:00"],
+                                 facts=["200 families displaced"], flags=["escalate", "no_action"], clarity=1,
+                                 ai_written=95, tone="stressed")
+    s = desk_stats.compute("live")
+    req = s["requests"][0]
+    assert req["persona"]["local"] == "donotreply" and req["open"] == 1 and req["asks"][0]["text"] == "3 trucks"
+    assert s["commitments"][0]["text"] == "Deploy at 14:00" and s["facts"][0]["text"] == "200 families displaced"
+    assert s["flags"][0]["flags"] == ["Needs ExCon attention"]  # the desk's flags only, no judgement of the team
+    d = desk_client()
+    page = d.get("/inbox/desk/dashboard/").content.decode()
+    assert "3 trucks" in page and "Deploy at 14:00" in page and "200 families" in page
+    assert "stressed" not in page and "95" not in page and "No action" not in page  # never tone, quality, AI-written
+    answer(d, Mail.objects.get(team=None, folder="inbox"), ta)
+    assert desk_stats.compute("live")["requests"][0]["open"] == 0

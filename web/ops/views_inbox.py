@@ -796,6 +796,8 @@ def _ctx(v, **extra):
     if v.desk_person:
         c["desk_tabs"] = desk_tabs(v.desk_person, "desk" if v.desk else "teams")
         c["back_url"], c["me"] = "/inbox/desk/teams/", v.desk_person  # also on the teams it views
+    elif v.desk:  # ExCon staff on the desk: its tabs too
+        c["desk_tabs"] = desk_tabs(None, "desk")
     if v.leader:
         c["leader_tabs"] = leader_tabs(v.leader, "team" if v.leader_mode else "peer" if v.peer
                                        else "members" if v.member_box else "mail")
@@ -1482,6 +1484,22 @@ def desk_teams(request):
         "team": DESK, "me": person, "base": "/inbox/desk", "readonly": True, "desk_tabs": tabs, "teams": tabs["teams"],
         "box": box_theme(kind="desk", title="Persona desk", sub="Teams & team leaders · read-only"),
         "personal": personal, "v": None, "back_url": "/inbox/desk/teams/",
+        "simex_js": {"base": "/inbox/desk", "readonly": True, "book": [], "team": DESK["name"], "leader": False,
+                     "folder": "", "unread": 0, "vapid": "", "pushBase": "/inbox/desk", "labels": []}})
+
+
+@_desk_page
+def desk_dashboard(request):
+    """The persona desk's Dashboard tab: how the desk is keeping up (ops/desk_stats.py)."""
+    from . import desk_stats
+    person = desk_of(request.user)
+    have = desk_stats.kinds()
+    kind = request.GET.get("kind") or ("test" if have == {"test"} else "live")
+    kind = kind if kind in ("live", "test") else "live"
+    return render(request, "ops/mail/desk_dashboard.html", {
+        "team": DESK, "me": person, "base": "/inbox/desk", "readonly": True, "desk_tabs": desk_tabs(person, "dashboard"),
+        "box": box_theme(kind="desk", title="Persona desk", sub="Dashboard"), "v": None, "back_url": "/inbox/desk/",
+        "d": desk_stats.compute(kind), "kind": kind, "have": have, "desk_ai": desk_ai.enabled(),
         "simex_js": {"base": "/inbox/desk", "readonly": True, "book": [], "team": DESK["name"], "leader": False,
                      "folder": "", "unread": 0, "vapid": "", "pushBase": "/inbox/desk", "labels": []}})
 

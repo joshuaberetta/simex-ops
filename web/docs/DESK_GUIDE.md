@@ -13,6 +13,9 @@ You are on the **persona desk**: part of ExCon, playing the exercise's personas 
 - In a conversation, each message from a persona says who sent it: **Inject**, **Follow-up (ExCon)**, **Sent by** a desk member, **Sent by ExCon** or **Written by the AI persona**. A team's message shows which persona it went **to**.
 - On the left, **Personas** shows one persona's conversations and **Teams** one team's, each with its unread conversations. **AI** marks personas that answer on their own.
 
+## The Dashboard tab
+How the desk is keeping up, refreshed every minute: what needs attention and how many nobody has taken, how long the teams wait, how fast you answer, and an hourly strip of messages in against answers out. **Waiting longest** lists the teams waiting, with who has each. **Requests to the personas** shows what the teams asked each persona, unanswered first; **Decisions and commitments** what they told a persona they will do (a cue for a follow-up), and **Figures and facts** the numbers and places they gave (keep the personas' answers consistent with them). **Teams** shows whether one is being left behind, **Personas** which ones carry the load (time for a second person?), **Who is answering** who is online and what each has taken. Requests, commitments and flags are Claude's reading of the teams' messages: a hint, check the message.
+
 ## Answering a team
 - Open the conversation and click **Reply**. **From** is already the persona the team wrote to; **To** is that team. Your answer lands in the team's conversation, in SIMEX Mail or by email, like any other answer from that persona. It is also recorded as the persona's answer on ExCon's Replies tab.
 - You can change **From** to have another persona write in the same conversation (e.g. the press picking up on a government message). The team sees it in the same conversation.
