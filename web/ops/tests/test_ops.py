@@ -1383,3 +1383,32 @@ def test_excon_password_changed_in_admin_survives_a_restart():
     call_command("seed_simex", verbosity=0)  # what every container start runs
     u.refresh_from_db()
     assert u.check_password("changed-in-admin")
+
+
+def test_duplicate_inject_for_one_team_splits_it(excon):
+    from ops.models import Attachment, RubricCriterion
+    ta, tb = Team.objects.get(code="a"), Team.objects.get(code="b")
+    t = timezone.now() + timedelta(days=1)
+    inj = Inject.objects.create(mel_id="1-12", subject="Letter of attestation", body="Attached", send_at=t,
+                                status="scheduled", expects_reply=True, imported={"subject": "Letter of attestation"})
+    Attachment.objects.create(inject=inj, filename="1-12 Letter.pdf", data=b"x", size=1)
+    RubricCriterion.objects.create(inject=inj, label="Acknowledges", max_points=2)
+    r = excon.post(f"/injects/{inj.id}/duplicate/", {"team": ta.id, "remove_team": "1"})
+    copy = Inject.objects.get(mel_id="1-12-A")
+    assert r["Location"] == f"/injects/{copy.id}/"
+    assert copy.status == "draft" and copy.team_ids == [ta.id] and copy.send_at == t and copy.expects_reply
+    assert copy.imported is None and copy.subject == "Letter of attestation"
+    assert [a.filename for a in copy.attachments.all()] == ["1-12 Letter.pdf"]
+    assert [c.label for c in copy.rubric.all()] == ["Acknowledges"]
+    inj.refresh_from_db()
+    assert ta.id not in inj.team_ids and tb.id in inj.team_ids and inj.status == "scheduled"
+    # a plain copy, then the list names each inject's teams
+    excon.post(f"/injects/{inj.id}/duplicate/", {"team": ""})
+    assert Inject.objects.get(mel_id="1-12.2").team_ids == inj.team_ids
+    html = excon.get("/injects/").content.decode()
+    assert "<b>Team A</b>" in html and "Team B" in html
+    # the last team stays on the original
+    solo = Inject.objects.create(mel_id="2-01", subject="s", team_ids=[tb.id])
+    excon.post(f"/injects/{solo.id}/duplicate/", {"team": tb.id, "remove_team": "1"})
+    solo.refresh_from_db()
+    assert solo.team_ids == [tb.id] and Inject.objects.get(mel_id="2-01-B").team_ids == [tb.id]

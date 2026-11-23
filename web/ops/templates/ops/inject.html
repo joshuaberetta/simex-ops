@@ -233,6 +233,19 @@
 </div>
 {% endif %}
 
+<form method="post" action="/injects/{{ inj.id }}/duplicate/" class="card form" id="duplicate">{% csrf_token %}
+  <h3>Duplicate</h3>
+  <p class="hint">A copy of this inject as a draft, with its files and rubric, to change for one team (e.g. its own letter). A copy for a team is named {{ inj.mel_id }}-A, -B…; other copies {{ inj.mel_id }}.2, .3…</p>
+  <div class="row">
+    <label>Copy for <select name="team">
+      <option value="">The same teams as this one</option>
+      {% for t in teams %}{% if t.active %}<option value="{{ t.id }}">{{ t.name }} only</option>{% endif %}{% endfor %}
+    </select></label>
+    {% if st != 'sent' and st != 'partial' and st != 'sending' %}<label class="check"><input type="checkbox" name="remove_team" value="1" checked> and take that team off {{ inj.mel_id }}</label>{% endif %}
+  </div>
+  <button class="btn">Duplicate inject</button>
+</form>
+
 <form method="post" action="/injects/{{ inj.id }}/delete/" class="card danger-zone">{% csrf_token %}
   <label>Delete: type <b>{{ inj.mel_id }}</b> <input name="confirm" autocomplete="off"></label> <button class="btn small danger">Delete inject</button>
 </form>

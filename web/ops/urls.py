@@ -73,6 +73,7 @@ urlpatterns = [
     path("injects/<int:iid>/test/", x.inject_test),
     path("injects/<int:iid>/followup/", x.inject_followup),
     path("injects/<int:iid>/delete/", x.inject_delete),
+    path("injects/<int:iid>/duplicate/", x.inject_duplicate),
     path("injects/<int:iid>/attachments/", x.attachments_upload),
     path("injects/<int:iid>/rubric/", x.rubric_save),
     path("injects/<int:iid>/ai-check/", a.inject_ai_check),

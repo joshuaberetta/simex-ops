@@ -110,7 +110,9 @@ def injects(request):
     if flagged:
         rows = [i for i in rows if i.flags]
     groups = []
+    team_names = dict(Team.objects.values_list("id", "name"))
     for i in rows:
+        i.team_names = [team_names[t] for t in (i.team_ids or []) if t in team_names]
         snd = senders.get(i.sender_local)
         i.from_display = i.from_name or (snd.display_name if snd else "")
         i.att_count = len(files.get(i.id, [])) or ""
@@ -350,6 +352,66 @@ def inject_test(request, iid):
         else:
             messages.error(request, f"Test to {where} failed: {m.error}")
     return redirect(f"/injects/{iid}/")
+
+
+COPY_FIELDS = ("method", "mailbox", "scenario_dt", "send_at", "channel", "sender_local", "from_name", "reply_to",
+               "delivery", "team_ids", "to_extra", "cc", "bcc", "recipients_label", "subject", "body", "footer_mode",
+               "footer", "supporting_documents", "expects_reply", "critical", "to_leaders", "also_email",
+               "reply_due_minutes")
+
+
+def _copy_id(base, team=None):
+    """A free inject id for a copy: 1-12-A for Team A's, else 1-12.2, 1-12.3..."""
+    if team:
+        cand = f"{base}-{team.code.upper()}"[:40]
+        if not Inject.objects.filter(mel_id=cand).exists():
+            return cand
+        base = cand
+    n = 2
+    while Inject.objects.filter(mel_id=f"{base}.{n}"[:40]).exists():
+        n += 1
+    return f"{base}.{n}"[:40]
+
+
+@excon_required
+@require_POST
+def inject_duplicate(request, iid):
+    """A copy of an inject as a draft (its files and rubric too), for the same teams or one team,
+    so each team can get its own version (e.g. its own letter). Never imported: a re-import
+    leaves it alone."""
+    inj = get_object_or_404(Inject, pk=iid)
+    team = Team.objects.filter(pk=_int(request.POST.get("team")), is_test=False).first()
+    with transaction.atomic():
+        copy = Inject(mel_id=_copy_id(inj.mel_id, team), status="draft",
+                      seq=(Inject.objects.aggregate(m=Max("seq"))["m"] or 0) + 1)
+        for f in COPY_FIELDS:
+            setattr(copy, f, getattr(inj, f))
+        if team:
+            copy.team_ids = [team.id]
+        copy.save()
+        for a in inj.attachments.all():
+            Attachment.objects.create(inject=copy, filename=a.filename, content_type=a.content_type, size=a.size,
+                                      data=a.data)
+        for c in inj.rubric.all():
+            RubricCriterion.objects.create(inject=copy, label=c.label, description=c.description,
+                                           max_points=c.max_points, sort=c.sort, critical=c.critical)
+        note = ""
+        if team and request.POST.get("remove_team") == "1":
+            if inj.status in importer.LOCKED:
+                note = f" {inj.mel_id} has gone out, so it still lists {team.name}."
+            else:
+                ids = inj.team_ids or list(Team.objects.filter(active=True, is_test=False).values_list("id", flat=True))
+                rest = [i for i in ids if i != team.id]
+                if not rest:
+                    note = f" {team.name} is the only team on {inj.mel_id}, so it stays there."
+                elif rest != ids:
+                    inj.team_ids = rest
+                    inj.save()
+                    note = f" {inj.mel_id} no longer goes to {team.name}."
+    audit("inject_duplicate", f"{inj.mel_id} -> {copy.mel_id}", _u(request))
+    messages.success(request, f"Copied {inj.mel_id} as {copy.mel_id} (a draft{f' for {team.name}' if team else ''})."
+                              f"{note} Edit it, then schedule it.")
+    return redirect(f"/injects/{copy.id}/")
 
 
 @excon_required
