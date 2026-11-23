@@ -67,7 +67,7 @@ def send(person, note="", reply_to="", user=""):
     addr = person.personal_email.strip()
     password = ensure_account(person, reset=True)
     person.refresh_from_db()
-    link = signin.url(person.user) if signin.can_use(person.user) else ""  # none for the persona desk
+    link = signin.url(person.user) if signin.can_use(person.user) else ""
     real = _context(person, password, link, note)
     kept = {**real, "password": HIDDEN, "link": HIDDEN if link else "", "redacted": True}
     m = Message(kind="login", channel="email", target=f"{person.name} · login", from_addr=from_addr(), to=[addr],

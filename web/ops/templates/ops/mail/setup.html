@@ -3,7 +3,7 @@
 {% block main %}
 <article class="gm-guide gm-setup" data-setup data-app-url="{{ app_url }}">
   <h1>Welcome{% if me %}, {{ me.name }}{% endif %}</h1>
-  <p>You're signed in to {% if v.leader_box %}your team leader mailbox ({{ team.name }}){% else %}{{ team.name }}'s SIMEX Mail{% endif %} on this device. One more step so you don't miss a message:</p>
+  <p>You're signed in to {% if v.desk %}the persona desk{% elif v.leader_box %}your team leader mailbox ({{ team.name }}){% else %}{{ team.name }}'s SIMEX Mail{% endif %} on this device. One more step so you don't miss a message:</p>
   <section data-step="install" hidden>
     <h2>Add SIMEX Mail to your home screen</h2>
     <p>On an iPhone or iPad, alerts only work from the home-screen app. Tap <b>Share</b> <svg class="gm-share" width="16" height="16" viewBox="0 0 24 24" aria-label="(the square with an arrow)"><path fill="currentColor" d="M12 2l4 4-1.4 1.4L13 5.8V15h-2V5.8L9.4 7.4 8 6zM5 10h3v2H6v8h12v-8h-2v-2h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1z"/></svg>, then <b>Add to Home Screen</b>, then <b>Add</b>.</p>
@@ -26,6 +26,6 @@
     <h2>All set</h2>
     <p>Alerts are on for this device. To stop them, use the bell at the top, or sign out.</p>
   </section>
-  <p><a class="gm-pill-btn" href="/inbox/">Open my mailbox</a></p>
+  <p><a class="gm-pill-btn" href="{{ v.base }}/">Open my mailbox</a></p>
 </article>
 {% endblock %}

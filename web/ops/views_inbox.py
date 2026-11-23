@@ -122,7 +122,7 @@ def signin_link(request, token):
     if request.user != user:
         login(request, user, backend=settings.AUTHENTICATION_BACKENDS[0])
         audit("signin_qr", user.username, user.username)
-    resp = redirect("/inbox/setup/")
+    resp = redirect(signin.setup_path(user))
     resp.delete_cookie(SIGNED_OUT, domain=settings.SESSION_COOKIE_DOMAIN)
     return resp
 

@@ -104,6 +104,19 @@ def test_login_email_sends_new_password_and_qr_and_marks_shared(excon):
     assert p.login_shared_at is None
 
 
+def test_login_email_to_the_persona_desk_has_the_qr(excon):
+    from ops.tests.test_desk import desk_client
+    p = desk_client("Anna Desk").person
+    p.personal_email = "anna@home.org"
+    p.save()
+    assert excon.post("/people/logins/email/", {"person": p.id}).status_code == 302
+    payload, _ = mailer.get().sent[-1]
+    assert payload["to"] == ["anna@home.org"] and "persona desk" in payload["text"]
+    link = re.search(r"https?://\S+/inbox/go/(\S+)/", payload["text"])
+    assert link and signin.user_for(link.group(1)) == p.user
+    assert payload["attachments"][0]["content_id"] == "signin-qr" and 'src="cid:signin-qr"' in payload["html"]
+
+
 def test_bulk_login_emails_skip_shared_and_missing(excon):
     a = participant("a", "Amina").person
     b = participant("b", "Bo").person
