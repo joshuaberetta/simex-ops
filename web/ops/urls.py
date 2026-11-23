@@ -116,6 +116,7 @@ urlpatterns = [
     path("people/import/", x.people_import),
     path("people/import/apply/", x.people_import_apply),
     path("people/<int:pid>/shared/", x.person_login_shared),
+    path("people/<int:pid>/activity/", x.person_activity),
     path("people/<int:pid>/delete/", x.person_delete),
     path("people/<int:pid>/account/", x.person_account),
     path("teams/save/", x.team_save),

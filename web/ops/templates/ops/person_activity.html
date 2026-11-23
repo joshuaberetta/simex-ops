@@ -1,0 +1,45 @@
+{% extends "ops/base.html" %}{% load ops %}
+{% block title %}{{ p.name }} · activity · SIMEX ops{% endblock %}
+{% block body %}
+<h1><a href="/people/#g-{% if p.team_id %}team-{{ p.team_id }}{% elif p.role == 'desk' %}desk{% elif p.role == 'rp' %}rp{% else %}none{% endif %}" class="muted">People &amp; logins</a> / {{ p.name }}
+  {% if online %}<span class="pill safe">online</span>{% endif %}</h1>
+<div class="card">
+<dl class="hdrs">
+  <dt>Team · role</dt><dd>{{ p.team|default:"no team" }} · {{ ROLES|get:p.role|default:p.role }}{% if not p.active %} · <span class="warn">inactive</span>{% endif %}</dd>
+  <dt>Login</dt><dd>{% if p.user %}<code>{{ p.user.username }}</code>{% if not p.user.is_active %} <span class="warn">disabled</span>{% endif %}
+    · {% if p.login_shared_at %}shared {{ p.login_shared_at|date:"j M H:i" }}{% if p.login_shared_via %} ({{ p.login_shared_via }}){% endif %}{% else %}<span class="warn">not shared</span>{% endif %}{% else %}<span class="muted">none</span>{% endif %}</dd>
+  <dt>Last sign-in</dt><dd>{% if p.user.last_login %}{{ p.user.last_login|date:"D j M H:i" }} <span class="muted">({{ p.user.last_login|timesince }} ago)</span>{% else %}<span class="muted">never</span>{% endif %}
+    {% if signins.signins %} · {{ signins.signins }} sign-in{{ signins.signins|pluralize }} logged{% endif %}{% if signins.failed %} · <span class="warn">{{ signins.failed }} failed since</span>{% endif %}</dd>
+  <dt>Last seen</dt><dd>{% if p.last_seen_at %}{{ p.last_seen_at|date:"D j M H:i" }} <span class="muted">({{ p.last_seen_at|timesince }} ago)</span>{% else %}<span class="muted">not yet</span>{% endif %}</dd>
+</dl>
+<p class="hint">A sign-in lasts {{ session_days }} days on a device, so someone may use SIMEX Mail every day without signing in again: <b>last seen</b> is their latest page, to the minute.</p>
+</div>
+
+<div class="cols">
+<section class="col-main">
+<div class="bar"><h2>Activity <span class="muted small">latest 500</span></h2>
+<form method="get" class="filters"><select name="show" onchange="this.form.submit()"><option value="">everything</option>
+  {% for k, label in GROUPS.items %}<option value="{{ k }}" {% if group == k %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></form></div>
+<table class="list small">
+  <thead><tr><th>When</th><th>What</th><th></th></tr></thead>
+  {% for i in items %}
+  <tr><td class="nowrap" title="{{ i.at|date:'D j M Y H:i:s' }}">{{ i.at|date:"D j M H:i:s" }}</td>
+    <td>{% if i.link %}<a href="{{ i.link }}">{{ i.text }}</a>{% else %}<span class="{% if i.warn %}warn{% endif %}">{{ i.text }}</span>{% endif %}</td>
+    <td class="muted" {% if i.ua %}title="{{ i.ua }}"{% endif %}>{{ i.detail }}</td></tr>
+  {% empty %}<tr><td colspan="3" class="muted">Nothing yet.</td></tr>{% endfor %}
+</table>
+</section>
+<section class="col-side">
+<h2>Devices signed in</h2>
+<table class="list small">
+  {% for d in devices %}<tr><td title="{{ d.ua }}"><b>{{ d.name }}</b><br><span class="muted">{{ d.n }}× · first {{ d.first|date:"j M H:i" }} · last {{ d.last|date:"j M H:i" }}{% if d.ip %} · {{ d.ip }}{% endif %}</span></td></tr>
+  {% empty %}<tr><td class="muted">No sign-in logged.</td></tr>{% endfor %}
+</table>
+<h2>Alerts on</h2>
+<table class="list small">
+  {% for d in push %}<tr><td title="{{ d.ua }}"><b>{{ d.name }}</b><br><span class="muted">since {{ d.since|date:"j M H:i" }}{% if d.ok %} · last alert {{ d.ok|date:"j M H:i" }}{% endif %}</span></td></tr>
+  {% empty %}<tr><td class="muted">No device has alerts on.</td></tr>{% endfor %}
+</table>
+</section>
+</div>
+{% endblock %}

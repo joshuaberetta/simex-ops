@@ -82,6 +82,7 @@ MIDDLEWARE = [
     "ops.middleware.MailHost",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "ops.middleware.LastSeen",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]

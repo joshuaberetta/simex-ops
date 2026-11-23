@@ -29,7 +29,8 @@
       {% else %}<b>{{ g.people|length }}</b> {% if g.key == "desk" %}on the desk{% elif g.key == "rp" %}role player{{ g.people|length|pluralize }}{% else %}{{ g.people|length|pluralize:"person,people" }}{% endif %}{% endif %}
       {% if g.people %}<span class="status {% if g.unshared %}draft{% else %}sent{% endif %}">{{ g.shared }} shared</span>{% if g.unshared %} <span class="status overdue">{{ g.unshared }} not shared</span>{% endif %}
       {% if g.no_email %}<span class="warn small">{{ g.no_email }} without a personal email</span>{% endif %}
-      {% if g.no_login %}<span class="warn small">{{ g.no_login }} without a login</span>{% endif %}{% endif %}
+      {% if g.no_login %}<span class="warn small">{{ g.no_login }} without a login</span>{% endif %}
+      <span class="small" title="Signed in at least once · seen in the last 5 minutes">{{ g.signed_in }} signed in{% if g.online %} · <b>{{ g.online }} online</b>{% endif %}</span>{% endif %}
       {% if g.team and g.people %}<a class="small" href="/people/slips/?team={{ g.team.id }}" target="_blank">sign-in slips</a>{% endif %}
     </span>
   </summary>
@@ -54,6 +55,7 @@
       <button class="link" name="action" value="reset" data-confirm="Issue a new password for {{ p.name }}?">reset password</button>
       {% if p.login_shared_at %}<span class="pill safe small" title="{{ p.login_shared_via }}">shared {{ p.login_shared_at|date:"j M H:i" }}{% if p.login_shared_via == "by hand" %} by hand{% else %} by email{% endif %}</span>{% if p.login_email and p.login_email.delivery and p.login_email.delivery != "delivered" %} <span class="warn small">{{ p.login_email.delivery }}</span>{% endif %}
       {% else %}<span class="pill warn small">not shared</span>{% if p.login_email and p.login_email.status == "failed" %} <a class="warn small" href="/log/{{ p.login_email.id }}/" title="{{ p.login_email.error }}">email failed</a>{% endif %}{% endif %}
+      <a class="small signin-status" href="/people/{{ p.id }}/activity/" title="Sign-ins, devices and activity{% if p.user.last_login %} · last sign-in {{ p.user.last_login|date:'j M H:i' }}{% endif %}{% if p.last_seen_at %} · last seen {{ p.last_seen_at|date:'j M H:i' }}{% endif %}">{% if p.online %}<span class="pill safe small">online</span>{% elif p.last_seen_at %}seen {{ p.last_seen_at|timesince }} ago{% elif p.user.last_login %}signed in {{ p.user.last_login|date:"j M H:i" }}{% else %}<span class="muted">never signed in</span>{% endif %}</a>{% if p.signins.failed %} <span class="warn small" title="Failed sign-ins since the last good one">{{ p.signins.failed }} failed</span>{% endif %}
       {% if p.user.is_active %}<button class="link" name="action" value="deactivate">disable</button>{% else %}<button class="link" name="action" value="activate">enable</button>{% endif %}
     {% else %}<button class="link" name="action" value="create">create login</button>{% endif %}
   </form>

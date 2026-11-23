@@ -38,3 +38,18 @@ class MailHost:
             elif path.startswith("/inbox/") and not path.startswith(self.EXCON_PATHS):
                 return redirect(settings.MAIL_URL + request.get_full_path())
         return self.get_response(request)
+
+
+class LastSeen:
+    """Stamp the signed-in person's Person.last_seen_at (ops/activity.py), at most once a minute."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        resp = self.get_response(request)
+        if request.path.startswith("/static/"):
+            return resp
+        from . import activity
+        activity.seen(request)
+        return resp

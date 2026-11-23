@@ -95,6 +95,7 @@ class Person(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
                                 related_name="person")
     lead_seen = models.IntegerField(default=0)  # leader: the last team-inbox Mail id they looked at
+    last_seen_at = models.DateTimeField(null=True, blank=True)  # last signed-in request (ops/activity.py)
 
     objects = PersonQuerySet.as_manager()
 
@@ -425,6 +426,23 @@ class MailAction(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["team", "action"])]
+
+
+class LoginEvent(models.Model):
+    """A sign-in (password or QR code), a sign-out or a failed sign-in, with the device it came
+    from (ops/activity.py, from Django's auth signals). Kept through Start afresh, like the logins."""
+    person = models.ForeignKey(Person, null=True, blank=True, on_delete=models.CASCADE, related_name="login_events")
+    username = models.CharField(max_length=150, blank=True, default="")
+    kind = models.CharField(max_length=10)  # signin | signout | failed
+    method = models.CharField(max_length=10, blank=True, default="")  # password | qr (sign-ins)
+    at = models.DateTimeField(default=timezone.now)
+    ip = models.CharField(max_length=64, blank=True, default="")
+    user_agent = models.CharField(max_length=400, blank=True, default="")
+    host = models.CharField(max_length=10, blank=True, default="")  # mail | ops
+
+    class Meta:
+        ordering = ["-at", "-id"]
+        indexes = [models.Index(fields=["person", "at"])]
 
 
 class PushSubscription(models.Model):

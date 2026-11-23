@@ -120,6 +120,7 @@ def signin_link(request, token):
                                     "on your slip, or ask ExCon for a new slip.")
         return redirect("/inbox/")
     if request.user != user:
+        request.signin_method = "qr"
         login(request, user, backend=settings.AUTHENTICATION_BACKENDS[0])
         audit("signin_qr", user.username, user.username)
     resp = redirect(signin.setup_path(user))

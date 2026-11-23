@@ -21,7 +21,7 @@ from django.utils import timezone
 from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_POST
 
-from . import (addresses, ai, legacy_import, backup, checks, reset, conf, simclock, delivery, desk, documents, importer, inbound, logins, mailer,
+from . import (activity, addresses, ai, legacy_import, backup, checks, reset, conf, simclock, delivery, desk, documents, importer, inbound, logins, mailer,
                notices, render as rnd, roster, signin)
 from .access import excon_required
 from .models import (CHANNELS, DELIVERY_MODES, ROLES, STATUSES, AiGrade, Attachment, AttachmentImport, Audit, Grade,
@@ -715,8 +715,11 @@ def people_page(request):
         t.n_members = sum(p.role == "member" for p in mine)
     team_roles = list(TeamRole.objects.annotate(n=Count("people", filter=Q(people__role="member"))))
     last = logins.last_emails(people)
+    signins = activity.summary(people)
     for p in people:
         p.login_email = last.get(p.id)
+        p.signins = signins.get(p.id, {})
+        p.online = activity.online(p)
     sharable = [p for p in people if _sharable(p)]
     login_stats = {"shared": sum(1 for p in sharable if p.user and p.login_shared_at),
                    "unshared": sum(1 for p in sharable if not (p.user and p.login_shared_at)),
@@ -737,7 +740,9 @@ def people_page(request):
                        "shared": sum(1 for p in live if p.user and p.login_shared_at),
                        "unshared": sum(1 for p in live if not (p.user and p.login_shared_at)),
                        "no_email": sum(1 for p in live if not p.personal_email),
-                       "no_login": sum(1 for p in live if not p.user)})
+                       "no_login": sum(1 for p in live if not p.user),
+                       "signed_in": sum(1 for p in live if p.user and (p.user.last_login or p.last_seen_at)),
+                       "online": sum(1 for p in live if p.online)})
     return render(request, "ops/people.html", {"tab": "people", "teams": teams, "people": people, "ROLES": ROLES,
                                                "groups": groups,
                                                "team_roles": team_roles,
@@ -1052,6 +1057,21 @@ def people_login_email(request):
     if not people:
         messages.warning(request, "Nobody to email: every login there has been shared already.")
     return redirect("/people/#login-emails" if not P.get("person") else "/people/")
+
+
+@excon_required
+def person_activity(request, pid):
+    """One person's sign-ins, devices and what they did in SIMEX Mail, latest first."""
+    p = get_object_or_404(Person.objects.select_related("team", "user"), pk=pid)
+    group = request.GET.get("show", "")
+    if group not in activity.GROUPS:
+        group = ""
+    seen_devices, push = activity.devices(p)
+    return render(request, "ops/person_activity.html", {
+        "tab": "people", "p": p, "items": activity.timeline(p, group=group), "group": group,
+        "GROUPS": activity.GROUPS, "devices": seen_devices, "push": push, "online": activity.online(p),
+        "signins": activity.summary([p]).get(p.id, {}), "ROLES": ROLES,
+        "session_days": settings.SESSION_COOKIE_AGE // 86400})
 
 
 @excon_required
