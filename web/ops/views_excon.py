@@ -29,7 +29,7 @@ from .models import (CHANNELS, DELIVERY_MODES, ROLES, STATUSES, AiGrade, Attachm
                      MessageAttachment, Notice, Person, PushSubscription, ReplyAnalysis, Response,
                      ResponseAttachment, RubricCriterion, Sender, Team, TeamRole, TestRun, TestRunItem, audit)
 
-from .views_inbox import LABEL_COLOURS, desk_from_choices, desk_members  # noqa: E402
+from .views_inbox import LABEL_COLOURS, desk_from_choices, desk_leaders, desk_members  # noqa: E402
 
 MAX_ATTACHMENT = documents.MAX_ATTACHMENT
 User = get_user_model()
@@ -1138,10 +1138,10 @@ def inboxes(request):
 
 @excon_required
 def compose(request):
-    """A message from a persona to teams or team members, now, as on the persona desk (desk.send:
+    """A message from a persona to teams, team members or team leaders, now, as on the persona desk (desk.send:
     a Message of kind desk, no inject), without opening SIMEX Mail."""
     teams = list(Team.objects.filter(active=True))
-    members = desk_members(teams)
+    members = desk_members(teams) + desk_leaders(teams)
     if request.method == "POST":
         P = request.POST
         keys = set(P.getlist("to"))
@@ -1171,7 +1171,8 @@ def compose(request):
     else:
         form = {"from": "", "to": set(), "subject": "", "body": ""}
     by_team = [{"team": t, "key": f"t:{t.id}",
-                "members": [e for e in members if e["team"] == t.id]} for t in teams]
+                "leaders": [e for e in members if e["team"] == t.id and e["kind"] == "tl"],
+                "members": [e for e in members if e["team"] == t.id and e["kind"] == "member"]} for t in teams]
     recent = Message.objects.filter(kind="desk").select_related("author").order_by("-id")[:30]
     return render(request, "ops/compose.html", {
         "tab": "compose", "personas": desk_from_choices(), "by_team": by_team, "form": form, "recent": recent,

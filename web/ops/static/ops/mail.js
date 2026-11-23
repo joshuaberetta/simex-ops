@@ -85,10 +85,10 @@
       let idx = 0, items = [];
       const show = () => {
         const q = input.value.trim().toLowerCase();
-        items = BOOK.filter((b) => !this.keys[field].includes(b.key) && (!q || b.name.toLowerCase().includes(q) || b.addr.toLowerCase().includes(q))).slice(0, 8);
+        items = BOOK.filter((b) => !this.keys[field].includes(b.key) && (!q || b.name.toLowerCase().includes(q) || b.addr.toLowerCase().includes(q))).slice(0, 60);  // the list scrolls
         if (!items.length || document.activeElement !== input) { box.hidden = true; return; }
         idx = Math.min(idx, items.length - 1);
-        box.innerHTML = items.map((b, i) => `<div data-i="${i}" class="${i === idx ? "on" : ""}"><span class="gm-avatar" style="background:${colour(b.name)}">${esc((b.name || "?")[0].toUpperCase())}</span><span>${esc(b.name)}<small>${esc(b.addr)}${b.kind === "team" ? " · team" : b.kind === "member" ? " · team member" : ""}</small></span></div>`).join("");
+        box.innerHTML = items.map((b, i) => `<div data-i="${i}" class="${i === idx ? "on" : ""}"><span class="gm-avatar" style="background:${colour(b.name)}">${esc((b.name || "?")[0].toUpperCase())}</span><span>${esc(b.name)}<small>${esc(b.addr)}${b.kind === "team" ? " · team" : b.kind === "member" ? " · team member" : b.kind === "tl" ? " · team leader" : ""}</small></span></div>`).join("");
         box.hidden = false;
       };
       input.addEventListener("input", () => { idx = 0; input.classList.remove("bad"); input.title = ""; show(); });

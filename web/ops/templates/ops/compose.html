@@ -2,7 +2,7 @@
 {% block title %}Compose · SIMEX ops{% endblock %}
 {% block body %}
 <h1>Compose</h1>
-<p class="muted">Write as any persona to teams or team members, now, without making an inject: the same as <b>Write as a persona</b> on the <a href="/inbox/desk/">persona desk</a>.
+<p class="muted">Write as any persona to teams, team members or team leaders, now, without making an inject: the same as <b>Write as a persona</b> on the <a href="/inbox/desk/">persona desk</a>.
 One message per team or member ticked, in SIMEX Mail or by email as the delivery channel is (Settings). It is logged as kind <i>desk</i>: out of the injects' figures, but the teams' replies to it are matched like any other.</p>
 <form method="post" action="/compose/" enctype="multipart/form-data" class="card form live-card" style="max-width:760px">{% csrf_token %}
   <label>From <span class="hint">every active persona but the team leader persona (the leaders play it)</span>
@@ -12,9 +12,10 @@ One message per team or member ticked, in SIMEX Mail or by email as the delivery
   <fieldset><legend>To</legend>
     {% for g in by_team %}<div>
       <label class="chk"><input type="checkbox" name="to" value="{{ g.key }}" {% if g.key in form.to %}checked{% endif %}> <b>{{ g.team.name }}</b>{% if g.team.is_test %} <span class="muted small">test</span>{% endif %} <span class="muted small">team inbox</span></label>
+      {% for e in g.leaders %}<label class="chk"><input type="checkbox" name="to" value="{{ e.key }}" {% if e.key in form.to %}checked{% endif %}> {{ e.name }} <span class="muted small">team leader · {{ e.addr }}</span></label>{% endfor %}
       {% for e in g.members %}<label class="chk"><input type="checkbox" name="to" value="{{ e.key }}" {% if e.key in form.to %}checked{% endif %}> {{ e.name }} <span class="muted small">{{ e.addr }}</span></label>{% endfor %}
     </div>{% empty %}<p class="muted small">No active teams (People &amp; logins).</p>{% endfor %}
-    <p class="hint">A member's message goes to their own mailbox only (with personal mailboxes off, to the team inbox, for them; by email, to their own email address).</p>
+    <p class="hint">A member's message goes to their own mailbox only (with personal mailboxes off, to the team inbox, for them; by email, to their own email address). A team leader's goes to their own mailbox only (by email, to their email address); it doesn't reach the team.</p>
   </fieldset>
   <label>Subject <input name="subject" value="{{ form.subject }}"></label>
   <label>Message <textarea name="body" rows="8">{{ form.body }}</textarea></label>

@@ -328,3 +328,36 @@ def test_excon_compose_tab(excon):
     excon.post("/compose/", {"from": "p:cnn", "to": f"t:{ta.id}", "body": "x"})
     assert Message.objects.filter(kind="desk").count() == 2
     assert desk_client().get("/compose/").status_code == 403 and participant("a").get("/compose/").status_code == 403
+
+
+def test_compose_and_desk_write_to_team_leaders(excon):
+    setup(excon)
+    ta = Team.objects.get(code="a")
+    lead = Person.objects.get(team=ta, role="tl")
+    key = f"l:{lead.id}"
+    group = next(g for g in excon.get("/compose/").context["by_team"] if g["team"] == ta)
+    entry = next(e for e in group["leaders"] if e["key"] == key)
+    assert entry["name"] == f"Team A leader ({lead.name})" and entry["addr"].startswith("undac-a-tl")
+    r = excon.post("/compose/", {"from": "p:cnn", "to": key, "subject": "For the TL", "body": "Only you."})
+    assert r.status_code == 302
+    m = Message.objects.get(kind="desk")
+    assert m.status == "sent" and m.inbox_owner == lead and m.person == lead
+    assert Mail.objects.filter(team=ta, owner=lead, folder="inbox", subject="For the TL").exists()
+    assert not Mail.objects.filter(team=ta, owner=None, subject="For the TL").exists()  # not the team's
+    assert Mail.objects.filter(team=None, folder="sent", subject="For the TL", desk_team=ta).exists()
+    la = leader("a")
+    assert "For the TL" in la.get("/inbox/").content.decode()
+    # The persona desk's book (and so its typing completion) lists every leader and member.
+    d = desk_client()
+    book = d.get("/inbox/desk/").context["simex_js"]["book"]
+    keys = {b["key"] for b in book}
+    assert key in keys and next(b for b in book if b["key"] == key)["kind"] == "tl"
+    assert all(f"m:{p.id}" in keys for p in Person.objects.participants().filter(active=True, team__active=True))
+    j = d.post("/inbox/desk/send/", {"from": "p:cnn", "to": key, "subject": "Again", "body": "Hi."},
+               headers=FETCH).json()
+    assert j["ok"], j
+    assert Mail.objects.filter(team=ta, owner=lead, folder="inbox", subject="Again").exists()
+    # Not a leader any more: no longer in the book, and a stale key goes nowhere.
+    lead.active = False
+    lead.save()
+    assert key not in {b["key"] for b in d.get("/inbox/desk/").context["simex_js"]["book"]}

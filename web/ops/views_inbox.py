@@ -275,7 +275,8 @@ def address_book(v):
     persona desk: every active team."""
     if v.desk:
         teams = list(Team.objects.filter(active=True))
-        return [{"key": f"t:{t.id}", "name": t.name, "addr": team_address(t), "kind": "team"} for t in teams] + desk_members(teams)
+        return ([{"key": f"t:{t.id}", "name": t.name, "addr": team_address(t), "kind": "team"} for t in teams]
+                + desk_members(teams) + desk_leaders(teams))
     team = v.team
     mates = []
     if conf.flag("personal_mailboxes"):
@@ -309,6 +310,28 @@ def desk_members(teams):
               .order_by("team__name", "name"))
     return [{"key": f"m:{p.id}", "name": addresses.member_name(p), "kind": "member", "team": p.team_id,
              "addr": (p.email or "no email address") if by_email else member_address(p, locs)} for p in people]
+
+
+def leader_name(p, team=None):
+    """How the desk names a team leader: "Team A leader (Jane Doe)"."""
+    team = team or p.team
+    return f"{team.name} leader ({p.name})" if team else p.name
+
+
+def desk_leaders(teams):
+    """The persona desk (and Compose) write to the team leaders too: each active team's leader,
+    in their own mailbox (at the team leader persona's address they play) or, when injects go
+    by email, at their email."""
+    by_email = conf.get("channel_mode") == "email"
+    out = []
+    for t in teams:
+        p = t.leader()
+        if not p:
+            continue
+        lp = rnd.leader_persona(t)
+        addr = (p.email or "no email address") if by_email else (lp["addr"] if lp else team_address(t))
+        out.append({"key": f"l:{p.id}", "name": leader_name(p, t), "kind": "tl", "team": t.id, "addr": addr})
+    return out
 
 
 CONTACT_SCAN = 3000  # the latest mails of a mailbox read for its contacts

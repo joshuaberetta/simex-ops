@@ -18,7 +18,7 @@ You are on the **persona desk**: part of ExCon, playing the exercise's personas 
 - **Someone else on it?** At the top of a conversation, a yellow bar says who else on the desk has it open, and a red one who is writing an answer, so two of you don't answer the same message. Read and starred are shared: a conversation one of you opened is no longer unread for the others.
 
 ## Writing first
-Click **Write as a persona**, choose **From** (each persona with its address), and pick one or more teams or team members (e.g. **Team A (Jane Doe)**) in To, Cc or Bcc: each gets its own message and only ever sees its own. A member's goes to their own mailbox, not the team's. New messages to the teams only go out once ExCon has armed live sending (except to the Test team), and nothing goes while sending is paused.
+Click **Write as a persona**, choose **From** (each persona with its address), and pick one or more teams, team members (e.g. **Team A (Jane Doe)**) or team leaders (**Team A leader (John Roe)**) in To, Cc or Bcc: start typing a team, a name or an address and every match is suggested. Each gets its own message and only ever sees its own. A member's or a leader's goes to their own mailbox, not the team's. A leader can't answer a persona in SIMEX Mail (only by email). New messages to the teams only go out once ExCon has armed live sending (except to the Test team), and nothing goes while sending is paused.
 
 ## What you can't do here
 - Write as the **team leader persona**: each team's leader plays it themselves.

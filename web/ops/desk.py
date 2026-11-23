@@ -110,7 +110,8 @@ def _files(desk_mail, mail=None, m=None, response=None):
 def on_delivered(m, mail=None):
     """A persona's delivery (m, a Message just sent; mail: the in-app Mail it put in a team's
     inbox) -> its copy in the desk's Sent. Not the team leader persona's, nor the copies in the
-    team leaders' own mailboxes or emails to them. Never stops the delivery."""
+    team leaders' own mailboxes or emails to them (but the desk's own messages to a leader).
+    Never stops the delivery."""
     try:
         with transaction.atomic():
             return _on_delivered(m, mail)
@@ -120,7 +121,8 @@ def on_delivered(m, mail=None):
 
 
 def _on_delivered(m, mail):
-    if (m.kind == "leader" or (m.inbox_owner_id and m.inbox_owner.is_leader) or not m.persona or (m.person_id and m.person.is_leader)
+    to_leader = m.kind != "desk" and ((m.inbox_owner_id and m.inbox_owner.is_leader) or (m.person_id and m.person.is_leader))
+    if (m.kind == "leader" or to_leader or not m.persona
             or is_leader_persona(m.persona) or Mail.objects.filter(team=None, message=m).exists()):
         return None
     name, addr = email.utils.parseaddr(m.from_addr)
@@ -237,18 +239,22 @@ def send(person, user, from_key, entries, subject, body, files=(), docs=(), pare
                  .select_related("team").first())
             if p and (p.team, p) not in targets:
                 targets.append((p.team, p))
+        elif e.get("kind") == "tl":
+            p = Person.objects.filter(pk=int(e["key"][2:]), role="tl", active=True, team__active=True).select_related("team").first()
+            if p and (p.team, p) not in targets:
+                targets.append((p.team, p))
     if not targets:
-        raise DeskError("Write to one or more teams or team members.")
+        raise DeskError("Write to one or more teams, team members or team leaders.")
     who = person.name if person else user
     msgs, errors = [], []
     from . import delivery
     for t, member in targets:
-        label = member_name(member) if member else t.name
+        label = _name(member, t)
         ctx = render.team_ctx(t)
         local = render.fill(s.local_part, ctx).lower()
         response = answering(parent, t)
-        if response is not None and member and response.person_id != member.id:
-            response = None  # another member's message: this one is written to them afresh
+        if response is not None and member and (response.person_id != member.id or member.is_leader):
+            response = None  # another member's message (or a leader's, never a team's): written to them afresh
         if response is not None and (response.persona or "") == local and (response.channel == "email" or response.team_id):
             m = delivery.answer(response, body, user=user, files=files, attachments=docs, author=person)
         elif not conf.flag("live_armed") and not t.is_test:
@@ -269,6 +275,13 @@ def send(person, user, from_key, entries, subject, body, files=(), docs=(), pare
     return msgs, errors
 
 
+def _name(person, team):
+    """A desk message's recipient as named in the Log and the desk's Sent."""
+    if not person:
+        return team.name
+    return f"{team.name} leader ({person.name})" if person.is_leader else member_name(person)
+
+
 def _new(s, local, ctx, team, subject, body, files, docs, parent, response, person, user, member=None):
     """A new message from the persona to a team or one of its members (kind desk), delivered
     now. In-app, a member's goes to their own mailbox only (personal mailboxes; else to the team
@@ -278,13 +291,14 @@ def _new(s, local, ctx, team, subject, body, files, docs, parent, response, pers
     name = (render.fill(s.display_name, ctx) or local).replace('"', "'")
     channel = response.channel if response is not None else (
         "email" if conf.get("channel_mode") == "email" else "inapp")
-    label = member_name(member) if member else team.name
+    label = _name(member, team)
     common = dict(target=label, subject=subject, body=body, footer=cfg.get("footer", ""),
                   attachment_ids=[a.id for a in docs], team_id=team.id, reply_local=local,
                   person_id=member.id if member else None)
     thread = ""
     if channel == "inapp":
-        own = member if member and conf.flag("personal_mailboxes") else None
+        # A member's own mailbox (personal mailboxes), a leader's always.
+        own = member if member and (member.is_leader or conf.flag("personal_mailboxes")) else None
         if parent is not None and Mail.objects.filter(team=team, owner=own, thread=parent.thread).exists():
             thread = parent.thread  # the conversation goes on
         d = render.Draft(**common, from_addr=f'"{name}" <{render.persona_address(s, local, ctx)}>', reply_to=None,
