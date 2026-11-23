@@ -435,7 +435,29 @@ class DeskConversation(models.Model):
     ai_reason = models.CharField(max_length=400, blank=True, default="")
     ai_error = models.TextField(blank=True, default="")
     ai_at = models.DateTimeField(null=True, blank=True)
+    # The owner came from the default assignments (DeskDefault, desk.auto_assign); auto_done:
+    # they were applied, or someone on the desk gave, took or released it, so they never are again.
+    auto = models.BooleanField(default=False)
+    auto_done = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class DeskDefault(models.Model):
+    """Who on the persona desk has a persona's conversations by default (the desk's Assign tab,
+    Default assignments): with one team, or (team None) every team without its own rule. Given
+    once, to a conversation nobody has (desk.auto_assign: its first desk copy, or Apply now).
+    Setup like the Senders: kept through Start afresh."""
+    sender = models.ForeignKey(Sender, on_delete=models.CASCADE, related_name="desk_defaults")
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    set_by = models.CharField(max_length=150, blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["sender", "team"], condition=models.Q(team__isnull=False), name="desk_default_team"),
+            models.UniqueConstraint(fields=["sender"], condition=models.Q(team__isnull=True), name="desk_default_all"),
+        ]
 
 
 class DeskWatch(models.Model):

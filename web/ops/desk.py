@@ -142,6 +142,7 @@ def _on_delivered(m, mail):
         message=m, inject_id=m.inject_id, is_test=m.kind in ("test", "oneoff") or bool(team and team.is_test),
         read_at=timezone.now(), author_id=m.author_id, sim_at=mail.sim_at if mail is not None else None)
     _files(desk_mail, mail=mail) if mail is not None else _files(desk_mail, m=m)
+    auto_assign(thread, quiet=True)  # the owner hears when the team writes
     _told_out(m, desk_mail)
     return desk_mail
 
@@ -181,6 +182,7 @@ def _on_response(r, personas_):
         created_at=r.received_at, author_id=r.person_id, sim_at=src.sim_at if src else None)
     _files(mail, mail=src) if src else _files(mail, response=r)
     push.notify_mail(mail)
+    auto_assign(thread)  # before _told_in: the default owner is told the team wrote
     _told_in(mail)
     return mail
 
@@ -434,7 +436,7 @@ def states(threads, user=None, now=None):
                     last_rid = rid or last_rid
         waiting = first_open is not None
         st = {"waiting": waiting, "since": first_open, "open_id": open_id, "last_in": last_in, "follow": None, "owner": "", "mine": False,
-              "owner_id": None, "assigned_by": "", "npc": None, "triage": None, "done_by": "", "section": REST}
+              "owner_id": None, "assigned_by": "", "auto": False, "npc": None, "triage": None, "done_by": "", "section": REST}
         if c:
             last_sent = max((mid for mid, folder, *_ in ms if folder == "sent"), default=0)
             if c.follow_upto and last_sent <= c.follow_upto:
@@ -442,6 +444,7 @@ def states(threads, user=None, now=None):
                                 "due": c.follow_at is None or c.follow_at <= now}
             st["owner"], st["mine"] = c.owner_name, bool(user and c.owner_id and c.owner_id == user.id)
             st["owner_id"], st["assigned_by"] = c.owner_id, c.assigned_by if c.owner_id else ""
+            st["auto"] = bool(c.owner_id and c.auto)
             if c.done_upto and not waiting and c.done_upto >= last_in:
                 st["done_by"] = c.done_by or "the desk"
             if waiting and c.ai_status == "done" and c.ai_upto >= last_in:
@@ -506,9 +509,11 @@ def mark(threads, act, user, name, minutes=None, note="", assignee=None):
             given.append((t, c.owner_id, new))
             c.owner, c.owner_name = new, (name if new.id == user.id else user_name(new))[:150]
             c.assigned_by, c.assigned_at = ("" if new.id == user.id else name[:150]), now
+            c.auto, c.auto_done = False, True
             watch(t, new, "owner")
         elif act == "release":
             c.owner, c.owner_name, c.assigned_by, c.assigned_at = None, "", "", None
+            c.auto, c.auto_done = False, True  # nobody's, on purpose: the defaults don't give it again
         elif act == "watch":
             watch(t, user, "follow", force=True)
             continue
@@ -540,21 +545,161 @@ def mark(threads, act, user, name, minutes=None, note="", assignee=None):
 
 
 def _told_given(given, user, name):
-    """Conversations given (by user, name) to someone else, or taken from someone: both told."""
+    """Conversations given (by user, name) to someone else, or taken from someone: both told,
+    once for all of them (several cards dropped on the Assign board at once)."""
     info = _about([t for t, _, _ in given])
     User = get_user_model()
     old = {u.id: u for u in User.objects.filter(id__in={o for _, o, _ in given if o})}
+    stamp = f"{timezone.now().timestamp():.0f}"
+    to_new, to_old = {}, {}
     for t, old_id, new in given:
-        subj, team, test = info.get(t, ("", None, False))
-        what = f"{team.name}: {subj}" if team else subj
-        url = f"/inbox/desk/t/{t}/"
         if new.id != user.id:
-            notify([new], f"assign:{t}:{timezone.now().timestamp():.0f}", "assign", f"{name} gave you a conversation",
-                   what, t, url, test, push_=True)
+            to_new.setdefault(new.id, (new, []))[1].append(t)
         if old_id and old_id not in (user.id, new.id) and old_id in old:
+            to_old.setdefault(old_id, (old[old_id], []))[1].append((t, new))
+
+    def what(t):
+        subj, team, _ = info.get(t, ("", None, False))
+        return f"{team.name}: {subj}" if team else subj
+
+    def test(ts):
+        return all(info.get(t, ("", None, False))[2] for t in ts)
+
+    for u, ts in to_new.values():
+        if len(ts) == 1:
+            notify([u], f"assign:{ts[0]}:{stamp}", "assign", f"{name} gave you a conversation", what(ts[0]), ts[0],
+                   f"/inbox/desk/t/{ts[0]}/", test(ts), push_=True)
+        else:
+            notify([u], f"assign:{len(ts)}x{ts[0]}:{stamp}", "assign", f"{name} gave you {len(ts)} conversations",
+                   "; ".join(what(t) for t in ts[:5]) + ("..." if len(ts) > 5 else ""), "", "/inbox/desk/?folder=mine",
+                   test(ts), push_=True)
+    for u, xs in to_old.values():
+        ts = [t for t, _ in xs]
+        if len(xs) == 1:
+            t, new = xs[0]
             by = "took it over" if new.id == user.id else f"gave it to {user_name(new)}"
-            notify([old[old_id]], f"unassign:{t}:{timezone.now().timestamp():.0f}", "assign",
-                   f"{name} {by}", what, t, url, test)
+            notify([u], f"unassign:{t}:{stamp}", "assign", f"{name} {by}", what(t), t, f"/inbox/desk/t/{t}/", test(ts))
+        else:
+            notify([u], f"unassign:{len(xs)}x{ts[0]}:{stamp}", "assign", f"{name} moved {len(xs)} of your conversations",
+                   "; ".join(f"{what(t)} -> {user_name(n)}" for t, n in xs[:5]), "", "/inbox/desk/?folder=mine", test(ts))
+
+
+# --- default assignments (DeskDefault, the Assign tab) --------------------------------------------
+#
+# A persona's conversations with a team go by default to someone on the desk: the rule for that
+# persona and that team, else the persona's rule for all teams. Given once, to a conversation
+# nobody has, at its first desk copy (a persona's delivery: quietly, the owner hears when the team
+# writes; a team's message: before those on it are told), or by Apply now; never over someone
+# who gave, took or released it by hand.
+
+DEFAULTS = "default assignments"  # DeskConversation.assigned_by of the defaults' owners
+
+
+def persona_senders():
+    """{username: Sender} of the desk's personas, a {team} one filled for every team."""
+    out, teams = {}, None
+    for s in personas():
+        if "{team}" in s.local_part:
+            teams = teams if teams is not None else list(Team.objects.all())
+            for t in teams:
+                out[render.fill(s.local_part, render.team_ctx(t)).lower()] = s
+        else:
+            out[s.local_part.lower()] = s
+    return out
+
+
+def default_rules():
+    """{(sender id, team id or None): user} of the default assignments, but to those no longer
+    on the desk."""
+    from .models import DeskDefault
+    ok = {u.id: u for u in assignee_users()}
+    return {(d.sender_id, d.team_id): ok[d.user_id] for d in DeskDefault.objects.all() if d.user_id in ok}
+
+
+def default_owner(local, team_id, rules=None, senders=None):
+    """Who has the conversations of the persona local (a username) with the team team_id by
+    default, or None."""
+    rules = default_rules() if rules is None else rules
+    s = (persona_senders() if senders is None else senders).get((local or "").lower()) if rules else None
+    if s is None:
+        return None
+    return (team_id and rules.get((s.id, team_id))) or rules.get((s.id, None))
+
+
+def sides(threads):
+    """{thread: (persona username, team id)} a desk conversation is about: its first team
+    message to a persona, else its first persona message."""
+    first_in, first = {}, {}
+    for t, folder, local, team_id in (Mail.objects.filter(team=None, owner=None, thread__in=threads).exclude(folder="drafts")
+                                      .order_by("id").values_list("thread", "folder", "persona", "desk_team_id")):
+        first.setdefault(t, (local, team_id))
+        if folder == "inbox":
+            first_in.setdefault(t, (local, team_id))
+    return {t: first_in.get(t) or first[t] for t in first}
+
+
+def _give_default(c, to, now=None):
+    c.owner, c.owner_name, c.assigned_by, c.assigned_at = to, user_name(to)[:150], DEFAULTS, now or timezone.now()
+    c.auto = c.auto_done = True
+    c.save()
+    watch(c.thread, to, "owner")
+
+
+def auto_assign(thread, quiet=False):
+    """Give a desk conversation to its default owner, once: when nobody has it and nobody on the
+    desk has given, taken or released it. Quiet or not, no notice of its own (the owner is told
+    when the team writes, as anyone on it). Returns the owner, or None."""
+    from .models import DeskConversation, DeskDefault
+    try:
+        if not DeskDefault.objects.exists():
+            return None
+        c = DeskConversation.objects.filter(thread=thread).first()
+        if c and (c.owner_id or c.auto_done):
+            return None
+        local, team_id = sides([thread]).get(thread, (None, None))
+        to = default_owner(local, team_id)
+        if to is None:
+            return None
+        with transaction.atomic():
+            _give_default(c or conversation(thread, create=True), to)
+        return to
+    except Exception:
+        log.exception("default assignment of %s failed", thread)
+        return None
+
+
+def unassigned_open(kind=None):
+    """The desk conversations nobody has that still need something (not in the rest), with the
+    owner the defaults would give them: [(thread, user)]."""
+    from .models import DeskConversation
+    owned = DeskConversation.objects.filter(owner__isnull=False).values("thread")
+    threads = list(Mail.objects.filter(team=None, owner=None, trashed_at__isnull=True).exclude(folder="drafts")
+                   .exclude(thread__in=owned).order_by().values_list("thread", flat=True).distinct())
+    rules = default_rules()
+    if not threads or not rules:
+        return []
+    senders, side = persona_senders(), sides(threads)
+    out = []
+    for t, st in states(threads).items():
+        if st["section"] == REST:
+            continue
+        to = default_owner(*side.get(t, (None, None)), rules=rules, senders=senders)
+        if to is not None:
+            out.append((t, to))
+    return out
+
+
+def apply_defaults(user, name):
+    """Apply now: the open conversations nobody has, to their default owners (each told once, for
+    all theirs). Returns how many were given."""
+    given = unassigned_open()
+    now = timezone.now()
+    for t, to in given:
+        _give_default(conversation(t, create=True), to, now)
+    if given:
+        audit("desk_defaults_apply", f"x{len(given)}", name)
+        _told_given([(t, None, to) for t, to in given], user, name)
+    return len(given)
 
 
 def attention_count():

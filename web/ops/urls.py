@@ -2,6 +2,7 @@ from django.urls import include, path
 
 from . import views_ai as a
 from . import views_excon as x
+from . import views_desk_board as dbx
 from . import views_inbox as p
 from . import views_leader as lead
 from . import views_network as net
@@ -71,6 +72,11 @@ urlpatterns = [
     path("inbox/desk/suggest/", sg.suggestion),
     path("inbox/desk/suggest/<int:sid>/", sg.suggestion_get),
     path("inbox/desk/dashboard/", p.desk_dashboard),
+    path("inbox/desk/assign/", dbx.board),
+    path("inbox/desk/assign/board/", dbx.board_json),
+    path("inbox/desk/assign/defaults/", dbx.defaults),
+    path("inbox/desk/assign/defaults/set/", dbx.defaults_set),
+    path("inbox/desk/assign/defaults/apply/", dbx.defaults_apply),
     path("inbox/desk/setup/", p.setup, {"box": "desk"}),
     path("inbox/desk/", include(mail_patterns), {"box": "desk"}),
     # A role player's (or a team leader's) role plays: their schedule, briefs and files.

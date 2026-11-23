@@ -1,0 +1,30 @@
+{% extends "ops/mail/base.html" %}{% load static ops %}
+{% block title %}Assign conversations{% endblock %}
+{% block search %}<div class="gm-search-space">Persona desk · Assign</div>{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'ops/desk_board.css' %}">{% endblock %}
+{% block side %}{% endblock %}
+{% block main %}
+<div class="gm-ab" data-board>
+  {% include "ops/mail/_assign_head.html" %}
+  <form class="gm-ab-filters" method="get" data-board-filters>
+    {% if have|length > 1 or args.kind not in have %}<select name="kind" aria-label="Traffic">
+      <option value="live"{% if args.kind == 'live' %} selected{% endif %}>Exercise teams</option>
+      <option value="test"{% if args.kind == 'test' %} selected{% endif %}>Test team</option></select>{% else %}<input type="hidden" name="kind" value="{{ args.kind }}">{% endif %}
+    <select name="team" aria-label="Team"><option value="">Every team</option>
+      {% for t in filters.teams %}<option value="{{ t.id }}"{% if args.team_id == t.id %} selected{% endif %}>{{ t.name }}</option>{% endfor %}</select>
+    <select name="persona" aria-label="Persona"><option value="">Every persona</option>
+      {% for p in filters.personas %}<option value="{{ p.id }}"{% if args.sender_id == p.id %} selected{% endif %}>{{ p.name }}</option>{% endfor %}</select>
+    <select name="recent" aria-label="Answered conversations">
+      {% for h in recent_choices %}<option value="{{ h }}"{% if args.recent == h %} selected{% endif %}>{% if h %}and answered, last {{ h }} h{% else %}Open conversations only{% endif %}</option>{% endfor %}</select>
+    <noscript><button class="gm-pill-btn">Show</button></noscript>
+    <label class="gm-ab-excon"><input type="checkbox" data-show-excon> ExCon logins</label>
+    <span class="gm-ab-hint">Drag a conversation onto someone to give it to them; click several to move them together. <span class="gm-ab-sel" data-sel hidden></span></span>
+  </form>
+  <div hidden>{% csrf_token %}</div>
+  <div class="gm-ab-err" data-board-err hidden></div>
+  <div class="gm-ab-cols" data-cols aria-live="polite"></div>
+</div>
+{{ data|json_script:"simex-board" }}
+{{ v_board|json_script:"simex-board-v" }}
+{% endblock %}
+{% block scripts %}<script src="{% static 'ops/desk_board.js' %}"></script>{% endblock %}

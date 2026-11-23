@@ -25,6 +25,14 @@ never sees grades, quality, tone or the AI-written estimate.
   follow-ups when due (`desk.tick_follow_ups`), teams writing again and others answering in
   conversations they are involved in, AI persona answers held, and teams waiting on theirs
   (`desk.notify`, `/inbox/desk/notices/`). Step 3 below can build on `assign` and `DeskWatch`.
+- **Assign tab** (`ops/desk_board.py`, `views_desk_board.py`, `static/ops/desk_board.js`,
+  `/inbox/desk/assign/`). A board of the open conversations in a column per person (and Not
+  assigned), moved by dragging (pointer events, no library; it posts to `desk.mark`), with one
+  notification per person for several moved at once. Default assignments (`DeskDefault`: a
+  persona, a team or all teams, a desk login) given once to a conversation nobody has, at its
+  first desk copy (`desk.auto_assign`), or by Apply now (`desk.apply_defaults`); never over a
+  choice made by hand (`DeskConversation.auto_done`). This is step 3, by persona and team
+  (no from/until yet: change the grid at a shift change).
 
 ## Next steps, in order
 
@@ -46,7 +54,10 @@ Different personas answer at different speeds: the media fast, a ministry slowly
   and on the Waiting chip (red once past target).
 - AI personas: give a default from `NpcProfile` timing.
 
-### 3. Assignment by persona (shifts)
+### 3. Assignment by persona (shifts): built as the Assign tab's Default assignments (above)
+What is left: from/until times for shifts, a "My personas" side-bar filter, pushing a new team message only to its owner.
+
+The original plan:
 With many people on the desk, give each person standing personas instead of only taking one
 conversation at a time.
 - Add a `DeskAssignment` (person ↔ Sender, optional from/until), set on the desk itself

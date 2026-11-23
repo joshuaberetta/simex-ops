@@ -5,6 +5,7 @@ You are on the **persona desk**: part of ExCon, playing the exercise's personas 
 ## The tabs at the top
 - **Persona desk**: the shared mailbox. Its **Inbox** has every message a team writes to a persona (in SIMEX Mail or by email); its **Sent**, everything the personas sent the teams (the injects, ExCon's follow-ups and answers, the AI personas' answers and what the desk writes). The red number is unread conversations.
 - **Teams & team leaders** (read-only): each team's inbox, its team leader's mailbox and (when members have their own) each member's, exactly as they see them. Opening mail there does **not** mark it read for them. The side bar switches between teams.
+- **Dashboard** and **Assign**: how the desk is keeping up, and who has which conversations (below).
 
 **Simulation time.** When ExCon runs the simulation clock, the calendar and clock at the top show the scenario's date and time, with the real time beside it. Messages show the real time, with their simulation time under it (marked with a small clock): the teams see only the simulation time, so use that one when a persona mentions a time.
 
@@ -54,6 +55,16 @@ Tick several rows in the Inbox for **I'll take these**, **Assign to…**, **No r
   - a team has waited too long in one of yours.
 - While nobody has a conversation, everyone who answered in it or set a follow-up on it hears when the team writes again. Once someone has it, only they do, plus anyone who clicked **Follow**.
 - Click a notification to open the conversation. **✕** dismisses it; **Mark all read** and **Clear all** are at the top. Conversations given to you, follow-ups due and teams waiting too long also come to your phone, if you turned on alerts.
+
+## The Assign tab
+**Board**: the conversations that still need something, in columns: **Not assigned** first, then one for each of you (a green dot: online now), with how many each has, how many need attention and the longest wait, and the personas they have by default. Each card shows the team, the persona, how long the team has waited, *Urgent*, what SIMEX AI reads the team as asking, and who has it open now; click its subject to open it.
+- **Drag a card onto someone** to give it to them (onto **Not assigned** to release it). Click several cards first to move them together (Esc clears the choice); they are told once for all of them. On a phone or tablet, drag by the dots at the card's top left, or use the menu at the bottom of each card.
+- Choose a team, a persona, or *and answered, last 4 h* to see answered ones too. **ExCon logins** adds columns for ExCon staff (those with a conversation always show). The board keeps itself up to date.
+
+**Default assignments**: who has each persona's conversations with each team, so nobody has to hand them out. One row per persona: **All teams** covers every team without its own choice, and a team's cell overrides it (CCPRR: All teams to Sam, Team B and Team D to Alex). **Whole row to…** gives every team to one person; **Clear the row** removes the row's choices. Changes save as you make them.
+- A conversation goes to its default person when it starts: when the persona first writes to the team (an inject: quietly, they hear when the team writes) or when the team first writes to the persona. *Yours by the default assignments* shows on its bar, *by default* on its card.
+- Never over someone: a conversation anyone took, was given or released by hand keeps that. **Apply to open conversations nobody has** gives those to their default person now.
+- Someone who leaves the desk is skipped: their conversations go to the **All teams** choice, or nobody.
 
 ## Writing first
 Click **Write as a persona**, choose **From** (each persona with its address), and pick one or more teams, team members (e.g. **Team A (Jane Doe)**) or team leaders (**Team A leader (John Roe)**) in To, Cc or Bcc: start typing a team, a name or an address and every match is suggested. Each gets its own message and only ever sees its own. A member's or a leader's goes to their own mailbox, not the team's. A leader can't answer a persona in SIMEX Mail (only by email). New messages to the teams only go out once ExCon has armed live sending (except to the Test team), and nothing goes while sending is paused.

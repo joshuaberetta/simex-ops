@@ -77,6 +77,7 @@
   <a href="/inbox/desk/" class="{% if dt.current == 'desk' %}on{% endif %}">{% icon "inbox" 20 %} Persona desk<span class="gm-tab-n" data-tab-desk>{% if dt.unread and dt.current != 'desk' %}{{ dt.unread }}{% endif %}</span></a>
   <a href="/inbox/desk/teams/" class="{% if dt.current == 'teams' %}on{% endif %}">{% icon "eye" 20 %} Teams &amp; team leaders <span class="gm-tab-ro">read-only</span></a>
   <a href="/inbox/desk/dashboard/" class="{% if dt.current == 'dashboard' %}on{% endif %}">{% icon "all" 20 %} Dashboard</a>
+  <a href="/inbox/desk/assign/" class="{% if dt.current == 'assign' %}on{% endif %}">{% icon "person" 20 %} Assign</a>
 </nav>
 {% endwith %}{% elif member_tabs %}{% with mt=member_tabs %}
 <nav class="gm-tabs" aria-label="Mailboxes">
