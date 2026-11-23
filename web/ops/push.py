@@ -88,32 +88,56 @@ _workers_lock = threading.Lock()
 
 def _work():
     while True:
-        args = _queue.get()
+        fn, args = _queue.get()
         try:
-            send_team(*args)
+            fn(*args)
         except Exception:
             log.exception("push failed")
 
 
 def _start(team_id, data, author_id, owner_id=None):
+    _run(send_team, (team_id, data, author_id, owner_id))
+
+
+def _run(fn, args):
     if RUN_INLINE:
-        return send_team(team_id, data, author_id, owner_id)
+        return fn(*args)
     with _workers_lock:
         while len(_workers) < WORKERS:
             t = threading.Thread(target=_work, daemon=True, name=f"push-{len(_workers)}")
             t.start()
             _workers.append(t)
-    _queue.put((team_id, data, author_id, owner_id))
+    _queue.put((fn, args))
+
+
+def notify_people(person_ids, data):
+    """Push data (title, body, url, tag) to these people's devices (role-play reminders,
+    ops/roleplay.py), after the transaction commits."""
+    if not (enabled() or _sender) or not person_ids:
+        return
+    ids = list(person_ids)
+    transaction.on_commit(lambda: _run(send_people, (ids, data)))
+
+
+def send_people(person_ids, data):
+    from .models import PushSubscription
+    _send(PushSubscription.objects.filter(person_id__in=person_ids, person__active=True,
+                                          person__user__is_active=True), data)
 
 
 def send_team(team_id, data, author_id=None, owner_id=None):
+    from .models import PushSubscription
+    who = ({"person_id": owner_id} if owner_id else {"person__team_id": team_id, "person__role": "member"}
+           if team_id else {"person__role": "desk"})  # no team: the persona desk's mailbox
+    _send(PushSubscription.objects.filter(**who, person__active=True,
+                                          person__user__is_active=True).exclude(person_id=author_id), data)
+
+
+def _send(qs, data):
     from django.db import connection
     from .models import PushSubscription
     try:
-        who = ({"person_id": owner_id} if owner_id else {"person__team_id": team_id, "person__role": "member"}
-               if team_id else {"person__role": "desk"})  # no team: the persona desk's mailbox
-        subs = list(PushSubscription.objects.filter(**who, person__active=True,
-                                                    person__user__is_active=True).exclude(person_id=author_id))
+        subs = list(qs)
         body = json.dumps(data)
         if not RUN_INLINE:  # no database connection held through the push services' round trips
             connection.close()

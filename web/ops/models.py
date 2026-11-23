@@ -31,7 +31,10 @@ IMPORT_FIELDS = ["seq", "method", "mailbox", "scenario_dt", "send_at", "sender_l
 # The persona desk (ExCon, no team) shares one mailbox in SIMEX Mail where the teams' mail to
 # the personas arrives and from which it writes as any persona (Senders tab); it reads every
 # team's inbox and team leader's mailbox read-only, and has no access to the ExCon screens.
-ROLES = {"member": "Team member", "tl": "Team leader (ExCon)", "desk": "Persona desk (ExCon)"}
+ROLES = {"member": "Team member", "tl": "Team leader (ExCon)", "desk": "Persona desk (ExCon)",
+         "rp": "Role player (ExCon)"}
+# A role player (ExCon, no team) plays a character face to face, by phone or VTC at set times
+# (RolePlay below); they reach only their own schedule and briefs in SIMEX Mail (/inbox/rp/).
 # Within a team, members may also hold a team role (TeamRole: Deputy Team Leader, Logistics...),
 # set by ExCon on People & logins, so the Dashboard and reports can break behaviour down by it.
 
@@ -85,7 +88,7 @@ class Person(models.Model):
     login_shared_at = models.DateTimeField(null=True, blank=True)  # their current password was given out
     login_shared_via = models.CharField(max_length=320, blank=True, default="")  # the address emailed, or "by hand"
     team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.SET_NULL, related_name="people")
-    role = models.CharField(max_length=20, default="member")  # member | tl | desk (see ROLES)
+    role = models.CharField(max_length=20, default="member")  # member | tl | desk | rp (see ROLES)
     team_role = models.ForeignKey(TeamRole, null=True, blank=True, on_delete=models.SET_NULL,
                                   related_name="people")  # members only
     active = models.BooleanField(default=True)
@@ -105,6 +108,10 @@ class Person(models.Model):
     @property
     def is_desk(self):
         return self.role == "desk"
+
+    @property
+    def is_rp(self):
+        return self.role == "rp"
 
     def __str__(self):
         return self.name
@@ -806,3 +813,82 @@ class NpcSandbox(models.Model):
     status = models.CharField(max_length=10, default="done")  # running | done | failed
     error = models.TextField(blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
+
+
+# --- role play (ops/roleplay.py) ----------------------------------------------------------------
+# Control-side by nature (scripts, expected outcomes): read only by ExCon (views_roleplay.py) and
+# by the role players assigned (views_rp.py), never by participants' or leaders' mail views, the
+# AI, the AI personas or the reports (tests/test_roleplay.py scans those modules).
+
+RP_STATUSES = {"pending": "Pending", "ready": "In position", "done": "Done", "skipped": "Skipped"}
+
+
+class RolePlay(models.Model):
+    """One event of the role-play schedule (a MEL serial: 1-25 Immigration), played by role
+    players (or team leaders) at one or more sittings (slots)."""
+    key = models.CharField(max_length=40, unique=True)  # the serial; -b, -c for more rows of one serial
+    serial = models.CharField(max_length=40, default="")
+    seq = models.IntegerField(default=0)
+    day = models.CharField(max_length=40, blank=True, default="")  # as the sheet says: "Monday"
+    time_text = models.CharField(max_length=200, blank=True, default="")  # "1440 - A", "18:00 + 18:20"
+    duration = models.CharField(max_length=120, blank=True, default="")  # "10 min max per team"
+    title = models.TextField(blank=True, default="")  # the sheet's Description / Event
+    role = models.CharField(max_length=200, blank=True, default="")  # "Immigration officers x 2"
+    players_text = models.CharField(max_length=300, blank=True, default="")  # the sheet's Role player cell
+    location = models.CharField(max_length=200, blank=True, default="")
+    method = models.CharField(max_length=60, blank=True, default="")  # F2F | Phone | VTC...
+    script = models.TextField(blank=True, default="")
+    outcomes = models.TextField(blank=True, default="")
+    documents = models.TextField(blank=True, default="")  # to bring / print, one per line
+    notes = models.TextField(blank=True, default="")  # ExCon's notes and FAQ for this event
+    optional = models.BooleanField(default=False)
+    players = models.ManyToManyField(Person, blank=True, related_name="role_plays")
+    imported = models.JSONField(null=True, blank=True)  # last imported values (local edits kept)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["seq", "key"]
+
+    def __str__(self):
+        return f"{self.serial or self.key} {self.title[:40]}"
+
+
+class RolePlaySlot(models.Model):
+    """One sitting of a role play: a time, its length and the teams it is for (none = all
+    teams together)."""
+    play = models.ForeignKey(RolePlay, on_delete=models.CASCADE, related_name="slots")
+    start = models.DateTimeField(null=True, blank=True)
+    minutes = models.IntegerField(null=True, blank=True)
+    teams = models.ManyToManyField(Team, blank=True, related_name="+")
+    status = models.CharField(max_length=10, default="pending")  # see RP_STATUSES
+    status_at = models.DateTimeField(null=True, blank=True)
+    status_by = models.CharField(max_length=200, blank=True, default="")
+    reminded = models.CharField(max_length=10, blank=True, default="")  # "" | soon | start
+    changed_at = models.DateTimeField(null=True, blank=True)  # moved or reassigned (players told)
+    was_start = models.DateTimeField(null=True, blank=True)  # the time before the last change
+    imported_start = models.DateTimeField(null=True, blank=True)  # as last imported
+
+    class Meta:
+        ordering = ["start", "id"]
+
+    def end(self):
+        return self.start + timedelta(minutes=self.minutes or 0) if self.start else None
+
+
+class RolePlayFile(models.Model):
+    play = models.ForeignKey(RolePlay, on_delete=models.CASCADE, related_name="files")
+    filename = models.CharField(max_length=300)
+    content_type = models.CharField(max_length=120, default="application/octet-stream")
+    size = models.IntegerField(default=0)
+    data = models.BinaryField()
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["filename"]
+
+
+class RolePlaySeen(models.Model):
+    """A role player has seen their schedule since its last change (ExCon's board ticks them)."""
+    person = models.OneToOneField(Person, on_delete=models.CASCADE, related_name="rp_seen")
+    at = models.DateTimeField(default=timezone.now)
