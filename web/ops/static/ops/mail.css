@@ -500,6 +500,42 @@ body.desk .gm-row[style*="--persona"]::after { content: ""; position: absolute; 
 .gm-presence { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: #fef7e0; color: #7a4f01; font-size: 14px; }
 .gm-presence.replying { background: #fce8e6; color: #a50e0e; font-weight: 600; }
 
+/* Persona desk: what still needs an answer (desk.states), in sections, with where each stands */
+.gm-section { display: flex; align-items: baseline; gap: 8px; padding: 14px 16px 6px; font-size: 13px; font-weight: 700;
+  color: var(--ink); border-bottom: 1px solid var(--line); background: var(--bg); }
+.gm-section small { font-weight: 400; color: var(--muted); }
+.gm-section-n { background: #e8eaed; border-radius: 10px; padding: 0 8px; font-size: 12px; }
+.gm-section-attention { color: #a50e0e; }
+.gm-section-attention .gm-section-n { background: #fce8e6; color: #a50e0e; }
+.gm-row.desk-rest { opacity: .85; }
+.gm-label.gm-st-wait { background: #fce8e6; color: #a50e0e; font-weight: 600; }
+.gm-label.gm-st-urgent { background: #d93025; color: #fff; font-weight: 600; }
+.gm-label.gm-st-ask { background: #e8f0fe; color: #0b57d0; }
+.gm-label.gm-st-quiet { background: #e6f4ea; color: #137333; }
+.gm-label.gm-st-follow { background: #fef7e0; color: #7a4f01; }
+.gm-label.gm-st-npc { background: #f3e8fd; color: #6236b0; }
+.gm-label.gm-st-owner { background: #fff; color: #202124; border: 1px solid #747775; line-height: 16px; }
+.gm-label.gm-st-owner.mine { background: #00696b; color: #fff; border-color: #00696b; }
+.gm-label.gm-st-here { background: #fef7e0; color: #7a4f01; }
+.gm-label.gm-st-here.replying { background: #fce8e6; color: #a50e0e; }
+.gm-label.gm-st-done { background: #e6f4ea; color: #137333; }
+.gm-label.gm-st-ai { background: #e8f0fe; color: #0b57d0; font-weight: 600; }
+.gm-desk-btn { padding: 4px 12px; font-size: 13px; margin-left: 4px; }
+.gm-desk-wait { display: block; margin: 0 16px 8px 12px; padding: 6px 10px; border-radius: 8px; background: #fce8e6; color: #a50e0e;
+  font-weight: 600; font-size: 13px; text-decoration: none; }
+.gm-deskbar { margin: 0 0 14px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: #fff; font-size: 14px; }
+.gm-deskbar-attention { border-color: #f6aea9; background: #fef6f5; }
+.gm-deskbar-quiet, .gm-deskbar-rest { background: #f6fbf7; }
+.gm-deskbar-later { background: #fffbf0; }
+.gm-deskbar-state > span { margin-left: 10px; }
+.gm-deskbar-ai { margin-top: 6px; }
+.gm-deskbar-ai small { color: var(--muted); margin-left: 4px; }
+.gm-deskbar-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.gm-deskbar-acts .gm-pill-btn { padding: 4px 14px; font-size: 13px; text-decoration: none; color: inherit; }
+.gm-deskbar-fu { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.gm-deskbar-fu select, .gm-deskbar-fu input { font: inherit; font-size: 13px; padding: 4px 8px; border: 1px solid #c4c7c5; border-radius: 6px; }
+.gm-deskbar-fu input { width: 200px; }
+
 /* The kind of mailbox (views_inbox.box_theme): its name in the top bar and its own colours, so
    nobody mistakes a team inbox for their own mail, a team leader's or the persona desk's. */
 body.box-team { --accent: #0b57d0; --top-bg: #eef3fd; }

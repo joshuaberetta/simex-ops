@@ -19,6 +19,19 @@ def get(d, key):
 
 
 @register.filter
+def waited(dt):
+    """How long since dt, short: "4 min", "1 h 05", "2 d"."""
+    if not dt:
+        return ""
+    mins = max(0, int((timezone.now() - dt).total_seconds() // 60))
+    if mins < 60:
+        return f"{mins} min"
+    if mins < 24 * 60:
+        return f"{mins // 60} h {mins % 60:02d}"
+    return f"{mins // (24 * 60)} d"
+
+
+@register.filter
 def kb(n):
     n = n or 0
     return f"{n / 1024 / 1024:.1f} MB" if n > 1024 * 1024 else f"{max(1, round(n / 1024))} KB"
@@ -187,6 +200,7 @@ def file_kind(name):
 
 # Material Design icon paths (Apache 2.0), inlined so nothing loads from a CDN.
 ICONS = {
+    "done": "M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z",
     "menu": "M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z",
     "search": "M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z",
     "edit": "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z",

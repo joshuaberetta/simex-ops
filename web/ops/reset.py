@@ -6,7 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from . import conf
-from .models import (AiGrade, AiReport, DocumentAnalysis, ExerciseReport, Grade, Inject, Mail, MailAction, MailLabel, Message, Notice,
+from .models import (AiGrade, AiReport, DeskConversation, DocumentAnalysis, ExerciseReport, Grade, Inject, Mail, MailAction, MailLabel, Message, Notice,
                      Person, Response, TestRun)
 
 SCOPES = {"all": "Every mailbox: the team inbox, the leader's and each member's own",
@@ -50,6 +50,8 @@ def clear_team(team, scope="all", deliveries=False):
             MailAction.objects.filter(team=team).delete()
             n["grades"] = Grade.objects.filter(team=team).delete()[0] + AiGrade.objects.filter(team=team).delete()[0]
             DocumentAnalysis.objects.filter(team=team).delete()  # the readings of the files it sent
+            from . import desk
+            desk.prune()  # the desk's state of conversations no longer on it
         if deliveries:
             msgs = Message.objects.filter(Q(team=team) | Q(inbox_team=team)).exclude(kind="login")
             if scope == "members":
@@ -77,6 +79,7 @@ def start_afresh(reschedule=True):
         Mail.objects.all().delete()
         MailLabel.objects.all().delete()
         MailAction.objects.all().delete()
+        DeskConversation.objects.all().delete()  # the persona desk's to-answer state
         Message.objects.exclude(kind="login").delete()  # with their Events
         Grade.objects.all().delete()
         AiGrade.objects.all().delete()

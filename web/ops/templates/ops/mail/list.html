@@ -29,6 +29,10 @@
         <button class="gm-icon-btn" name="action" value="star" title="Star" aria-label="Star">{% icon "star_border" %}</button>
         <span class="gm-tb-sep"></span>
         {% include "ops/mail/_label_menus.html" %}
+        {% if v.desk %}<span class="gm-tb-sep"></span>
+        <button class="gm-pill-btn gm-desk-btn" name="act" value="take" formaction="/inbox/desk/mark/" title="These are yours: the desk sees your name on them">I'll take these</button>
+        <button class="gm-pill-btn gm-desk-btn" name="act" value="done" formaction="/inbox/desk/mark/" title="Needs no answer: out of Needs attention until the team writes again">No reply needed</button>
+        <button class="gm-pill-btn gm-desk-btn" name="act" value="reopen" formaction="/inbox/desk/mark/" title="Back to Needs attention if a team is waiting">Reopen</button>{% endif %}
       {% endif %}
     </span>
     <span class="gm-tb-right">
@@ -40,14 +44,22 @@
   {% if q %}<div class="gm-searchnote">Results for <b>{{ q }}</b> in {% if folder == 'inbox' %}all mail{% else %}{{ folder }}{% endif %}</div>{% endif %}
   {% if folder == 'trash' and rows %}<div class="gm-searchnote">Messages in Trash stay here; nothing is deleted for good during the exercise.</div>{% endif %}
   <div class="gm-list" role="list">
-    {% for r in rows %}{% with m=r.latest %}
-    <div class="gm-row{% if r.unread %} unread{% endif %}" role="listitem" tabindex="-1"{% if r.desk.colour %} style="--persona: {{ r.desk.colour }}"{% endif %}
+    {% for r in rows %}{% with m=r.latest st=r.state %}
+    {% if sections %}{% ifchanged st.section %}{% with sec=sections|get:st.section %}
+    <div class="gm-section gm-section-{{ st.section }}">
+      <span>{{ sec.name }}</span> <span class="gm-section-n">{{ sec.n }}</span>
+      {% if st.section == 'attention' %}<small>oldest waiting first{% if desk_ai %} · most urgent first, as Claude reads them{% endif %}</small>
+      {% elif st.section == 'quiet' %}<small>Claude reads the team's latest message as needing no answer: check, then <b>No reply needed</b></small>
+      {% elif st.section == 'later' %}<small>follow-ups not due yet, and conversations an AI persona is about to answer</small>{% endif %}
+    </div>{% endwith %}{% endifchanged %}{% endif %}
+    <div class="gm-row{% if r.unread %} unread{% endif %}{% if st %} desk-{{ st.section }}{% endif %}" role="listitem" tabindex="-1"{% if r.desk.colour %} style="--persona: {{ r.desk.colour }}"{% endif %}
          {% if r.draft %}data-draft="{{ m.id }}"{% else %}data-href="{{ base }}/t/{{ r.thread }}/?folder={{ folder }}"{% if not readonly and folder != 'trash' %} draggable="true"{% endif %}{% endif %} data-thread="{{ r.thread }}" data-labels="{% for l in r.all_labels %}{{ l }}{% if not forloop.last %},{% endif %}{% endfor %}">
       <label class="gm-check" onclick="event.stopPropagation()"><input type="checkbox" name="threads" value="{{ r.thread }}"><span></span></label>
       <span class="gm-avatar gm-ravatar" style="background: {{ r.people|avatar_colour }}"{% if not readonly %} role="checkbox" aria-checked="false" aria-label="Select" tabindex="0" data-select-row{% endif %}>{% if r.draft %}D{% else %}{{ r.people|cut:"To: "|initial }}{% endif %}</span>
       <button type="button" class="gm-star{% if r.starred %} on{% endif %}" data-star-thread="{{ r.thread }}" aria-label="Star" {% if readonly %}disabled{% endif %}>{% if r.starred %}{% icon "star" 20 %}{% else %}{% icon "star_border" 20 %}{% endif %}</button>
       <span class="gm-from">{% if r.draft %}<span class="gm-draft-red">Draft</span>{% else %}{{ r.people }}{% endif %}{% if r.count > 1 %} <span class="gm-n">{{ r.count }}</span>{% endif %}</span>
       <span class="gm-subj">
+        {% if st %}{% include "ops/mail/_desk_state.html" with st=st here=r.here %}{% endif %}
         {% if r.desk %}{% for p in r.desk.personas %}<span class="gm-label gm-persona" style="background: {{ p.colour }}; color: {{ p.fg }}" title="{{ p.addr }}">{{ p.name }}</span>{% endfor %}{% for t in r.desk.teams %}<span class="gm-label gm-teamchip">{{ t }}</span>{% endfor %}{% if r.desk.test %}<span class="gm-label test">Test</span>{% endif %}{% endif %}
         {% if folder != 'inbox' and m.folder == 'inbox' and not m.archived %}<span class="gm-label">Inbox</span>{% endif %}
         {% if r.ai %}<span class="gm-label gm-ai {{ r.ai.level }}" title="{{ r.ai.level|capfirst }} AI-assisted ({{ r.ai.pct }} %, Claude's estimate, never proof). {{ r.ai.why }}">AI?</span>{% endif %}
@@ -61,6 +73,7 @@
         {% if folder == 'trash' %}<button type="button" class="gm-icon-btn" data-row-action="restore" title="Move to Inbox">{% icon "restore" %}</button>
         {% elif r.draft %}<button type="button" class="gm-icon-btn" data-row-action="discard" title="Discard">{% icon "trash" %}</button>
         {% else %}
+        {% if st.section == 'attention' or st.section == 'quiet' %}<button type="button" class="gm-icon-btn" data-desk-act="done" title="No reply needed">{% icon "done" %}</button>{% endif %}
         {% if m.folder == 'inbox' %}<button type="button" class="gm-icon-btn" data-row-action="archive" title="Archive">{% icon "archive" %}</button>{% endif %}
         <button type="button" class="gm-icon-btn" data-row-action="trash" title="Delete">{% icon "trash" %}</button>
         {% if r.unread %}<button type="button" class="gm-icon-btn" data-row-action="read" title="Mark as read">{% icon "read" %}</button>

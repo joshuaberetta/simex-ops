@@ -658,6 +658,8 @@ def withdraw(m, team_ids, user=""):
         from . import ai_docs
         for t in {x.team for x in mails if x.team}:
             ai_docs.prune(t)  # a leader's file that is no longer anywhere
+        from . import desk
+        desk.prune()  # the desk's state of conversations no longer on it
         teams = ", ".join(sorted({(x.team or x.desk_team).name for x in mails}))
         audit("withdraw", f"delivery {m.pk} ({(m.subject or '')[:80]}) from {teams}: {n} copies", user)
     return n

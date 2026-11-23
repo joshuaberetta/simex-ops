@@ -12,7 +12,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from . import ai, ai_docs, checks, conf, delivery
+from . import ai, ai_docs, checks, conf, delivery, desk_ai  # noqa: F401 (desk_ai: its instructions)
 from .access import excon_required
 from .models import (AiCall, AiGrade, AiReport, DocumentAnalysis, Event, Grade, Inject, InjectDraft, InjectReview, MailAction, MailAttachment, Message,
                      Person, ReplyAnalysis, Response, Sender, Team, TeamRole, audit)
@@ -364,7 +364,7 @@ def grade_analyse(request, iid, tid):
 @require_POST
 def settings_ai(request):
     P = request.POST
-    for k in ("ai_enabled", "ai_auto", "ai_tests", "ai_injects", "ai_documents", "ai_documents_deep"):
+    for k in ("ai_enabled", "ai_auto", "ai_tests", "ai_injects", "ai_documents", "ai_documents_deep", "desk_triage"):
         conf.put(k, "1" if P.get(k) == "1" else "0")
     try:
         conf.put("ai_daily_usd", f"{max(0.0, float(P.get('ai_daily_usd') or 0)):g}")

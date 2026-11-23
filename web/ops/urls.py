@@ -64,6 +64,7 @@ urlpatterns = [
     path("inbox/me/", include(mail_patterns), {"box": "me"}),
     path("inbox/desk/teams/", p.desk_teams),
     path("inbox/desk/presence/", p.desk_presence),
+    path("inbox/desk/mark/", p.desk_mark),
     path("inbox/desk/setup/", p.setup, {"box": "desk"}),
     path("inbox/desk/", include(mail_patterns), {"box": "desk"}),
     # A role player's (or a team leader's) role plays: their schedule, briefs and files.

@@ -18,6 +18,7 @@ import logging
 import time
 import uuid
 import zlib
+from datetime import timedelta
 
 from django.conf import settings
 from django.core.cache import cache
@@ -343,3 +344,198 @@ def presence(thread, user_id, name, replying=False):
     seen[str(user_id)] = {"name": name, "at": now, "replying": bool(replying)}
     cache.set(key, seen, PRESENCE_SECONDS * 2)
     return [{"name": x["name"], "replying": x["replying"]} for k, x in seen.items() if k != str(user_id)]
+
+
+def on_now(threads, user_id=None):
+    """{thread: [{"name", "replying"}]}: who else on the desk has each conversation open now
+    (the Inbox rows)."""
+    keys = {f"desk-presence:{t[:60]}": t for t in threads}
+    now, out = time.time(), {}
+    for key, seen in cache.get_many(list(keys)).items():
+        others = [{"name": x["name"], "replying": x["replying"]} for k, x in (seen or {}).items()
+                  if k != str(user_id) and now - x["at"] < PRESENCE_SECONDS]
+        if others:
+            out[keys[key]] = others
+    return out
+
+
+# --- what still needs an answer -----------------------------------------------------------------
+#
+# Many people share the desk: read or unread doesn't say whether a team is still waiting. A
+# conversation is waiting when a team's latest message in it (by Mail id: an email fetched
+# late counts from when the desk got it) has no persona message to that team after it, and
+# nobody marked it as needing no reply since. The Inbox puts those first (ATTENTION), then
+# those Claude reads as needing no reply (QUIET, ops/desk_ai.py), then follow-ups not due yet
+# and conversations an AI persona is about to answer (LATER), then the rest.
+
+ATTENTION, QUIET, LATER, REST = "attention", "quiet", "later", "rest"
+SECTIONS = [(ATTENTION, "Needs attention"), (QUIET, "Probably no reply needed (Claude)"),
+            (LATER, "Later"), (REST, "Answered or nothing to answer")]
+URGENCY = {"high": 0, "normal": 1, "low": 2}
+
+
+def conversation(thread, create=False):
+    from .models import DeskConversation
+    if create:
+        return DeskConversation.objects.get_or_create(thread=thread)[0]
+    return DeskConversation.objects.filter(thread=thread).first()
+
+
+def states(threads, user=None, now=None):
+    """{thread: state} of desk conversations: section (above), waiting (a team waits for an
+    answer) since (its first unanswered message's time), last_in (the latest Mail id of a
+    team's in it), follow ({at, note, by, due}) if a follow-up is on, owner (who took it; mine:
+    the user did), npc (an AI persona's queued or held answer: {status, due_at}), triage
+    (Claude's reading of the waiting message, if current), done_by (marked as needing no reply)."""
+    from .models import DeskConversation
+    threads = list(dict.fromkeys(threads))
+    now = now or timezone.now()
+    if not threads:
+        return {}
+    mails = {}
+    for t, mid, folder, team_id, at, rid in (Mail.objects.filter(team=None, owner=None, thread__in=threads,
+                                                               trashed_at__isnull=True).exclude(folder="drafts")
+                                             .order_by("id").values_list("thread", "id", "folder", "desk_team_id",
+                                                                         "created_at", "desk_response_id")):
+        mails.setdefault(t, []).append((mid, folder, team_id, at, rid))
+    convs = {c.thread: c for c in DeskConversation.objects.filter(thread__in=threads)}
+    rids = [m[4] for ms in mails.values() for m in ms if m[4]]
+    npc = {}
+    for job in (NpcReply.objects.filter(response_id__in=rids, status__in=["queued", "writing", "held", "failed"])
+                .order_by("id")):
+        npc[job.response_id] = job
+    out = {}
+    for t in threads:
+        ms, c = mails.get(t, []), convs.get(t)
+        done_upto = c.done_upto if c else 0
+        last_out, first_open, last_in, last_rid, open_id = {}, None, 0, None, 0
+        for mid, folder, team_id, at, rid in ms:
+            if folder == "sent":
+                last_out[team_id] = mid
+        for mid, folder, team_id, at, rid in ms:
+            if folder == "inbox":
+                last_in = max(last_in, mid)
+                if mid > max(last_out.get(team_id, 0), done_upto):
+                    if first_open is None or at < first_open:
+                        first_open, open_id = at, mid
+                    last_rid = rid or last_rid
+        waiting = first_open is not None
+        st = {"waiting": waiting, "since": first_open, "open_id": open_id, "last_in": last_in, "follow": None, "owner": "", "mine": False,
+              "npc": None, "triage": None, "done_by": "", "section": REST}
+        if c:
+            last_sent = max((mid for mid, folder, *_ in ms if folder == "sent"), default=0)
+            if c.follow_upto and last_sent <= c.follow_upto:
+                st["follow"] = {"at": c.follow_at, "note": c.follow_note, "by": c.follow_by,
+                                "due": c.follow_at is None or c.follow_at <= now}
+            st["owner"], st["mine"] = c.owner_name, bool(user and c.owner_id and c.owner_id == user.id)
+            if c.done_upto and not waiting and c.done_upto >= last_in:
+                st["done_by"] = c.done_by or "the desk"
+            if waiting and c.ai_status == "done" and c.ai_upto >= last_in:
+                st["triage"] = {"need": c.ai_need, "urgency": c.ai_urgency, "ask": c.ai_ask, "reason": c.ai_reason}
+        job = npc.get(last_rid) if waiting else None
+        if job:
+            st["npc"] = {"status": job.status, "due_at": job.due_at}
+        if waiting and job and job.status in ("queued", "writing"):
+            st["section"] = LATER  # the AI persona answers it
+        elif waiting and st["triage"] and st["triage"]["need"] == "none" and not (st["follow"] and st["follow"]["due"]):
+            st["section"] = QUIET
+        elif waiting or (st["follow"] and st["follow"]["due"]):
+            st["section"] = ATTENTION
+        elif st["follow"]:
+            st["section"] = LATER
+        out[t] = st
+    return out
+
+
+def sort_key(st, latest_at):
+    """Within a section: the most urgent, then the longest waiting first; later ones by when
+    they come up; the rest newest first (latest_at: the row's latest message)."""
+    sec = [s for s, _ in SECTIONS].index(st["section"])
+    if st["section"] in (ATTENTION, QUIET):
+        urg = URGENCY.get((st["triage"] or {}).get("urgency"), 1)
+        when = st["since"] or (st["follow"] or {}).get("at") or latest_at
+        return (sec, urg, when.timestamp())
+    if st["section"] == LATER:
+        when = (st["follow"] or {}).get("at") or (st["npc"] or {}).get("due_at") or latest_at
+        return (sec, 0, when.timestamp())
+    return (sec, 0, -latest_at.timestamp())
+
+
+ACTIONS = ("take", "release", "done", "reopen", "follow", "unfollow", "triage")
+
+
+def mark(threads, act, user, name, minutes=None, note=""):
+    """A desk member's action on conversations (ACTIONS): take it (it's theirs) or release it;
+    done (no reply needed: the teams' messages so far) or reopen; follow up (in minutes, or
+    now, with a note) or stop; triage (ask Claude now). Returns how many were changed."""
+    from .models import DeskConversation
+    if act not in ACTIONS:
+        raise DeskError("Unknown action.")
+    threads = list(Mail.objects.filter(team=None, owner=None, thread__in=threads).order_by()
+                   .values_list("thread", flat=True).distinct())
+    now = timezone.now()
+    for t in threads:
+        c = conversation(t, create=True)
+        if act == "take":
+            c.owner, c.owner_name = user, name[:150]
+        elif act == "release":
+            c.owner, c.owner_name = None, ""
+        elif act == "done":
+            c.done_upto = (Mail.objects.filter(team=None, owner=None, thread=t, folder="inbox")
+                           .order_by("-id").values_list("id", flat=True).first() or 0)
+            c.done_by, c.done_at, c.follow_upto, c.follow_at, c.follow_note = name[:150], now, 0, None, ""
+        elif act == "reopen":
+            c.done_upto, c.done_by, c.done_at = 0, "", None
+        elif act == "follow":
+            c.follow_upto = (Mail.objects.filter(team=None, owner=None, thread=t).exclude(folder="drafts")
+                             .order_by("-id").values_list("id", flat=True).first() or 0) or 1
+            c.follow_at = now + timedelta(minutes=minutes) if minutes else None
+            c.follow_note, c.follow_by = (note or "")[:300], name[:150]
+        elif act == "unfollow":
+            c.follow_upto, c.follow_at, c.follow_note, c.follow_by = 0, None, "", ""
+        elif act == "triage":
+            c.ai_status, c.ai_upto, c.ai_error = "queued", 0, ""
+        c.save()
+    if threads:
+        audit("desk_mark", f"{act} x{len(threads)}", name)
+    return len(threads)
+
+
+def attention_count():
+    """How many desk conversations need attention now (the desk's tab badge and side bar)."""
+    threads = list(Mail.objects.filter(team=None, owner=None, folder="inbox", trashed_at__isnull=True).order_by()
+                   .values_list("thread", flat=True).distinct())
+    from .models import DeskConversation
+    threads += list(DeskConversation.objects.filter(follow_upto__gt=0).values_list("thread", flat=True))
+    return sum(1 for st in states(threads).values() if st["section"] == ATTENTION)
+
+
+def tick(now=None):
+    """Scheduler main loop: a Notice for ExCon for each conversation a team has waited
+    desk_wait_minutes (Settings) for a persona's answer, once per message waiting; not those
+    an AI persona is about to answer or Claude reads as needing no reply. Returns how many."""
+    try:
+        wait = int(conf.get("desk_wait_minutes") or 0)
+    except ValueError:
+        wait = 0
+    if wait <= 0:
+        return 0
+    from . import notices
+    now = now or timezone.now()
+    threads = list(Mail.objects.filter(team=None, owner=None, folder="inbox", trashed_at__isnull=True,
+                                       created_at__lte=now - timedelta(minutes=wait))
+                   .order_by().values_list("thread", flat=True).distinct())
+    n = 0
+    for t, st in states(threads, now=now).items():
+        if st["section"] != ATTENTION or not st["waiting"] or st["since"] > now - timedelta(minutes=wait):
+            continue
+        mail = Mail.objects.filter(pk=st["open_id"]).select_related("desk_team").first()
+        if mail and notices.desk_wait(t, mail, wait, st["owner"]):
+            n += 1
+    return n
+
+
+def prune():
+    """Conversations no longer on the desk (cleared, withdrawn): their state goes."""
+    from .models import DeskConversation
+    DeskConversation.objects.exclude(thread__in=Mail.objects.filter(team=None, owner=None).values("thread")).delete()

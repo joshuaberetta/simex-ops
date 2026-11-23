@@ -32,7 +32,8 @@
     {% for l in thread_labels %}<span class="gm-label"{% if l.colour %} style="background: {{ l.colour }}; color: {{ l.fg }}"{% endif %}>{{ l.name }}{% if not readonly %}<button type="button" class="gm-label-x" data-unlabel="{{ l.id }}" title="Remove this label" aria-label="Remove label {{ l.name }}">×</button>{% endif %}</span>{% endfor %}
     {% if desk_chips %}{% for p in desk_chips.personas %}<span class="gm-label gm-persona" style="background: {{ p.colour }}; color: {{ p.fg }}" title="{{ p.addr }}">{{ p.name }}</span>{% endfor %}{% for t in desk_chips.teams %}<span class="gm-label gm-teamchip">{{ t }}</span>{% endfor %}{% endif %}
     {% if mails.0.is_test %}<span class="gm-label test">Test</span>{% endif %}</h2>
-  {% if v.desk %}<div class="gm-presence" data-presence hidden></div>{% endif %}
+  {% if v.desk %}<div class="gm-presence" data-presence hidden></div>
+  {% if desk_state %}{% include "ops/mail/_desk_bar.html" with st=desk_state c=desk_conv %}{% endif %}{% endif %}
   {% for m in mails %}
   <article class="gm-msg {% if forloop.last %}open{% else %}closed{% endif %}{% if m.desk_chip %} desk-{{ m.folder }}{% endif %}" data-msg="{{ m.id }}"{% if m.desk_chip %} style="--persona: {{ m.desk_chip.colour }}"{% endif %}>
     <div class="gm-avatar" style="background: {% if m.desk_chip and m.folder == 'sent' %}{{ m.desk_chip.colour }}{% else %}{{ m.from_name|default:m.from_addr|avatar_colour }}{% endif %}">{{ m.from_name|default:m.from_addr|initial }}</div>

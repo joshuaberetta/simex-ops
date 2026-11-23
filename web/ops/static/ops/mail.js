@@ -340,6 +340,15 @@
       snack(act === "archive" ? "Conversation archived." : act === "trash" ? "Conversation moved to Trash." : act === "restore" ? "Conversation moved to Inbox." : "Draft discarded.",
         act === "archive" || act === "trash" ? { label: "Undo", run: async () => { await post(`${BASE}/action/`, { action: act === "archive" ? "unarchive" : "restore", threads: row.dataset.thread }); location.reload(); } } : null);
     });
+    // The persona desk: a conversation needs no reply (desk.mark), from its row.
+    $$("[data-desk-act]").forEach((b) => b.onclick = async (e) => {
+      e.stopPropagation();
+      const row = b.closest(".gm-row");
+      const r = await post("/inbox/desk/mark/", { act: b.dataset.deskAct, threads: row.dataset.thread });
+      if (!r.ok) { snack("Not saved: try again."); return; }
+      sessionStorage.setItem("simex-snack", "Marked as needing no reply.");
+      location.reload();
+    });
     // keyboard focus in the list
     let focus = -1;
     window.simexListMove = (d) => {

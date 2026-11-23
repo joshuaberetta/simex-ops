@@ -12,6 +12,7 @@ DEFAULTS = {
     "login_reply_to": "",  # login emails (People & logins): where answers to them go
     "test_redirect": "delivered+{key}@resend.dev",
     "grace_minutes": "10",
+    "desk_wait_minutes": "20",  # a Notice when a team waits this long for a persona's answer on the desk (0: never)
     "live_armed": "0",
     "paused": "0",
     "team_to_team": "0",  # participants may write to other teams' inboxes
@@ -35,6 +36,7 @@ DEFAULTS = {
     "ai_injects": "1",  # review unsent injects (missing attachments, placeholders...) when they change
     "ai_documents": "1",  # read the files teams send (ops/ai_docs.py): what they are, AI-written estimate
     "ai_documents_deep": "0",  # with the deep model (else the fast one)
+    "desk_triage": "1",  # read the persona desk's waiting conversations: needs an answer? (ops/desk_ai.py)
     "ai_daily_usd": "5",  # spend cap per day (Nairobi), estimated
     # AI personas (ops/npc.py): personas whose answers Claude writes. Off, and for the Test team
     # only ("test") until ExCon widens it to every team ("all").

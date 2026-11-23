@@ -764,6 +764,10 @@ def tick(limit=BATCH):
     n += ai_docs.tick(limit - n)
     if n >= limit:
         return n
+    from . import desk_ai
+    n += desk_ai.tick(limit - n)  # the persona desk's waiting conversations
+    if n >= limit:
+        return n
     for inj in pending_reviews()[:limit - n]:
         if not under_cap():
             return n

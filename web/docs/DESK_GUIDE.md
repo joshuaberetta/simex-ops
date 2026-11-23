@@ -19,6 +19,23 @@ You are on the **persona desk**: part of ExCon, playing the exercise's personas 
 - If an AI persona was going to answer that conversation, your answer replaces its answer: its queued answer is cancelled.
 - **Someone else on it?** At the top of a conversation, a yellow bar says who else on the desk has it open, and a red one who is writing an answer, so two of you don't answer the same message. Read and starred are shared: a conversation one of you opened is no longer unread for the others.
 
+## What still needs an answer
+Several of you share the desk, so *read* doesn't mean *answered*. The **Inbox** comes in sections:
+- **Needs attention**: a team is waiting for a persona's answer (*Waiting 12 min*), a follow-up is due, or an AI persona's answer was held. The longest waiting first; **Urgent** ones above. The red box on the left says how many.
+- **Probably no reply needed (Claude)**: Claude reads the team's latest message as a thanks or an acknowledgement. Check it, then **No reply needed**.
+- **Later**: follow-ups not due yet, and conversations an AI persona is about to answer.
+- **Answered or nothing to answer**: the rest.
+
+A conversation leaves Needs attention as soon as a persona answers that team in it; a new message from the team puts it back. A blue tag on a row is what Claude reads the team asking for: a hint, check the message.
+
+At the top of each conversation:
+- **I'll take it**: the others see your name on its row (**Yours** for you), so two of you don't pick up the same one. **Release** when you hand it back. Rows also show who is reading or writing in a conversation right now.
+- **No reply needed**: nothing to answer (a thanks, a confirmation). It leaves Needs attention and the next waiting conversation opens. **Reopen** undoes it.
+- **Follow up** now or in 15 minutes to 4 hours, with a note (*chase the convoy ETA*): it waits in Later, comes back to Needs attention when due, and ends when a persona writes in it (or **Stop**).
+- **Ask Claude**, when Claude hasn't read it yet; **Next waiting** to move on.
+
+Tick several rows in the Inbox for **I'll take these**, **No reply needed** or **Reopen** at once; the ✓ on a row (on hover) is **No reply needed**.
+
 ## Writing first
 Click **Write as a persona**, choose **From** (each persona with its address), and pick one or more teams, team members (e.g. **Team A (Jane Doe)**) or team leaders (**Team A leader (John Roe)**) in To, Cc or Bcc: start typing a team, a name or an address and every match is suggested. Each gets its own message and only ever sees its own. A member's or a leader's goes to their own mailbox, not the team's. A leader can't answer a persona in SIMEX Mail (only by email). New messages to the teams only go out once ExCon has armed live sending (except to the Test team), and nothing goes while sending is paused.
 

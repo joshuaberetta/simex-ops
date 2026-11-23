@@ -21,6 +21,7 @@ import copy
 import json
 import re
 import uuid
+from collections import Counter
 from datetime import timedelta
 
 from django.conf import settings
@@ -38,7 +39,7 @@ from django.utils.http import content_disposition_header
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import addresses, conf, delivery, desk, inbound, push, render as rnd, signin, simclock
+from . import addresses, conf, delivery, desk, desk_ai, inbound, push, render as rnd, signin, simclock
 from .access import desk_of, is_excon, leader_of, login_required_any, participant_of, rp_of
 from .models import (Mail, MailAction, MailAttachment, MailLabel, MessageAttachment, Person, PushSubscription, Response,
                      Sender, Team, ThreadLabel, audit)
@@ -167,6 +168,7 @@ class Viewer:
         self.owner, self.leader_mode = None, False  # leader_mode: a leader reading their team's inbox
         self.peer = box == "peer"
         self.desk = box == "desk"
+        self.user = request.user
         if box in ("me", "member") and not conf.flag("personal_mailboxes"):
             raise Http404
         if self.desk:
@@ -591,12 +593,25 @@ def conversations(v, folder, q=""):
         flags = ai_flags(v.team, {t: threads[t] for t in order})
         for r in rows:
             r["ai"] = flags.get(r["thread"])
+    if v.desk and folder not in ("drafts", "trash"):  # what still needs an answer (desk.states)
+        sts = desk.states(order, v.user)
+        here = desk.on_now(order, v.user.id)
+        for r in rows:
+            r["state"], r["here"] = sts.get(r["thread"]), here.get(r["thread"])
+        if sectioned(v, folder):
+            rows.sort(key=lambda r: desk.sort_key(r["state"], r["latest"].created_at))
     if folder == "replies":  # newest team reply first
         last_sent = {}
         for th, at in v.mails().filter(folder="sent", thread__in=order).values_list("thread", "created_at"):
             last_sent[th] = max(at, last_sent.get(th, at))
         rows.sort(key=lambda r: last_sent.get(r["thread"]) or r["latest"].created_at, reverse=True)
     return rows
+
+
+def sectioned(v, folder):
+    """The persona desk's Inbox (and its persona and team filters): in sections, what needs
+    attention first (desk.SECTIONS)."""
+    return v.desk and (folder == "inbox" or bool(desk_filter(v, folder)))
 
 
 def ai_flags(team, threads):
@@ -650,7 +665,7 @@ def desk_side(v):
                          "unread": len({t for t, p, _ in unread if p in locs})})
     teams = [{"key": f"t{t.id}", "name": t.name, "test": t.is_test,
               "unread": len({th for th, _, tid in unread if tid == t.id})} for t in Team.objects.filter(active=True)]
-    return {"personas": personas, "teams": teams}
+    return {"personas": personas, "teams": teams, "attention": desk.attention_count()}
 
 
 def desk_tabs(person, current):
@@ -821,8 +836,12 @@ def inbox(request, v):
         last = MailAction.objects.filter(**v.box, person=v.person, action="search").order_by("-at").first()
         if not (last and last.detail.get("q") == q[:200] and last.at > timezone.now() - timedelta(minutes=2)):
             track(v, "search", q=q[:200], folder=folder, results=total)
+    sections = None
+    if not q and sectioned(v, folder):  # the persona desk: what needs attention first
+        counts = Counter(r["state"]["section"] for r in rows)
+        sections = {key: {"name": name, "n": counts.get(key, 0)} for key, name in desk.SECTIONS}
     return render(request, "ops/mail/list.html", _ctx(
-        v, folder=folder, q=q, rows=rows[start:start + PAGE], total=total, first=start + 1 if total else 0,
+        v, folder=folder, q=q, rows=rows[start:start + PAGE], sections=sections, desk_ai=desk_ai.enabled(), total=total, first=start + 1 if total else 0,
         last=min(start + PAGE, total), page=page, has_prev=page > 1, has_next=start + PAGE < total, today=timezone.localdate()))
 
 
@@ -934,9 +953,18 @@ def thread_view(request, v, thread):
         v, folder=folder, mails=mails, subject=subject, thread=thread, prev_t=prev_t, next_t=next_t,
         pos=i + 1, total=len(keys), last=last, thread_js=thread_js, can_reply=can_reply,
         desk_chips=desk_chips(mails, {}, dict(Team.objects.values_list("id", "name"))) if v.desk else None,
+        desk_state=desk.states([thread], v.user).get(thread) if v.desk else None,
+        desk_conv=desk.conversation(thread) if v.desk else None, desk_ai=v.desk and desk_ai.enabled(),
+        next_waiting=_next_waiting(rows, thread) if v.desk else None,
         in_inbox=any(m.folder == "inbox" and not m.archived for m in mails), starred=any(m.starred for m in mails),
         thread_labels=[_label_dict(tl.label) for tl in ThreadLabel.objects.filter(label__in=v.labels(), thread=thread)
                        .select_related("label").order_by("label__name")]))
+
+
+def _next_waiting(rows, thread):
+    """The next desk conversation that needs attention after this one, if any."""
+    return next((r["thread"] for r in rows if r["thread"] != thread and r.get("state")
+                 and r["state"]["section"] == desk.ATTENTION), None)
 
 
 def _desk_thread(mails):
@@ -1456,6 +1484,30 @@ def desk_teams(request):
         "personal": personal, "v": None, "back_url": "/inbox/desk/teams/",
         "simex_js": {"base": "/inbox/desk", "readonly": True, "book": [], "team": DESK["name"], "leader": False,
                      "folder": "", "unread": 0, "vapid": "", "pushBase": "/inbox/desk", "labels": []}})
+
+
+@_desk_page
+@require_POST
+def desk_mark(request):
+    """A desk member marks conversations (desk.ACTIONS): take or release, no reply needed or
+    reopen, follow up later or stop, ask Claude."""
+    P = request.POST
+    person = desk_of(request.user)
+    name = person.name if person else (request.user.get_full_name() or request.user.get_username())
+    try:
+        minutes = max(0, min(int(P.get("minutes") or 0), 24 * 60))
+    except ValueError:
+        minutes = 0
+    try:
+        n = desk.mark(P.getlist("threads"), P.get("act", ""), request.user, name, minutes, P.get("note", ""))
+    except desk.DeskError as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=400)
+    if request.headers.get("x-requested-with") == "fetch":
+        return JsonResponse({"ok": True, "n": n})
+    nxt = P.get("next") or ""
+    if P.get("act") == "done":  # on to the next conversation waiting, else back to the Inbox
+        nxt = P.get("next_done") or ("/inbox/desk/" if "/t/" in nxt else nxt)
+    return redirect(nxt if nxt.startswith("/inbox/desk/") else "/inbox/desk/")
 
 
 @_desk_page

@@ -101,6 +101,7 @@
       {% if t.lead %}<li><a href="/inbox/as/{{ t.id }}/leader/" class="{% if t.id == team.id and v.leader_box %}on{% endif %}">{% icon "label" %}<span class="gm-flabel">{{ t.name }} · team leader</span></a></li>{% endif %}{% endfor %}
     </ul>
     {% else %}<button class="gm-compose-btn" data-compose {% if readonly %}disabled title="Read-only view"{% endif %}>{% icon "edit" 24 %}<span>{% if v.desk %}Write as a persona{% else %}Compose{% endif %}</span></button>{% endif %}
+    {% if desk_side.attention %}<a class="gm-desk-wait" href="{{ base }}/" title="Conversations a team is waiting on, follow-ups due, AI answers held: at the top of the Inbox">{{ desk_side.attention }} need{% if desk_side.attention == 1 %}s{% endif %} attention</a>{% endif %}
     <ul class="gm-folders">
       {% for key, label in folders %}
       <li><a href="{{ base }}/?folder={{ key }}" class="{% if folder == key and not q %}on{% endif %}{% if key == 'inbox' and inbox_unread %} bold{% endif %}" data-folder="{{ key }}"{% if key == 'inbox' %} data-drop-to="inbox"{% endif %}>

@@ -134,6 +134,16 @@ def npc(job):
     return None
 
 
+def desk_wait(thread, mail, minutes, owner=""):
+    """A team has waited minutes for a persona's answer on the persona desk (mail: its first
+    unanswered message there): once per message waiting."""
+    from .desk import describe
+    persona = describe(mail.persona)["name"] if mail.persona else "a persona"
+    return add(f"desk-wait:{thread}:{mail.id}", "reply", f"{_team(mail.desk_team)} waiting {minutes} min for {persona}",
+               mail.subject, f"Taken by {owner}, not answered yet." if owner else "Nobody on the persona desk has taken it.",
+               f"/inbox/desk/t/{thread}/", team=mail.desk_team, test=mail.is_test)
+
+
 def npc_ready(p):
     if p.gen_status == "done":
         return add(f"npc-new:{p.id}", "system", "AI persona written", p.sender.display_name, p.brief, f"/npcs/{p.id}/")

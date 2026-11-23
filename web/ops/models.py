@@ -402,6 +402,34 @@ class MailLabel(models.Model):
         return self.name
 
 
+class DeskConversation(models.Model):
+    """What the persona desk keeps about one of its conversations (Mail.thread, team None), so
+    the people sharing it can tell what still needs an answer (ops/desk.py states): marked
+    as needing no reply (the teams' mail up to done_upto, a Mail id: a newer message from a team
+    opens it again), to follow up (until a persona writes in it after follow_upto, due at
+    follow_at or now), taken by one of them, and Claude's reading of whether the teams' latest
+    message needs an answer (ops/desk_ai.py: ai_upto, the last Mail id it read)."""
+    thread = models.CharField(max_length=40, unique=True)
+    done_upto = models.IntegerField(default=0)
+    done_by = models.CharField(max_length=150, blank=True, default="")
+    done_at = models.DateTimeField(null=True, blank=True)
+    follow_upto = models.IntegerField(default=0)  # 0: no follow-up
+    follow_at = models.DateTimeField(null=True, blank=True)  # None: due now
+    follow_note = models.CharField(max_length=300, blank=True, default="")
+    follow_by = models.CharField(max_length=150, blank=True, default="")
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    owner_name = models.CharField(max_length=150, blank=True, default="")
+    ai_upto = models.IntegerField(default=0)
+    ai_status = models.CharField(max_length=10, blank=True, default="")  # "" | queued | done | failed
+    ai_need = models.CharField(max_length=10, blank=True, default="")  # reply | optional | none
+    ai_urgency = models.CharField(max_length=10, blank=True, default="")  # high | normal | low
+    ai_ask = models.CharField(max_length=300, blank=True, default="")
+    ai_reason = models.CharField(max_length=400, blank=True, default="")
+    ai_error = models.TextField(blank=True, default="")
+    ai_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
 class ThreadLabel(models.Model):
     """A label on a conversation (Mail.thread) of the label's mailbox."""
     label = models.ForeignKey(MailLabel, on_delete=models.CASCADE, related_name="threads")
