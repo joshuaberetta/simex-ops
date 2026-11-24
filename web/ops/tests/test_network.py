@@ -106,3 +106,25 @@ def test_network_pages_are_excon_only(excon):
     for url in ("/dashboard/network/", "/dashboard/network/data/", "/dashboard/network/poll/"):
         assert pa.get(url).status_code == 403 and la.get(url).status_code == 403
         assert "/login/" in anon.get(url)["Location"]
+
+
+def test_the_persona_desk_has_the_network_as_a_tab(excon):
+    from ops.tests.test_desk import desk_client
+    setup_exercise(excon)
+    deliver_now("3-13")
+    d = desk_client()
+    page = d.get("/inbox/desk/network/")
+    assert page.status_code == 200 and page.context["desk_tabs"]["current"] == "network"
+    assert b'href="/inbox/desk/network/"' in page.content and b"network.js" in page.content and b"Source code" in page.content
+    assert b"/inbox/desk/network/data/?kind=live" in page.content
+    wall = d.get("/inbox/desk/network/?screen=1")
+    assert wall.status_code == 200 and b"Back to the persona desk" in wall.content
+    data = d.get("/inbox/desk/network/data/").json()
+    assert data["sends"] and {n["type"] for n in data["nodes"]} >= {"team", "persona"}
+    p = d.get("/inbox/desk/network/poll/?kind=live&" + "&".join(f"{k}={v}" for k, v in data["cursor"].items())).json()
+    assert "sends" in p and "cursor" in p
+    assert excon.get("/inbox/desk/network/").status_code == 200
+    pa, la, anon = participant("a"), leader("a"), Client()
+    for url in ("/inbox/desk/network/", "/inbox/desk/network/data/", "/inbox/desk/network/poll/"):
+        assert pa.get(url).status_code == 403 and la.get(url).status_code == 403
+        assert "/login/" in anon.get(url)["Location"]

@@ -134,3 +134,18 @@ body.net-screen .net-stage, body.net-screen .net-side { height: calc(100vh - 140
 .net-style-panel .row { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; margin-top: 2px; }
 .net-style-panel .row .muted { color: var(--net-muted); }
 .net.no-legend .net-legend { display: none; }
+
+/* The persona desk's Network tab (ops/mail/desk_network.html): SIMEX Mail has no app.css, so the
+   few of its pieces the map uses are here, kept to the tab. */
+.gm-net { --line-strong: #d1d5db; --shadow: 0 1px 2px rgba(16,24,40,.05); --shadow-md: 0 1px 3px rgba(16,24,40,.08), 0 1px 2px rgba(16,24,40,.04); }
+.gm-net .muted { color: var(--muted); }
+.gm-net .small { font-size: 12px; }
+.gm-net .gm-dd-head { align-items: center; }
+.gm-net .gm-net-wall { margin-left: auto; }
+.gm-net .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; font: inherit; font-weight: 600; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); padding: 0 14px; border-radius: 6px; cursor: pointer; box-shadow: var(--shadow); white-space: nowrap; text-decoration: none; }
+.gm-net .btn:hover { background: #f9fafb; border-color: #9ca3af; }
+.gm-net .btn.small { min-height: 28px; padding: 0 10px; font-size: 12px; }
+.gm-net .seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 8px; background: #eef0f3; }
+.gm-net .net-stage { height: calc(var(--app-h, 100vh) - 300px); }
+.gm-net .net-side { height: calc(var(--app-h, 100vh) - 300px); }
+@media (max-width: 960px) { .gm-net .net-side { height: auto; } }

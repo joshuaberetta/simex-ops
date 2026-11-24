@@ -80,6 +80,7 @@
   <a href="/inbox/desk/" class="{% if dt.current == 'desk' %}on{% endif %}">{% icon "inbox" 20 %} Persona desk<span class="gm-tab-n" data-tab-desk>{% if dt.unread and dt.current != 'desk' %}{{ dt.unread }}{% endif %}</span></a>
   <a href="/inbox/desk/teams/" class="{% if dt.current == 'teams' %}on{% endif %}">{% icon "eye" 20 %} Teams &amp; team leaders <span class="gm-tab-ro">read-only</span></a>
   <a href="/inbox/desk/dashboard/" class="{% if dt.current == 'dashboard' %}on{% endif %}">{% icon "all" 20 %} Dashboard</a>
+  <a href="/inbox/desk/network/" class="{% if dt.current == 'network' %}on{% endif %}">{% icon "network" 20 %} Network</a>
   <a href="/inbox/desk/calendar/" class="{% if dt.current == 'calendar' %}on{% endif %}">{% icon "event" 20 %} Calendar</a>
   <a href="/inbox/desk/assign/" class="{% if dt.current == 'assign' %}on{% endif %}">{% icon "person" 20 %} Assign</a>
   {% if dt.chat %}<button type="button" class="gm-chat-tab" data-chat-toggle aria-expanded="false" title="Ask SIMEX AI what has been said already, who a persona is, how to answer a team">{% icon "edit" 20 %} ChatSIMEX</button>{% endif %}

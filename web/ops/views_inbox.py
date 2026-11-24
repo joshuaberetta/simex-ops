@@ -789,6 +789,7 @@ def apps(v, request):
                   tile("calendar", "Calendar", "/inbox/desk/calendar/", "calendar"),
                   tile("teams", "Teams", "/inbox/desk/teams/", "people"),
                   tile("dashboard", "Dashboard", "/inbox/desk/dashboard/", "dashboard"),
+                  tile("network", "Network", "/inbox/desk/network/", "network"),
                   tile("assign", "Assign", "/inbox/desk/assign/", "assign")]
         if desk_p and roleplay.has_role_plays(desk_p):
             tiles.append(tile("rp", "Role plays", "/inbox/rp/", "roleplay"))

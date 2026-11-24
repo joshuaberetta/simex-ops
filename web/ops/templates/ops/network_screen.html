@@ -11,7 +11,7 @@
 <header class="net-head">
   <b>SIMEX <span>comms network</span>{% if kind == "test" %} · Test team{% endif %}</b>
   <span class="net-clocks"><span data-net-real></span><span data-net-sim hidden></span></span>
-  <a href="/dashboard/network/?kind={{ kind }}" class="net-back">Back to the Dashboard</a>
+  <a href="{{ back_url }}" class="net-back">{{ back_label }}</a>
 </header>
 {% include "ops/_network.html" %}
 <footer class="foot net-foot">SIMEX ops is open source under the AGPL-3.0. <a href="{{ SOURCE_URL }}" target="_blank" rel="noopener">Source code on GitHub</a></footer>

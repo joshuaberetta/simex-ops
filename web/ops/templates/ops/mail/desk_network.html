@@ -1,0 +1,19 @@
+{% extends "ops/mail/base.html" %}{% load static %}
+{% block title %}Network{% endblock %}
+{% block search %}<div class="gm-search-space">Persona desk · Network</div>{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'ops/network.css' %}">{% endblock %}
+{% block side %}{% endblock %}
+{% block main %}
+<div class="gm-dash gm-net">
+  <div class="gm-dd-head">
+    <h2>Who writes to whom</h2>
+    <span class="gm-dd-kind">
+      <a href="?kind=live" class="{% if kind == 'live' %}on{% endif %}">Exercise teams</a>
+      <a href="?kind=test" class="{% if kind == 'test' %}on{% endif %}">Test team</a></span>
+    <a href="?kind={{ kind }}&amp;screen=1" class="btn small gm-net-wall" target="_blank" rel="noopener" title="Full screen, dark, without the menus: to leave open on a screen">Wall screen</a>
+  </div>
+  <p class="small muted">The teams, their members and leaders, the personas. A dot grows with the mail it sent and received, a line with the messages one way (bright where it starts). New messages travel along the lines as they go. Updates every few seconds.</p>
+  {% include "ops/_network.html" %}
+  <p class="gm-source small muted">Open source (AGPL-3.0). <a href="{{ SOURCE_URL }}" class="gm-link" target="_blank" rel="noopener">Source code</a></p>
+</div>
+{% endblock %}
