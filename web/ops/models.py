@@ -372,12 +372,22 @@ class Mail(models.Model):
     # The persona desk's copies: the team on the other side, and for what a team wrote, its Response.
     desk_team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
     desk_response = models.ForeignKey("Response", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    # SIMEX Calendar (ops/calendar.py): a mail about an event, every copy of it (the invitation
+    # card): request | update | cancel | reply (a guest's answer).
+    event = models.ForeignKey("CalendarEvent", null=True, blank=True, on_delete=models.SET_NULL, related_name="mails")
+    invite = models.CharField(max_length=8, blank=True, default="")
 
     class Meta:
         ordering = ["-created_at", "-id"]
         indexes = [models.Index(fields=["team", "folder", "thread"])]
 
     def save(self, *args, **kwargs):
+        if self._state.adding and not self.event_id:
+            from . import calendar
+            sending = calendar.SENDING.get()  # every Mail an invitation makes, in any mailbox
+            if sending:
+                self.event_id, self.invite = sending[0], sending[1]
+                self.thread = self.thread or sending[2]
         if not self.thread:
             self.thread = uuid.uuid4().hex
         if self._state.adding and self.sim_at is None:
@@ -1185,3 +1195,127 @@ class ReplySuggestion(models.Model):
 
     class Meta:
         ordering = ["-id"]
+
+
+# --- SIMEX Calendar (ops/calendar.py, views_calendar.py) -------------------------------------------
+
+def _event_uid():
+    return uuid.uuid4().hex[:16]
+
+
+class CalendarEvent(models.Model):
+    """A meeting or appointment on SIMEX Calendar. It belongs to its organiser's mailbox
+    ((team, owner) as Mail; team None and owner None = the persona desk, organiser_key
+    p:<username> the persona organising it) and shows on the calendar of every mailbox with a
+    CalendarAttendee row for it, the organiser's own row included. Times are real (as
+    everywhere in the DB); SIMEX Calendar shows members their simulation time
+    (calendar.to_sim), everyone else both. Participant-facing text only."""
+    uid = models.CharField(max_length=32, unique=True, default=_event_uid)  # also the invitation thread (step 2)
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    owner = models.ForeignKey(Person, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    organiser_key = models.CharField(max_length=140, default="")  # t:<id> | m:<pid> | l:<pid> | p:<username>
+    organiser_name = models.CharField(max_length=200, blank=True, default="")
+    title = models.CharField(max_length=200, default="")
+    location = models.CharField(max_length=200, blank=True, default="")
+    description = models.TextField(blank=True, default="")
+    mode = models.CharField(max_length=12, default="in_person")  # in_person | phone | vtc | other
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField()
+    all_day = models.BooleanField(default=False)
+    status = models.CharField(max_length=12, default="confirmed")  # confirmed | cancelled
+    sequence = models.IntegerField(default=0)  # bumped on changes that matter to the guests
+    source_mail = models.ForeignKey(Mail, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    # Found in the mail by SIMEX AI and applied by ExCon (ops/cal_seed.py): "From the mail".
+    seeded = models.ForeignKey("CalendarSeed", null=True, blank=True, on_delete=models.SET_NULL, related_name="events")
+    created_by = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    is_test = models.BooleanField(default=False)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["starts_at", "id"]
+        indexes = [models.Index(fields=["starts_at"])]
+
+    def __str__(self):
+        return self.title
+
+
+class CalendarAttendee(models.Model):
+    """An event on one mailbox's calendar: the organiser (role organiser) or a guest. (team,
+    owner) is the mailbox whose calendar shows it, as Mail; a persona's row has team None,
+    owner None (the persona desk) and its username in persona."""
+    event = models.ForeignKey(CalendarEvent, on_delete=models.CASCADE, related_name="attendees")
+    key = models.CharField(max_length=140, default="")  # address-book key, as organiser_key
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    owner = models.ForeignKey(Person, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    persona = models.CharField(max_length=120, blank=True, default="")
+    person = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    name = models.CharField(max_length=200, blank=True, default="")
+    addr = models.CharField(max_length=320, blank=True, default="")
+    role = models.CharField(max_length=10, default="required")  # organiser | required | optional
+    response = models.CharField(max_length=14, default="needs_action")  # needs_action | accepted | tentative | declined
+    responded_at = models.DateTimeField(null=True, blank=True)
+    responded_by = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    comment = models.TextField(blank=True, default="")
+    remind_minutes = models.IntegerField(null=True, blank=True)  # None: conf cal_lead
+    reminded_at = models.DateTimeField(null=True, blank=True)
+    hidden = models.BooleanField(default=False)  # removed from this calendar
+
+    class Meta:
+        ordering = ["id"]
+        indexes = [models.Index(fields=["team", "owner"]), models.Index(fields=["persona"])]
+
+
+class CalendarSeed(models.Model):
+    """A run of "Find meetings in the mail" (ops/cal_seed.py, ExCon only): SIMEX AI reads the teams'
+    mail (participant-facing only) for meetings already proposed or agreed, as CalendarSeedItems
+    for ExCon to check and apply."""
+    status = models.CharField(max_length=10, default="running")  # running | done | failed
+    teams = models.JSONField(default=list, blank=True)  # team ids; [] = every active team
+    since = models.DateTimeField(null=True, blank=True)
+    until = models.DateTimeField(null=True, blank=True)
+    include_seeded = models.BooleanField(default=False)  # read threads earlier runs read too
+    scanned = models.JSONField(default=list, blank=True)  # "team id:thread" read by this run
+    total = models.IntegerField(default=0)  # chunks
+    done = models.IntegerField(default=0)
+    threads = models.IntegerField(default=0)
+    error = models.TextField(blank=True, default="")
+    model = models.CharField(max_length=120, blank=True, default="")
+    user = models.CharField(max_length=150, blank=True, default="")
+    created_at = models.DateTimeField(default=timezone.now)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    applied_at = models.DateTimeField(null=True, blank=True)
+    applied_by = models.CharField(max_length=150, blank=True, default="")
+
+    class Meta:
+        ordering = ["-id"]
+
+
+class CalendarSeedItem(models.Model):
+    """A meeting SIMEX AI found in the mail: for ExCon to edit, tick and apply (an event and its
+    attendee rows, quietly: no mail). allowed: the address-book keys its evidence mails belong to
+    or are addressed to, the only calendars it may go on (teams never cross)."""
+    seed = models.ForeignKey(CalendarSeed, on_delete=models.CASCADE, related_name="items")
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    thread = models.CharField(max_length=40, blank=True, default="")
+    title = models.CharField(max_length=200, default="")
+    starts_at = models.DateTimeField(null=True, blank=True)
+    ends_at = models.DateTimeField(null=True, blank=True)
+    all_day = models.BooleanField(default=False)
+    location = models.CharField(max_length=200, blank=True, default="")
+    mode = models.CharField(max_length=12, default="in_person")
+    organiser_key = models.CharField(max_length=140, blank=True, default="")
+    guests = models.JSONField(default=list, blank=True)  # [{"key", "response"}]
+    status = models.CharField(max_length=10, default="proposed")  # proposed | confirmed | declined | cancelled
+    confidence = models.IntegerField(default=0)  # 0-100
+    sources = models.JSONField(default=list, blank=True)  # [{"mail": id, "quote": "..."}]
+    allowed = models.JSONField(default=list, blank=True)
+    note = models.TextField(blank=True, default="")  # SIMEX AI's
+    problems = models.JSONField(default=list, blank=True)  # what the checks dropped or doubt
+    duplicate = models.ForeignKey(CalendarEvent, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    duplicate_why = models.CharField(max_length=200, blank=True, default="")
+    ticked = models.BooleanField(default=False)
+    event = models.ForeignKey(CalendarEvent, null=True, blank=True, on_delete=models.SET_NULL, related_name="seed_items")
+
+    class Meta:
+        ordering = ["starts_at", "id"]

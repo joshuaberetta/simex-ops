@@ -93,7 +93,7 @@ def _put_mail(m):
 # What a copy of a Mail in another mailbox keeps (the mailbox state, star, read..., starts afresh).
 COPIED = ["thread", "from_name", "from_addr", "to_label", "cc_label", "to_person_id", "persona", "to_team_id", "subject",
           "body", "footer", "banner", "author_id", "message_id", "inject_id", "is_test", "recipients", "created_at",
-          "sim_at"]
+          "sim_at", "event_id", "invite"]
 
 
 def copy_mail(src, **over):
@@ -402,7 +402,8 @@ def drafted(m, draft, text):
         m.ai_edited = " ".join(text.split()) != " ".join(str(draft.body.get("body") or "").split())
 
 
-def answer(response, body, user="", files=(), attachments=(), ai_draft=None, idem_key=None, npc=False, author=None):
+def answer(response, body, user="", files=(), attachments=(), ai_draft=None, idem_key=None, npc=False, author=None,
+           subject=None):
     """Reply as the persona the participant wrote to: into their team's inbox (in-app
     thread) or by email (email thread), with files ExCon uploaded ((filename, content_type,
     data) tuples) and inject documents (Attachment rows). Returns the Message. An AI
@@ -415,7 +416,8 @@ def answer(response, body, user="", files=(), attachments=(), ai_draft=None, ide
     ctx = {**ctx, "team_name": team.name} if team else ctx
     name = ((render.fill(sender.display_name, ctx) if sender and sender.display_name else "") or persona).replace('"', "'")
     cfg = conf.get_all()
-    subject = response.subject if response.subject.lower().startswith("re:") else f"Re: {response.subject}"
+    # (subject: an answer to an invitation, ops/calendar.py, says what it is: "Accepted: ...")
+    subject = subject or (response.subject if response.subject.lower().startswith("re:") else f"Re: {response.subject}")
     from_addr = f'"{name}" <{render.persona_address(sender, persona, ctx, response.channel)}>'
     if response.channel == "inapp":
         team = response.team
@@ -654,6 +656,8 @@ def withdraw(m, team_ids, user=""):
         for x in {x.message_id for x in mails}:
             if not Mail.objects.filter(message_id=x).exists():
                 Message.objects.filter(pk=x).update(status="withdrawn")
+        from . import calendar
+        calendar.withdrawn(mails, team_ids)  # an invitation taken back: off those teams' calendars
     if n:
         from . import ai_docs
         for t in {x.team for x in mails if x.team}:

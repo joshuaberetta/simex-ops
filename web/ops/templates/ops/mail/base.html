@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{% block title %}Inbox{% endblock %} - {{ team.name }} - SIMEX Mail</title>
 <link rel="stylesheet" href="{% static 'ops/mail.css' %}">
+<link rel="stylesheet" href="{% static 'ops/apps.css' %}">
 <link rel="manifest" href="/inbox/manifest.webmanifest">
 <link rel="apple-touch-icon" href="{% static 'ops/icon-180.png' %}">
 <meta name="apple-mobile-web-app-title" content="SIMEX Mail">
@@ -48,6 +49,7 @@
         <div class="gm-dn-foot">Conversations given to you or taken from you, your follow-ups when due, teams writing again and others answering in conversations you have or follow, a team waiting on yours, AI persona answers held. <a href="/inbox/desk/?folder=mine" class="gm-link">Assigned to me</a> · <a href="/inbox/desk/?folder=watching" class="gm-link">Following</a></div>
       </div>
     </div>{{ desk_tabs.bell|json_script:"simex-dn" }}{% endif %}
+    {% include "ops/mail/_apps.html" %}
     <a class="gm-icon-btn" href="{{ base }}/help/" title="Help" aria-label="Help">{% icon "help" 22 %}</a>
     <button class="gm-icon-btn" data-sound title="Alert sound and notifications" aria-label="Alert sound and notifications">{% icon "sound" 22 "gm-snd-on" %}{% icon "sound_off" 22 "gm-snd-off" %}</button>
     <div class="gm-account">
@@ -208,6 +210,7 @@
 {{ simex_js|json_script:"simex-config" }}
 <script src="{% static 'ops/notify.js' %}"></script>
 <script src="{% static 'ops/mail.js' %}"></script>
+<script src="{% static 'ops/apps.js' %}"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

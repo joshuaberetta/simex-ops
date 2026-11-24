@@ -1,0 +1,44 @@
+{% extends "ops/base.html" %}
+{% block title %}Meetings in the mail · SIMEX ops{% endblock %}
+{% block head %}{% if seed.status == 'running' %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
+{% block body %}
+<div class="bar"><h1><a href="/inboxes/" class="muted">Team inboxes</a> / <a href="/meetings/" class="muted">Meetings in the mail</a> / {{ seed.created_at|date:"D j M H:i" }}</h1></div>
+{% if seed.status == 'running' %}<div class="card"><p><b>SIMEX AI is reading the mail…</b> {{ seed.done }} of {{ seed.total|default:"?" }} batches ({{ seed.threads }} conversations). This page refreshes itself; you can leave it, a notification says when it is done.</p></div>
+{% elif seed.status == 'failed' %}<div class="card"><p class="error"><b>It failed:</b> {{ seed.error }}</p></div>{% endif %}
+{% if seed.status != 'running' %}
+<p class="small muted">{{ seed.threads }} conversation{{ seed.threads|pluralize }} read, {{ items|length }} meeting{{ items|length|pluralize }} found{% if seed.applied_at %} · applied {{ seed.applied_at|date:"D H:i" }} by {{ seed.applied_by }}{% endif %}.
+Check each one against its mail (the quotes link to the conversations, read-only), correct it, tick the ones to keep and <b>Apply</b>: each becomes an event on the calendars of its organiser and guests, with their answers as the mail shows them, and <b>no mail is sent</b>. Times are real (Nairobi){% if items.0.d.sim_start or items.1.d.sim_start %}; the scenario time is under each{% endif %}. Organiser and guests are address-book keys (t: team, m: member, l: team leader, p: persona) and can only be among those in its conversations. Rows are ticked when SIMEX AI is fairly sure, has a time and repeats no event already there.</p>
+<form method="post">{% csrf_token %}
+<table class="list fixed small">
+  <thead><tr><th style="width:3%"></th><th style="width:20%">Meeting</th><th style="width:17%">When</th><th style="width:20%">Who</th><th style="width:8%">Status</th><th style="width:32%">From the mail</th></tr></thead>
+  {% for it in items %}
+  <tr{% if it.event %} class="muted"{% endif %}>
+    <td>{% if it.event %}✓{% else %}<input type="checkbox" name="i{{ it.id }}-ticked" value="1" {% if it.ticked %}checked{% endif %} aria-label="Keep {{ it.title }}">{% endif %}</td>
+    <td>{% if it.event %}<b>{{ it.title }}</b><div>on the calendars</div>{% else %}
+      <input name="i{{ it.id }}-title" value="{{ it.title }}" maxlength="200" style="width:100%">
+      <input name="i{{ it.id }}-location" value="{{ it.location }}" placeholder="Where" maxlength="200" style="width:100%">
+      <select name="i{{ it.id }}-mode">{% for k, l in modes %}<option value="{{ k }}" {% if k == it.mode %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>{% endif %}
+      <div class="muted">{{ it.team_name }} · {{ it.confidence }}% sure</div></td>
+    <td>{% if it.event %}{{ it.start_text }}{% else %}
+      <input type="datetime-local" name="i{{ it.id }}-start" value="{{ it.start_text }}">
+      <input type="datetime-local" name="i{{ it.id }}-end" value="{{ it.end_text }}">
+      <label class="check"><input type="checkbox" name="i{{ it.id }}-all_day" value="1" {% if it.all_day %}checked{% endif %}> all day</label>{% endif %}
+      {% if it.d.sim_start %}<div class="muted">scenario {{ it.d.sim_start|slice:"0:10" }} {{ it.d.sim_start|slice:"11:16" }}</div>{% endif %}</td>
+    <td>{% if it.event %}{{ it.d.organiser }}{% else %}
+      <label>Organiser <select name="i{{ it.id }}-organiser">{% for a in it.d.allowed %}<option value="{{ a.key }}" {% if a.key == it.organiser_key %}selected{% endif %}>{{ a.name }}</option>{% endfor %}</select></label>
+      <label>Guests <input name="i{{ it.id }}-guests" value="{% for g in it.guests %}{{ g.key }}{% if not forloop.last %}, {% endif %}{% endfor %}" style="width:100%"></label>{% endif %}
+      <div>{% for g in it.d.guests %}{{ g.name }} <span class="muted">({{ g.response }})</span>{% if not forloop.last %}; {% endif %}{% endfor %}</div>
+      <details><summary class="muted">keys in its conversation</summary>{% for a in it.d.allowed %}<code>{{ a.key }}</code> {{ a.name }}<br>{% endfor %}</details></td>
+    <td>{% if it.event %}{{ it.status }}{% else %}<select name="i{{ it.id }}-status">{% for s in statuses %}<option value="{{ s }}" {% if s == it.status %}selected{% endif %}>{{ s }}</option>{% endfor %}</select>{% endif %}</td>
+    <td>{% for s in it.d.sources %}<div>“{{ s.quote }}” <a href="{{ s.url }}" target="_blank" rel="noopener">{{ s.subject|truncatechars:50 }}</a></div>{% endfor %}
+      {% if it.note %}<div class="muted">SIMEX AI: {{ it.note }}</div>{% endif %}
+      {% if it.duplicate %}<div class="warn">Possibly already on the calendar: “{{ it.duplicate.title }}” ({{ it.duplicate_why }})</div>{% endif %}
+      {% for p in it.problems %}<div class="warn">{{ p }}</div>{% endfor %}</td>
+  </tr>
+  {% empty %}<tr><td colspan="6" class="muted">No meetings found.</td></tr>{% endfor %}
+</table>
+{% if items %}<p><button class="btn" name="action" value="save">Save changes</button> <button class="btn primary" name="action" value="apply">Apply the ticked ones</button>
+  <span class="hint">No mail and no notification goes to anyone.</span></p>{% endif %}
+</form>
+{% endif %}
+{% endblock %}

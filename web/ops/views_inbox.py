@@ -41,7 +41,7 @@ from django.views.decorators.http import require_POST
 
 from . import addresses, conf, delivery, desk, desk_ai, inbound, push, render as rnd, signin, simclock, suggest_leader
 from .access import desk_of, is_excon, leader_of, login_required_any, participant_of, rp_of
-from .models import (Mail, MailAction, MailAttachment, MailLabel, MessageAttachment, Person, PushSubscription, Response,
+from .models import (CalendarEvent, Mail, MailAction, MailAttachment, MailLabel, MessageAttachment, Person, PushSubscription, Response,
                      Sender, Team, ThreadLabel, audit)
 
 PAGE = 50
@@ -233,6 +233,12 @@ class Viewer:
     def labels(self):
         return MailLabel.objects.filter(**self.box)
 
+    def events(self):
+        """The events on this mailbox's calendar (SIMEX Calendar, ops/calendar.py): those with a
+        row for it, the organiser's included. The persona desk's are every persona's."""
+        return CalendarEvent.objects.filter(attendees__team=self.team, attendees__owner=self.owner,
+                                            attendees__hidden=False).distinct()
+
     @property
     def leader_box(self):
         """A team leader's own mailbox (their own or, for ExCon or a peer, viewed)."""
@@ -404,7 +410,8 @@ member_by_address = addresses.member_by_address
 # What participants do in their mailbox, kept with its time for the end-of-exercise reports
 # (MailAction). Reading and downloading are Events (inbound.record_read).
 TRACKED = {"star", "unstar", "read", "unread", "archive", "unarchive", "trash", "restore", "label_add", "label_remove",
-           "move", "discard", "label_create", "label_delete", "search", "draft", "send"}
+           "move", "discard", "label_create", "label_delete", "search", "draft", "send",
+           "cal_create", "cal_update", "cal_cancel", "cal_rsvp"}  # SIMEX Calendar (ops/calendar.py)
 
 
 def track(v, action, threads=(), **detail):
@@ -624,7 +631,8 @@ def conversations(v, folder, q=""):
                      "starred": any(m.starred for m in conv), "people": people,
                      "has_files": any(m.files.all() for m in threads[t]), "draft": False,
                      "labels": sorted(on.get(t, []), key=lambda x: x["name"].lower()), "all_labels": ids_on.get(t, []),
-                     "desk": desk_chips(conv, memo, team_names) if v.desk else None})
+                     "desk": desk_chips(conv, memo, team_names) if v.desk else None,
+                     "invite": any(m.event_id for m in threads[t])})  # SIMEX Calendar
     if v.sees_ai:
         flags = ai_flags(v.team, {t: threads[t] for t in order})
         for r in rows:
@@ -738,6 +746,67 @@ def desk_tabs(person, current, user=None):
     return {"current": current, "teams": teams, "unread": _unread(None, None),
             "bell": desk.notice_counts(user) if user else None,
             "chat": conf.flag("desk_chat")}  # ChatSIMEX, on every desk page
+
+
+def apps(v, request):
+    """The app drawer (the grid button in SIMEX Mail's top bar, ops/mail/_apps.html): the tiles
+    of the apps this login has, in a fixed order per role, the one open marked, with unread mail
+    on the mail tiles. v: the mailbox shown, if any (ExCon viewing a team gets that mailbox's
+    Mail and Calendar)."""
+    user = getattr(request, "user", None)
+    if not user or not user.is_authenticated:
+        return []
+    from . import roleplay
+    member, lead, desk_p, rp = participant_of(user), leader_of(user), desk_of(user), rp_of(user)
+
+    def tile(key, name, url, icon, n=0):
+        return {"key": key, "name": name, "url": url, "icon": icon, "n": n}
+
+    tiles = []
+    if member:
+        tiles.append(tile("mail", f"{member.team.name} inbox", "/inbox/", "mail", _unread(member.team, None)))
+        if conf.flag("personal_mailboxes"):
+            tiles.append(tile("me", "My mail", "/inbox/me/", "mail_me", _unread(member.team, member)))
+        tiles += [tile("calendar", "Calendar", "/inbox/calendar/", "calendar"), tile("help", "Help", "/inbox/help/", "help")]
+    elif lead:
+        tiles += [tile("mail", "My mail", "/inbox/", "mail", _unread(lead.team, lead)),
+                  tile("team", f"{lead.team.name} inbox", "/inbox/team/", "mail_team"),
+                  tile("members", "Team members", "/inbox/members/", "people"),
+                  tile("calendar", "Calendar", "/inbox/calendar/", "calendar"),
+                  tile("dashboard", "Dashboard", "/inbox/dashboard/", "dashboard")]
+        if roleplay.has_role_plays(lead):
+            tiles.append(tile("rp", "Role plays", "/inbox/rp/", "roleplay"))
+        tiles.append(tile("help", "Help", "/inbox/help/", "help"))
+    elif desk_p or (v is not None and v.desk):
+        tiles += [tile("desk", "Persona desk", "/inbox/desk/", "mail_desk", _unread(None, None)),
+                  tile("calendar", "Calendar", "/inbox/desk/calendar/", "calendar"),
+                  tile("teams", "Teams", "/inbox/desk/teams/", "people"),
+                  tile("dashboard", "Dashboard", "/inbox/desk/dashboard/", "dashboard"),
+                  tile("assign", "Assign", "/inbox/desk/assign/", "assign")]
+        if desk_p and roleplay.has_role_plays(desk_p):
+            tiles.append(tile("rp", "Role plays", "/inbox/rp/", "roleplay"))
+        tiles.append(tile("help", "Help", "/inbox/desk/help/", "help"))
+    elif rp:
+        tiles += [tile("rp", "Role plays", "/inbox/rp/", "roleplay"), tile("help", "Briefing", "/inbox/rp/help/", "help")]
+    if v is not None and v.readonly and v.base.startswith("/inbox/as/"):  # ExCon or the desk viewing a team
+        what = f"{v.owner.name}'s" if v.owner else f"{v.team.name}'s"
+        tiles += [tile("viewed", f"{what} mail", v.base + "/", "mail_view"),
+                  tile("viewed_cal", f"{what} calendar", v.base + "/calendar/", "calendar")]
+    if is_excon(user) and not (member or lead or desk_p or rp):
+        tiles.append(tile("excon", "Back to ExCon", "/inboxes/" if v is not None and not v.desk else "/", "excon"))
+    path = request.path
+    cal = "/calendar/" in path
+    best = None
+    for t in tiles:  # the open one: the longest url this page is under (a calendar page: its Calendar)
+        if (t["icon"] == "calendar") != cal:
+            continue
+        if path.startswith(t["url"]) and (best is None or len(t["url"]) > len(best["url"])):
+            best = t
+    if cal and best is None:
+        best = next((t for t in tiles if t["icon"] == "calendar"), None)
+    for t in tiles:
+        t["on"] = t is best
+    return tiles
 
 
 def _label_dict(label, unread=0):
@@ -1022,6 +1091,10 @@ def thread_view(request, v, thread):
         can_reply = bool(reply_to)
         desk_js = _desk_thread(mails)
     subject = mails[0].subject
+    from . import calendar
+    cards = calendar.cards(v, mails)  # SIMEX Calendar: the invitation cards
+    for m in mails:
+        m.cal = cards.get(m.id)
     memo = {}
     thread_js = {"subject": subject, "thread": thread, "last": last.id,
                  "reply": [k for k in reply_to if k], "replyAll": [k for k in reply_all if k],
@@ -1036,6 +1109,7 @@ def thread_view(request, v, thread):
     return render(request, "ops/mail/thread.html", _ctx(
         v, folder=folder, mails=mails, subject=subject, thread=thread, prev_t=prev_t, next_t=next_t,
         pos=i + 1, total=len(keys), last=last, thread_js=thread_js, can_reply=can_reply,
+        cal_events=calendar.thread_events(v, mails), cal_create=not v.readonly and not v.peer,
         desk_chips=desk_chips(mails, {}, dict(Team.objects.values_list("id", "name"))) if v.desk else None,
         desk_state=desk.states([thread], v.user).get(thread) if v.desk else None,
         desk_conv=desk.conversation(thread) if v.desk else None, desk_ai=v.desk and desk_ai.enabled(),

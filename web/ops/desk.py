@@ -272,7 +272,9 @@ def _send(s, targets, subject, body, files, docs, parent, person, user, who):
         if response is not None and member and (response.person_id != member.id or member.is_leader):
             response = None  # another member's message (or a leader's, never a team's): written to them afresh
         if response is not None and (response.persona or "") == local and (response.channel == "email" or response.team_id):
-            m = delivery.answer(response, body, user=user, files=files, attachments=docs, author=person)
+            from . import calendar
+            m = delivery.answer(response, body, user=user, files=files, attachments=docs, author=person,
+                                subject=subject if calendar.SENDING.get() else None)  # an invitation's answer
         elif not conf.flag("live_armed") and not t.is_test:
             errors.append(f"{label}: live sending is not armed (ExCon, Settings).")
             continue

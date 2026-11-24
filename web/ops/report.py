@@ -261,7 +261,7 @@ def inbox_figures(team, kind, delivered, deliv, cells):
     members = []
     # Members' own mailboxes (Settings → personal mailboxes) count too, never the leader's.
     acted = Counter(MailAction.objects.filter(Q(owner=None) | Q(owner__role="member"), team=team)
-                    .values_list("person_id", flat=True))
+                    .exclude(action__startswith="cal_").values_list("person_id", flat=True))  # not SIMEX Calendar's
     within = Counter(Mail.objects.filter(team=team, owner__role="member", folder="sent", persona="")
                      .values_list("owner_id", flat=True))
     for p in Person.objects.filter(team=team).participants().select_related("team_role"):
@@ -317,7 +317,7 @@ def inbox_figures(team, kind, delivered, deliv, cells):
 
     # The inbox as it was left, and what they did to it over the exercise.
     inbox = box.filter(folder="inbox", trashed_at__isnull=True)
-    acts = list(MailAction.objects.filter(team=team, owner=None).order_by("at"))
+    acts = list(MailAction.objects.filter(team=team, owner=None).exclude(action__startswith="cal_").order_by("at"))
     by = Counter(a.action for a in acts)
     starred, unstarred = set(), set()
     for a in acts:

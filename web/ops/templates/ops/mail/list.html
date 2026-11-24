@@ -66,6 +66,7 @@
         <span class="gm-line1">
         {% if folder != 'inbox' and m.folder == 'inbox' and not m.archived %}<span class="gm-label">Inbox</span>{% endif %}
         {% for l in r.labels %}<span class="gm-label"{% if l.colour %} style="background: {{ l.colour }}; color: {{ l.fg }}"{% endif %}>{{ l.name }}</span>{% endfor %}
+        {% if r.invite %}<span class="gm-label gm-invite">{% icon "event" 14 %}Invitation</span>{% endif %}
         <span class="gm-s">{{ r.subject|default:"(no subject)" }}</span>{% with sn=m.body|snippet:140 %}{% if sn %}<span class="gm-snip"> - {{ sn }}</span>{% endif %}{% endwith %}
       </span>
         {% if st or r.desk %}<span class="gm-chips">{% comment %}the persona desk: a second line under the subject{% endcomment %}

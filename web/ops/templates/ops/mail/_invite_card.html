@@ -1,0 +1,18 @@
+{% load ops %}{# An invitation's card in a conversation (calendar.cards): the event as this viewer's clock reads it, its guests, and Yes / Maybe / No on the latest one. #}
+<div class="gm-invite-card{% if c.cancelled %} cancelled{% endif %}">
+  <div class="gm-ic-head">{% icon "event" 22 %}<span>{% if c.kind == "cancel" or c.cancelled %}Cancelled{% elif c.kind == "update" %}Updated invitation{% else %}Invitation{% endif %}</span>
+    <a class="gm-link" href="{{ c.cal_url }}">Open in Calendar</a></div>
+  <div class="gm-ic-title">{{ c.event.title }}</div>
+  <div class="gm-ic-when">{{ c.when }}{% if c.sim %} <span class="gm-simdate" title="Scenario time">{% icon "clock" 12 %} {{ c.sim }}</span>{% endif %}</div>
+  <div class="gm-ic-where">{{ c.mode }}{% if c.event.location %} · {{ c.event.location }}{% endif %} · organised by {{ c.event.organiser_name }}</div>
+  {% if c.guests %}<ul class="gm-ic-guests">{% for g in c.guests %}<li class="r-{{ g.response }}" title="{% if g.response == 'accepted' %}Yes{% elif g.response == 'tentative' %}Maybe{% elif g.response == 'declined' %}No{% else %}No answer yet{% endif %}">{{ g.name }}</li>{% endfor %}</ul>{% endif %}
+  {% if c.answer %}<form method="post" action="{{ base }}/calendar/respond/" class="gm-ic-answer">{% csrf_token %}
+    <input type="hidden" name="event" value="{{ c.event.id }}"><input type="hidden" name="layer" value="{{ c.layer }}">
+    <input type="hidden" name="next" value="{{ base }}/t/{{ thread }}/">
+    <span>Going?</span>
+    <button class="gm-pill-btn{% if c.response == 'accepted' %} on{% endif %}" name="answer" value="accepted">Yes</button>
+    <button class="gm-pill-btn{% if c.response == 'tentative' %} on{% endif %}" name="answer" value="tentative">Maybe</button>
+    <button class="gm-pill-btn{% if c.response == 'declined' %} on{% endif %}" name="answer" value="declined">No</button>
+    <input name="note" maxlength="500" placeholder="Add a note (optional)" value="{{ c.comment }}" autocomplete="off">
+  </form>{% elif c.response and c.response != "needs_action" %}<div class="gm-ic-mine">Your answer: <b>{% if c.response == 'accepted' %}Yes{% elif c.response == 'tentative' %}Maybe{% else %}No{% endif %}</b></div>{% endif %}
+</div>

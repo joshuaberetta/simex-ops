@@ -139,7 +139,7 @@ def from_mail(mail, personas):
         r.message, r.inject_id, r.match = earlier.message, earlier.inject_id, "exact"
     elif parent is not None and parent.inject_id:
         r.inject_id, r.match = parent.inject_id, "exact"
-    else:
+    elif not mail.event_id:  # an invitation (SIMEX Calendar) answers no inject
         guess(r)
     r.save()
     audit("inapp_response", f"{mail.team.name} -> {', '.join(personas)}: {mail.subject[:80]}")

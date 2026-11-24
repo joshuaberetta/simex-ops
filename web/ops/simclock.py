@@ -68,6 +68,37 @@ def now(at=None):
     return sim0 + ((at or timezone.now()) - real0) * rate()
 
 
+def _mapping():
+    """(sim anchor, real anchor, speed) for placing a real time on the scenario's timeline and
+    back (SIMEX Calendar), or None when the clock is off. A stopped clock (speed 0) maps at speed
+    1 from where it stopped, so events keep their length and order."""
+    if not enabled():
+        return None
+    sim0 = parse(conf.get("sim_anchor"))
+    if not sim0:
+        return None
+    return sim0, _real_anchor() or timezone.now(), rate() or 1.0
+
+
+def at(real):
+    """The simulation time of a real (aware) time, past or future; None when the clock is off."""
+    m = _mapping()
+    if not m or real is None:
+        return None
+    sim0, real0, speed = m
+    return sim0 + (real - real0) * speed
+
+
+def real_at(sim):
+    """The real time a simulation (aware) time falls at: the inverse of at(); sim itself when the
+    clock is off."""
+    m = _mapping()
+    if not m or sim is None:
+        return sim
+    sim0, real0, speed = m
+    return real0 + (sim - sim0) / speed
+
+
 def set_clock(sim_dt, speed=None, enabled_=True):
     """The clock reads sim_dt from now on (and runs at speed)."""
     conf.put("sim_anchor", timezone.localtime(sim_dt).replace(tzinfo=None).isoformat(timespec="seconds"))

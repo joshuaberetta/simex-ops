@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{% block title %}My role plays{% endblock %} · SIMEX</title>
 <link rel="stylesheet" href="{% static 'ops/rp.css' %}">
+<link rel="stylesheet" href="{% static 'ops/apps.css' %}">
 <link rel="manifest" href="/inbox/manifest.webmanifest">
 <link rel="apple-touch-icon" href="{% static 'ops/icon-180.png' %}">
 <meta name="apple-mobile-web-app-title" content="SIMEX Mail">
@@ -15,6 +16,7 @@
 <header class="rp-top">
   <a href="/inbox/rp/" class="rp-brand">SIMEX <b>Role play</b></a>
   <span class="rp-me">{{ me.name }}</span>
+  {% include "ops/mail/_apps.html" %}
   <button type="button" class="rp-bell" data-alerts title="Alerts on this device" aria-label="Alerts">🔔</button>
 </header>
 <nav class="rp-tabs">
@@ -38,5 +40,6 @@
   · <a href="{{ SOURCE_URL }}" target="_blank" rel="noopener">Source code</a> (AGPL-3.0)
 </footer>
 <script src="{% static 'ops/rp.js' %}" defer></script>
+<script src="{% static 'ops/apps.js' %}" defer></script>
 </body>
 </html>

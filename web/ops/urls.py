@@ -1,6 +1,8 @@
 from django.urls import include, path
 
 from . import views_ai as a
+from . import views_cal_seed as cs
+from . import views_calendar as cal
 from . import views_excon as x
 from . import views_desk_board as dbx
 from . import views_desk_chat as chat
@@ -32,6 +34,12 @@ mail_patterns = [
     path("help/", p.guide),
     path("push/", p.push_subscribe),
     path("labels/", p.labels_save),
+    # SIMEX Calendar (views_calendar.py): this mailbox's calendar
+    path("calendar/", cal.page),
+    path("calendar/events/", cal.events),
+    path("calendar/save/", cal.save),
+    path("calendar/delete/<int:eid>/", cal.delete),
+    path("calendar/respond/", cal.respond),
 ]
 # A team leader's read-only view of their team's inbox, of another team leader's mailbox
 # (/inbox/leaders/<team id>/) or of one of their members' own (/inbox/members/<person id>/):
@@ -42,6 +50,8 @@ team_patterns = [
     path("poll/", p.poll),
     path("file/<int:fid>/", p.mail_file),
     path("help/", p.guide),
+    path("calendar/", cal.page),
+    path("calendar/events/", cal.events),
 ]
 
 urlpatterns = [
@@ -155,6 +165,8 @@ urlpatterns = [
     path("team-roles/<int:rid>/delete/", x.team_role_delete),
     path("inboxes/", x.inboxes),
     path("inboxes/clear/", x.inbox_clear),
+    path("meetings/", cs.meetings),
+    path("meetings/<int:sid>/", cs.run),
     path("compose/", x.compose),
     path("excon/poll/", x.excon_poll),
     path("excon/notices/<int:nid>/", x.notice_open),
