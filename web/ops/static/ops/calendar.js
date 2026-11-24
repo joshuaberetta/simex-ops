@@ -289,7 +289,9 @@
       ${e.desk && C.desk ? `<div class="cal-pop-desk">${e.desk.owner ? `Played by <b>${esc(e.desk.owner)}</b>${e.desk.auto ? " (by default)" : ""}` : "<b>Nobody on the desk has it</b>"}
         ${e.desk.mine ? "" : `<button type="button" class="gm-pill-btn sm" data-desk-take>Take it</button>`}
         <select data-desk-give aria-label="Give it to"><option value="">Give to…</option>${C.desk.assignees.map(a =>
-          `<option value="${a.id}"${a.id === e.desk.ownerId ? " disabled" : ""}>${esc(a.name)}${a.desk ? "" : " (ExCon)"}</option>`).join("")}</select></div>` : ""}
+          `<option value="${a.id}"${a.id === e.desk.ownerId ? " disabled" : ""}>${esc(a.name)}${a.desk ? "" : " (ExCon)"}</option>`).join("")}</select>
+        ${e.desk.rolePlay ? `<span>Role play: ${C.desk.excon ? `<a class="gm-link" href="${esc(e.desk.rolePlay.url)}">${esc(e.desk.rolePlay.key)}</a>` : esc(e.desk.rolePlay.key)}</span>`
+          : C.desk.excon && e.status === "confirmed" ? `<button type="button" class="gm-pill-btn sm" data-make-rp>Make a role play</button>` : ""}</div>` : ""}
       ${e.invite ? `<p class="cal-pop-cal"><a class="gm-link" href="${esc(e.invite)}">Open the invitation</a></p>` : ""}
       ${e.seeded ? `<p class="cal-pop-cal"><b>From the mail</b>: arranged by email before the calendar</p>` : ""}
       ${e.source ? `<p class="cal-pop-cal">From the email <a class="gm-link" href="${esc(e.source.url)}">${esc(e.source.subject || "(no subject)")}</a></p>` : ""}
@@ -311,6 +313,9 @@
     else if (e.target.closest("[data-pop-edit]") && ev) { closePop(); openEditor(ev); }
     else if (e.target.closest("[data-pop-del]") && ev) { closePop(); remove(ev); }
     else if (e.target.closest("[data-desk-take]") && ev && ev.desk) deskMark(ev, "take");
+    else if (e.target.closest("[data-make-rp]") && ev) {  // ExCon: the meeting on the Role play board
+      post(`/roleplay/from-event/${ev.id}/`, {}).then(j => { if (!j.ok) showErr(j.error || "Couldn't make it."); closePop(); load(true); });
+    }
     else if (e.target.closest("[data-answer]") && ev) {
       const note = $("[data-answer-note]", pop);
       post(`${C.base}/calendar/respond/`, { event: ev.id, layer: ev.answerLayer || ev.layer, answer: e.target.closest("[data-answer]").dataset.answer,

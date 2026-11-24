@@ -317,8 +317,10 @@ def desk_side(ev, user=None):
         return None
     c = desk.conversation(thread)
     owner_id = c.owner_id if c else None
+    from . import roleplay
     return {"thread": thread, "owner": (c.owner_name if c and c.owner_id else ""), "ownerId": owner_id,
-            "auto": bool(c and c.owner_id and c.auto), "mine": bool(user and owner_id and owner_id == user.id)}
+            "auto": bool(c and c.owner_id and c.auto), "mine": bool(user and owner_id and owner_id == user.id),
+            "rolePlay": roleplay.for_event(ev)}
 
 
 def _thread_url(ev, lay):
@@ -412,7 +414,12 @@ def page_data(v, prefill=None):
             "book": [{**{k: b[k] for k in ("key", "name", "addr", "kind")}, "org": b.get("org", "")}
                      for b in contacts(v)] if writable else [],
             "prefill": prefill,
-            "desk": {"me": v.user.id, "assignees": desk.assignees(v.user)} if v.desk else None}
+            "desk": {"me": v.user.id, "assignees": desk.assignees(v.user), "excon": _is_excon(v.user)} if v.desk else None}
+
+
+def _is_excon(user):
+    from .access import is_excon
+    return bool(user and is_excon(user))
 
 
 def prefill(v, thread):
@@ -736,7 +743,16 @@ def save(v, data, eid=None, request=None):
             warnings += _send(v, lay, ent(kept), ev, "update", request)
     track(_box_viewer(v, lay), action, name=ev.title, event=ev.uid, start=shown(ev.starts_at, clk),
           guests=len(added) + len(kept))
+    _role_play_follows(ev)
     return ev, lay, warnings
+
+
+def _role_play_follows(ev):
+    """A role play made from this meeting (ExCon's Make a role play) follows it: moved, changed or
+    cancelled. The bridge is on the role-play side (roleplay.event_changed): nothing of the role
+    play is read here."""
+    from . import roleplay
+    roleplay.event_changed(ev)
 
 
 def delete(v, eid, request=None):
@@ -756,7 +772,10 @@ def delete(v, eid, request=None):
                 warnings = _send(v, lay, _resolve([a.key for a in guests], address_book(w), w), ev, "cancel", request)
             else:  # cancelled already: off the organiser's calendar
                 ev.attendees.filter(role="organiser").update(hidden=True)
+            _role_play_follows(ev)
         else:
+            ev.status = "cancelled"
+            _role_play_follows(ev)  # its sitting skipped before the event goes
             ev.delete()
     track(_box_viewer(v, lay), "cal_cancel", name=title, event=uid)
     return warnings

@@ -1,9 +1,9 @@
 {% extends "ops/base.html" %}
 {% block title %}Meetings in the mail · SIMEX ops{% endblock %}
 {% block body %}
-<div class="bar"><h1><a href="/inboxes/" class="muted">Team inboxes</a> / Meetings in the mail</h1></div>
+<div class="bar"><h1><a href="/inboxes/" class="muted">Team inboxes</a> / <a href="/meetings/" class="muted">Meetings</a> / Find meetings in the mail</h1></div>
 <p class="small muted">SIMEX Calendar came part way through the exercise: the meetings the teams have already proposed or agreed are in their mail. SIMEX AI reads the teams' mail (the team inboxes, the leaders' and members' own mailboxes, the persona desk's; nothing else) and lists the meetings it finds, for you to check. Nothing goes on a calendar until you apply it, and applying sends no mail: the events just appear on the calendars of those taking part.</p>
-<form method="post" class="card form" style="max-width:720px">{% csrf_token %}
+<form method="post" action="/meetings/find/" class="card form" style="max-width:720px">{% csrf_token %}
   <h3>Find meetings in the mail</h3>
   <fieldset class="row"><legend class="small">Teams <span class="hint">none ticked: every team</span></legend>
     {% for t in teams %}<label class="check"><input type="checkbox" name="team" value="{{ t.id }}"> {{ t.name }}</label>{% endfor %}</fieldset>

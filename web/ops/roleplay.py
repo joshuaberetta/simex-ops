@@ -730,6 +730,71 @@ def slip(after, minutes, day=None, only=None, user=""):
     return moved
 
 
+# --- from SIMEX Calendar: a persona's meeting played as a role play ---------------------------------
+# The bridge lives here, on the role-play side of the wall: the calendar (ops/calendar.py) only calls
+# event_changed and for_event, and never reads a role play's script, outcomes or notes.
+
+METHOD_OF_MODE = {"in_person": "F2F", "phone": "Phone", "vtc": "VTC"}
+
+
+def _event_teams(ev):
+    """The teams a meeting is for: its guests' teams, the organiser's if a team organised it."""
+    return list(Team.objects.filter(pk__in=[a.team_id for a in ev.attendees.all() if a.team_id]).distinct())
+
+
+def from_event(ev, user=""):
+    """Make (or return) the role play of a persona's meeting: key CAL-<event id>, its title, method,
+    place and length from the event, one sitting for its teams at its start. Returns the RolePlay."""
+    rp = RolePlay.objects.filter(event=ev).first()
+    if rp:
+        return rp
+    minutes = max(1, round((ev.ends_at - ev.starts_at).total_seconds() / 60))
+    personas = [a.name or a.persona for a in ev.attendees.all() if a.persona]
+    with transaction.atomic():
+        rp = RolePlay.objects.create(key=f"CAL-{ev.id}", serial=f"CAL-{ev.id}", seq=100000 + ev.id, title=ev.title,
+                                     role=", ".join(personas)[:200], location=ev.location[:200],
+                                     method=METHOD_OF_MODE.get(ev.mode, "Other"), duration=f"{minutes} min", event=ev,
+                                     time_text=timezone.localtime(ev.starts_at).strftime("%H:%M"),
+                                     day=timezone.localtime(ev.starts_at).strftime("%A"))
+        slot = RolePlaySlot.objects.create(play=rp, start=ev.starts_at, minutes=minutes, imported_start=ev.starts_at,
+                                           status="skipped" if ev.status == "cancelled" else "pending")
+        slot.teams.set(_event_teams(ev))
+    audit("roleplay_from_event", f"{rp.key}: {ev.title[:80]}", user)
+    bump()
+    return rp
+
+
+def event_changed(ev):
+    """A meeting with a role play was moved, changed or cancelled: its sittings follow (moved: the
+    players told, as after a slip; cancelled: skipped)."""
+    plays = list(RolePlay.objects.filter(event_id=ev.id))
+    if not plays:
+        return
+    now = timezone.now()
+    minutes = max(1, round((ev.ends_at - ev.starts_at).total_seconds() / 60))
+    for rp in plays:
+        for s in rp.slots.all():
+            if ev.status == "cancelled":
+                if s.status != "skipped":
+                    s.status, s.status_at, s.status_by = "skipped", now, "SIMEX Calendar (the meeting was cancelled)"
+                    s.save(update_fields=["status", "status_at", "status_by"])
+            elif s.start != ev.starts_at or s.minutes != minutes:
+                s.was_start, s.start, s.minutes, s.changed_at, s.reminded = s.start, ev.starts_at, minutes, now, ""
+                s.save(update_fields=["was_start", "start", "minutes", "changed_at", "reminded"])
+            if ev.status != "cancelled":
+                s.teams.set(_event_teams(ev))
+        RolePlay.objects.filter(pk=rp.pk).update(title=ev.title, location=ev.location[:200],
+                                                 method=METHOD_OF_MODE.get(ev.mode, "Other"), duration=f"{minutes} min")
+    bump()
+
+
+def for_event(ev):
+    """The role play made from a meeting, for ExCon's and the desk's eyes: {"key", "title", "url"},
+    or None. Never its script, outcomes or notes."""
+    rp = RolePlay.objects.filter(event_id=ev.id).only("id", "key", "title").first()
+    return {"key": rp.key, "title": rp.title, "url": f"/roleplay/{rp.id}/"} if rp else None
+
+
 def bump():
     """Something on the board changed: open boards and phones reload (poll)."""
     conf.put("rp_v", uuid.uuid4().hex[:10])

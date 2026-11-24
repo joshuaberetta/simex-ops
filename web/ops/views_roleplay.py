@@ -483,3 +483,24 @@ def print_page(request):
     return render(request, "ops/roleplay/print.html", {"title": title, "slots": slots, "plays": plays,
                                                        "person": person, "scripts": G.get("scripts", "1") == "1",
                                                        "briefing": conf.get("rp_briefing") if person else ""})
+
+
+@excon_required
+@require_POST
+def from_event(request, eid):
+    """Meetings, the desk's calendar → Make a role play: a persona's meeting on the Role play
+    board (roleplay.from_event), its sitting following the event."""
+    from .models import CalendarEvent
+    ev = get_object_or_404(CalendarEvent, pk=eid)
+    if not ev.attendees.filter(persona__gt="").exists() and not ev.organiser_key.startswith("p:"):
+        msg = "Only a meeting with a persona becomes a role play."
+        if request.headers.get("x-requested-with") == "fetch":
+            return JsonResponse({"ok": False, "error": msg}, status=400)
+        messages.error(request, msg)
+    else:
+        rp = roleplay.from_event(ev, _u(request))
+        if request.headers.get("x-requested-with") == "fetch":
+            return JsonResponse({"ok": True, "key": rp.key, "url": f"/roleplay/{rp.id}/"})
+        messages.success(request, f"Role play {rp.key} made: its sitting follows the meeting.")
+    nxt = request.POST.get("next") or "/meetings/"
+    return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else "/meetings/")

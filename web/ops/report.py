@@ -11,7 +11,7 @@ import threading
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
-from django.db.models import Q
+from django.db.models import F, Q
 from django.utils import timezone
 
 from . import ai, inbound, notices, render
@@ -244,7 +244,41 @@ def team_figures(team, kind, grid=None):
         "ai_written": ai_written,
         "excon_ai_drafts": dict(excon_ai),
         "inbox": inbox_figures(team, kind, qs, deliv, cells),
+        "calendar": calendar_figures(team),
     }
+
+
+def calendar_figures(team):
+    """SIMEX Calendar for a team (every calendar of it: the team's, its members' and leader's own):
+    meetings it organised, invitations it received (not counting its own to itself) and how fast it
+    answered them (from the first invitation mail in that mailbox), those left unanswered, and the
+    meetings with personas it took part in. No member is named."""
+    from .models import CalendarAttendee, CalendarEvent
+    organised = CalendarEvent.objects.filter(team=team)
+    rows = list(CalendarAttendee.objects.filter(team=team).exclude(role="organiser")
+                .exclude(event__team=team, event__owner_id=F("owner_id")).select_related("event"))
+    minutes = []
+    for a in rows:
+        if a.responded_at and a.response != "needs_action":
+            first = (Mail.objects.filter(event=a.event, team=team, owner_id=a.owner_id, invite__in=["request", "update"])
+                     .order_by("id").values_list("created_at", flat=True).first())
+            if first and a.responded_at >= first:
+                minutes.append((a.responded_at - first).total_seconds() / 60)
+    with_personas = (CalendarEvent.objects.filter(status="confirmed", attendees__team__isnull=True)
+                     .filter(Q(team=team, attendees__role="organiser") | Q(attendees__team=team, attendees__response="accepted"))
+                     .distinct())
+    with_personas = [ev for ev in with_personas.prefetch_related("attendees")
+                     if any(x.team_id is None and (x.response == "accepted" or x.role == "organiser") for x in ev.attendees.all())
+                     and any(x.team_id == team.id and (x.response == "accepted" or x.role == "organiser") for x in ev.attendees.all())]
+    return {"meetings_organised": organised.count(),
+            "meetings_cancelled": organised.filter(status="cancelled").count(),
+            "invitations_received": len(rows),
+            "invitations_answered": sum(1 for a in rows if a.response != "needs_action"),
+            "median_minutes_to_answer": _median(minutes),
+            "invitations_unanswered": sum(1 for a in rows if a.response == "needs_action" and a.event.status == "confirmed"),
+            "declined": sum(1 for a in rows if a.response == "declined"),
+            "meetings_with_personas": len(with_personas),
+            "found_in_the_mail": organised.exclude(seeded=None).count()}
 
 
 SLOW_AFTER_READ = 60  # minutes: read, then answered this much later (or after the reply window, if longer)
@@ -441,7 +475,8 @@ def exercise_figures(kind, team_figs, grid=None):
                          "read_but_never_answered", "messages_with_cc", "at_the_end", "starred_threads",
                          "by_team_role")}
                      | {"forwards": len(f.get("inbox", {}).get("forwards", [])),
-                        "labels": len(f.get("inbox", {}).get("labels", []))}}
+                        "labels": len(f.get("inbox", {}).get("labels", []))},
+                     "calendar": f.get("calendar")}
                   for f in team_figs],
         "injects": injects,
         "by_team_role": exercise_by_team_role(team_figs),

@@ -31,7 +31,7 @@ def meetings(request):
                                   _day(request.POST.get("until"), end=True), request.POST.get("include_seeded") == "1")
         except ai.AiError as e:
             messages.error(request, str(e))
-            return redirect("/meetings/")
+            return redirect("/meetings/find/")
         return redirect(f"/meetings/{seed.id}/")
     return render(request, "ops/meetings.html", {
         "tab": "inboxes", "runs": CalendarSeed.objects.all()[:30], "teams": Team.objects.filter(active=True),

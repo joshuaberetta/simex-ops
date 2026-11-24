@@ -1036,6 +1036,9 @@ class RolePlay(models.Model):
     optional = models.BooleanField(default=False)
     players = models.ManyToManyField(Person, blank=True, related_name="role_plays")
     imported = models.JSONField(null=True, blank=True)  # last imported values (local edits kept)
+    # Made from a persona's meeting on SIMEX Calendar (Meetings → Make a role play, roleplay.from_event):
+    # its sitting follows the event. The event never reads the role play's material.
+    event = models.ForeignKey("CalendarEvent", null=True, blank=True, on_delete=models.SET_NULL, related_name="role_plays")
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -59,6 +59,11 @@
   {% if b.median_minutes_drafting is not None %}<li>Median {{ b.median_minutes_drafting|num }} min from starting a draft to sending it{% if b.drafts_discarded %}; {{ b.drafts_discarded }} draft{{ b.drafts_discarded|pluralize }} discarded{% endif %}.</li>{% endif %}
 </ul>{% endif %}{% endwith %}
 
+{% with c=f.calendar %}{% if c and c.meetings_organised or c.invitations_received %}<h4>Meetings (SIMEX Calendar)</h4>
+<p class="small">{{ c.meetings_organised }} meeting{{ c.meetings_organised|pluralize }} organised{% if c.meetings_cancelled %} ({{ c.meetings_cancelled }} cancelled){% endif %};
+{{ c.invitations_received }} invitation{{ c.invitations_received|pluralize }} received, {{ c.invitations_answered }} answered{% if c.median_minutes_to_answer is not None %} (median {{ c.median_minutes_to_answer|num }} min){% endif %}{% if c.invitations_unanswered %}, {{ c.invitations_unanswered }} left unanswered{% endif %}{% if c.declined %}, {{ c.declined }} declined{% endif %};
+{{ c.meetings_with_personas }} meeting{{ c.meetings_with_personas|pluralize }} with the scenario's organisations.</p>{% endif %}{% endwith %}
+
 {% if f.excon_ai_drafts %}<p class="small"><b>Drafted with AI by ExCon:</b> of the messages you received,
 {% if f.excon_ai_drafts.injects %}{{ f.excon_ai_drafts.injects }} inject{{ f.excon_ai_drafts.injects|pluralize }}{% endif %}{% if f.excon_ai_drafts|get:"follow-ups" %}, {{ f.excon_ai_drafts|get:"follow-ups" }} follow-up{{ f.excon_ai_drafts|get:"follow-ups"|pluralize }}{% endif %}{% if f.excon_ai_drafts.answers %}, {{ f.excon_ai_drafts.answers }} answer{{ f.excon_ai_drafts.answers|pluralize }}{% endif %} started as an AI draft that ExCon reviewed.</p>{% endif %}
 
@@ -82,6 +87,12 @@
     <td>{{ b.replied_before_opening_documents|length }}</td><td>{{ b.read_but_never_answered|length }}</td>
     <td>{{ b.forwards }} · {{ b.messages_with_cc }}</td><td>{% if b.writing_share_top_member_percent is not None %}{{ b.writing_share_top_member_percent }}%{% else %}—{% endif %}</td>
     <td>{{ b.at_the_end.unread }}</td><td>{{ b.labels }} · {{ b.starred_threads }}</td></tr>{% endwith %}{% endfor %}</tbody>
+</table>{% endif %}
+{% if f.teams.0.calendar %}<table class="list small fig">
+  <thead><tr><th>Team</th><th>Meetings organised</th><th>Invitations received · answered</th><th>Median minutes to answer</th><th>Unanswered</th><th>With personas</th></tr></thead>
+  <tbody>{% for t in f.teams %}{% with c=t.calendar %}<tr><td><b>{{ t.team }}</b></td><td>{{ c.meetings_organised }}</td>
+    <td>{{ c.invitations_received }} · {{ c.invitations_answered }}</td><td>{{ c.median_minutes_to_answer|default:"—" }}</td>
+    <td>{{ c.invitations_unanswered }}</td><td>{{ c.meetings_with_personas }}</td></tr>{% endwith %}{% endfor %}</tbody>
 </table>{% endif %}
 {% if f.by_team_role %}<h4>By team role, all teams</h4>{% include "ops/_report_roles.html" with groups=f.by_team_role %}{% endif %}
 

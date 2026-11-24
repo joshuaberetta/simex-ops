@@ -1,0 +1,47 @@
+{% extends "ops/base.html" %}
+{% block title %}Meetings · SIMEX ops{% endblock %}
+{% block body %}
+<div class="bar"><h1><a href="/inboxes/" class="muted">Team inboxes</a> / Meetings</h1>
+  <span><a class="btn small" href="/meetings/find/">Find meetings in the mail</a>
+  <a class="btn small" href="/meetings/export/csv/?{{ query }}">CSV</a> <a class="btn small" href="/meetings/export/xlsx/?{{ query }}">XLSX</a></span></div>
+<p class="small muted">Every meeting on SIMEX Calendar, across the teams and the personas: who organised it, who is invited and their answers, when (real, with the scenario's time), how and where, who on the persona desk plays a persona's meeting, and its role play. The teams never see who plays a persona. This page refreshes itself when something changes.</p>
+<form method="get" class="card form row" data-filters>
+  <label>Teams <select name="kind"><option value="">Exercise teams</option><option value="test" {% if f.kind == 'test' %}selected{% endif %}>Test team</option></select></label>
+  <label>Team <select name="team"><option value="">All</option>{% for t in teams %}<option value="{{ t.id }}" {% if f.team == t.id|stringformat:'s' %}selected{% endif %}>{{ t.name }}</option>{% endfor %}</select></label>
+  <label>Persona <select name="persona"><option value="">All</option>{% for k, n in personas %}<option value="{{ k }}" {% if f.persona == k %}selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+  <label>Status <select name="status"><option value="">Any</option><option value="confirmed" {% if f.status == 'confirmed' %}selected{% endif %}>On</option><option value="cancelled" {% if f.status == 'cancelled' %}selected{% endif %}>Cancelled</option></select></label>
+  <label>When <select name="when"><option value="">Any time</option><option value="today" {% if f.when == 'today' %}selected{% endif %}>Today</option><option value="next" {% if f.when == 'next' %}selected{% endif %}>The next hours</option><option value="range" {% if f.when == 'range' %}selected{% endif %}>Between dates</option></select></label>
+  <label>Hours <input type="number" name="hours" min="1" max="336" value="{{ f.hours|default:'4' }}" class="narrow"></label>
+  <label>From <input type="date" name="since" value="{{ f.since }}"></label>
+  <label>Until <input type="date" name="until" value="{{ f.until }}"></label>
+  <label class="check"><input type="checkbox" name="needs" value="1" {% if f.needs %}checked{% endif %}> needs a player</label>
+  <button class="btn">Show</button>
+</form>
+<table class="list small fixed" style="margin-top:12px">
+  <thead><tr><th style="width:13%">When</th><th style="width:20%">Meeting</th><th style="width:14%">Organiser</th><th style="width:25%">Guests</th><th style="width:14%">Played by</th><th style="width:14%">Where to see it</th></tr></thead>
+  {% for r in rows %}<tr{% if r.status == 'cancelled' %} class="muted"{% endif %}>
+    <td>{{ r.start|date:"D j M H:i" }}–{{ r.end|date:"H:i" }}{% if r.sim %}<div class="muted">scenario {{ r.sim }}</div>{% endif %}</td>
+    <td><b{% if r.status == 'cancelled' %} style="text-decoration:line-through"{% endif %}>{{ r.title }}</b>{% if r.status == 'cancelled' %} <span class="flag">cancelled</span>{% endif %}
+      <div>{{ r.mode }}{% if r.location %} · {{ r.location }}{% endif %}</div>
+      {% if r.seeded %}<span class="flag">from the mail</span>{% elif r.from_email %}<span class="flag">from an email</span>{% endif %}</td>
+    <td>{{ r.organiser }}</td>
+    <td>{% for g in r.guests %}<div>{{ g.name }}{% if g.org %} <span class="muted">({{ g.org }})</span>{% endif %}: <b>{{ g.answer }}</b></div>{% empty %}<span class="muted">nobody</span>{% endfor %}</td>
+    <td>{% if r.personas %}{% if r.player %}{{ r.player }}{% elif r.needs_player %}<span class="warn">nobody</span>{% endif %}
+      {% if r.desk_url %}<div><a href="{{ r.desk_url }}">on the desk</a></div>{% endif %}
+      {% if r.role_play %}<div>Role play <a href="{{ r.role_play.url }}">{{ r.role_play.key }}</a></div>
+      {% elif r.status == 'confirmed' %}<form method="post" action="/roleplay/from-event/{{ r.id }}/" class="inline">{% csrf_token %}<input type="hidden" name="next" value="/meetings/?{{ query }}"><button class="link">Make a role play</button></form>{% endif %}
+      {% else %}<span class="muted">—</span>{% endif %}</td>
+    <td>{% if r.thread_url %}<div><a href="{{ r.thread_url }}">the conversation</a></div>{% endif %}
+      {% for c in r.calendars %}<div><a href="{{ c.url }}">{{ c.team }}'s calendar</a></div>{% endfor %}</td>
+  </tr>{% empty %}<tr><td colspan="6" class="muted">No meetings{% if f.when or f.team or f.persona or f.status or f.needs %} match{% endif %}.</td></tr>{% endfor %}
+</table>
+<script>
+(function () {  // refresh when the calendars change (by version, every 20 s)
+  const v0 = "{{ v|escapejs }}";
+  setInterval(() => {
+    if (document.hidden) return;
+    fetch("/meetings/v/", { credentials: "same-origin" }).then(r => r.json()).then(j => { if (j.v && j.v !== v0) location.reload(); }).catch(() => {});
+  }, 20000);
+})();
+</script>
+{% endblock %}

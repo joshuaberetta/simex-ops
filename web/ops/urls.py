@@ -2,6 +2,7 @@ from django.urls import include, path
 
 from . import views_ai as a
 from . import views_cal_seed as cs
+from . import views_meetings as mt
 from . import views_calendar as cal
 from . import views_excon as x
 from . import views_desk_board as dbx
@@ -165,7 +166,10 @@ urlpatterns = [
     path("team-roles/<int:rid>/delete/", x.team_role_delete),
     path("inboxes/", x.inboxes),
     path("inboxes/clear/", x.inbox_clear),
-    path("meetings/", cs.meetings),
+    path("meetings/", mt.overview),
+    path("meetings/v/", mt.version),
+    path("meetings/export/<str:fmt>/", mt.export),
+    path("meetings/find/", cs.meetings),
     path("meetings/<int:sid>/", cs.run),
     path("compose/", x.compose),
     path("compose/meeting/", x.compose_meeting),
@@ -206,6 +210,7 @@ urlpatterns = [
     path("reports/part/<int:rid>/rewrite/", rp.report_rewrite),
     path("reports/part/<int:rid>/print/", rp.report_print),
     path("roleplay/", rpx.board),
+    path("roleplay/from-event/<int:eid>/", rpx.from_event),
     path("roleplay/poll/", rpx.poll),
     path("roleplay/slip/", rpx.slip),
     path("roleplay/new/", rpx.play_new),

@@ -2,7 +2,7 @@
 {% block title %}Meetings in the mail · SIMEX ops{% endblock %}
 {% block head %}{% if seed.status == 'running' %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
 {% block body %}
-<div class="bar"><h1><a href="/inboxes/" class="muted">Team inboxes</a> / <a href="/meetings/" class="muted">Meetings in the mail</a> / {{ seed.created_at|date:"D j M H:i" }}</h1></div>
+<div class="bar"><h1><a href="/inboxes/" class="muted">Team inboxes</a> / <a href="/meetings/" class="muted">Meetings</a> / <a href="/meetings/find/" class="muted">Find in the mail</a> / {{ seed.created_at|date:"D j M H:i" }}</h1></div>
 {% if seed.status == 'running' %}<div class="card"><p><b>SIMEX AI is reading the mail…</b> {{ seed.done }} of {{ seed.total|default:"?" }} batches ({{ seed.threads }} conversations). This page refreshes itself; you can leave it, a notification says when it is done.</p></div>
 {% elif seed.status == 'failed' %}<div class="card"><p class="error"><b>It failed:</b> {{ seed.error }}</p></div>{% endif %}
 {% if seed.status != 'running' %}

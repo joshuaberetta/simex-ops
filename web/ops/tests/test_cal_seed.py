@@ -48,7 +48,7 @@ def meeting(mail, **kw):
 
 
 def find(excon, **data):
-    r = excon.post("/meetings/", data)
+    r = excon.post("/meetings/find/", data)
     assert r.status_code == 302, r.content[:300]
     return CalendarSeed.objects.order_by("-id").first()
 
@@ -147,11 +147,11 @@ def test_scenario_times_are_placed_through_their_mail(excon, fake):
 
 def test_off_without_ai_and_excon_only(excon):
     setup_exercise(excon)
-    page = excon.get("/meetings/").content.decode()
+    page = excon.get("/meetings/find/").content.decode()
     assert "disabled" in page
-    assert excon.post("/meetings/", {}).status_code == 302 and not CalendarSeed.objects.exists()
+    assert excon.post("/meetings/find/", {}).status_code == 302 and not CalendarSeed.objects.exists()
     pa = participant("a", "Jane")
-    assert pa.get("/meetings/").status_code == 403 and pa.post("/meetings/", {}).status_code == 403
+    assert pa.get("/meetings/find/").status_code == 403 and pa.post("/meetings/find/", {}).status_code == 403
 
 
 def test_reset_clears_the_runs(excon, fake):
