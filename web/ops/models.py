@@ -142,6 +142,9 @@ class Sender(models.Model):
     # tab and its import/export only, never shown to participants.
     notes = models.TextField(blank=True, default="")
     category = models.CharField(max_length=60, blank=True, default="")
+    # The organisation it speaks for, as the teams see it (SIMEX Calendar's guests, the address
+    # book): participant-facing, unlike notes and category.
+    organisation = models.CharField(max_length=200, blank=True, default="")
 
     class Meta:
         ordering = ["local_part"]

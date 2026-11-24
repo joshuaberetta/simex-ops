@@ -290,9 +290,35 @@ def guest_entries(w, keys, lay):
 
 # --- reading ------------------------------------------------------------------------------------
 
-def _guests(ev):
-    return [{"key": a.key, "name": a.name, "response": a.response, "role": a.role}
+def persona_org(local, memo=None):
+    """The organisation a persona speaks for, as the teams see it (Sender.organisation), or ""."""
+    memo = {} if memo is None else memo
+    if local not in memo:
+        s, _ = rnd.sender_by_local(local)
+        memo[local] = (s.organisation or "") if s else ""
+    return memo[local]
+
+
+def _org_of(a, memo):
+    return persona_org(a.key[2:], memo) if a.key.startswith("p:") else ""
+
+
+def _guests(ev, memo=None):
+    memo = {} if memo is None else memo
+    return [{"key": a.key, "name": a.name, "org": _org_of(a, memo), "response": a.response, "role": a.role}
             for a in ev.attendees.all() if a.role != "organiser" and not a.hidden]
+
+
+def desk_side(ev, user=None):
+    """Who plays a persona's meeting: the persona desk's conversation of it and who has it (for the
+    desk's own views only, never the teams'). None when it has no desk conversation."""
+    thread = desk_thread(ev)
+    if not thread:
+        return None
+    c = desk.conversation(thread)
+    owner_id = c.owner_id if c else None
+    return {"thread": thread, "owner": (c.owner_name if c and c.owner_id else ""), "ownerId": owner_id,
+            "auto": bool(c and c.owner_id and c.auto), "mine": bool(user and owner_id and owner_id == user.id)}
 
 
 def _thread_url(ev, lay):
@@ -363,6 +389,8 @@ def events(v, start_text, end_text, only=None):
         e = as_json(row.event, lay, clk, both, row, all_lays)
         e["layers"] = list(dict.fromkeys(keys))
         e["answerLayer"] = lay["key"]
+        if v.desk:  # who plays it: the desk's eyes only
+            e["desk"] = desk_side(row.event, v.user)
         if guest and not e["answerable"] and row.event.status == "confirmed":
             e.update(answerable=True, response=guest[0].response, comment=guest[0].comment, answerLayer=guest[1]["key"])
         out.append(e)
@@ -381,8 +409,10 @@ def page_data(v, prefill=None):
             "layers": [{k: lay[k] for k in ("key", "name", "colour", "fg", "writable", "on", "kind")} for lay in lays],
             "modes": MODES, "simNow": shown(timezone.now(), "sim") if shows_both(v) else "",
             "simRate": (simclock.rate() or 1.0) if shows_both(v) else None,
-            "book": [{k: b[k] for k in ("key", "name", "addr", "kind")} for b in contacts(v)] if writable else [],
-            "prefill": prefill}
+            "book": [{**{k: b[k] for k in ("key", "name", "addr", "kind")}, "org": b.get("org", "")}
+                     for b in contacts(v)] if writable else [],
+            "prefill": prefill,
+            "desk": {"me": v.user.id, "assignees": desk.assignees(v.user)} if v.desk else None}
 
 
 def prefill(v, thread):
@@ -404,9 +434,13 @@ def prefill(v, thread):
         r = m.recipients or {}
         keys += list(r.get("to", [])) + list(r.get("cc", []))
     lays = [lay for lay in layers(v) if lay["writable"]]
-    lay = lays[0] if lays else None
+    # The calendar of the mailbox the conversation is in (the desk: the persona in it), else none chosen.
     if v.desk:
-        lay = next((x for x in lays if x["persona"] == next((m.persona for m in mails if m.persona), "")), lay)
+        lay = next((x for x in lays if x["persona"] == next((m.persona for m in mails if m.persona), "")), None)
+    else:
+        lay = layer_of_box(v, _tid(v.team), _tid(v.owner), "", lays)
+    if lay is None and len(lays) == 1:
+        lay = lays[0]
     mine = {lay["org_key"]} if lay else set()
     if v.member_box:
         mine.add(f"m:{v.owner.id}")
@@ -447,6 +481,7 @@ def cards(v, mails):
         out[m.id] = {
             "event": ev, "when": when_text(ev, clk), "sim": when_text(ev, "sim") if both else "",
             "mode": dict(MODES).get(ev.mode, ev.mode), "guests": _guests(ev), "kind": m.invite,
+            "desk": desk_side(ev, v.user) if v.desk else None,
             "cancelled": ev.status == "cancelled", "response": row.response if row else "",
             "comment": row.comment if row else "",
             "answer": bool(row and lay["writable"] and ev.status == "confirmed" and latest.get(ev.id) == m.id),
@@ -472,6 +507,8 @@ def thread_events(v, mails):
 # --- writing ------------------------------------------------------------------------------------
 
 def _writable(v, key):
+    if not key:
+        raise CalendarError("Choose the calendar it goes on.")
     lay = next((lay for lay in layers(v) if lay["key"] == key), None)
     if not lay or not lay["writable"]:
         raise CalendarError("You can't add to that calendar.")
@@ -593,7 +630,23 @@ def _send(v, lay, entries, ev, kind, request, subject=None, body=None, from_key=
             raise CalendarError(str(e))
     vi.track(w, "send", [sent.thread], kind="invite" if kind != "reply" else "invite_reply", to=len(entries), cc=0,
              bcc=0, files=0)
+    personas = [e for e in entries if e.get("kind") == "persona"]
+    if personas and kind in ("request", "update", "cancel"):
+        _tell_desk(ev, kind, personas, w)
     return []
+
+
+def _tell_desk(ev, kind, personas, w):
+    """A team invited personas, or changed or cancelled a meeting with them: a desk notice
+    (kind calendar) to those on its desk conversation, everyone on the desk while nobody is."""
+    thread = desk_thread(ev)
+    team = w.team.name if w.team else ""
+    names = ", ".join(e["name"] for e in personas)
+    verb = {"request": "invites", "update": "changed the meeting with", "cancel": "cancelled the meeting with"}[kind]
+    when = when_text(ev, "real") + (f" (scenario {when_text(ev, 'sim')})" if simclock.enabled() else "")
+    desk.notify(_desk_users(thread), f"cal-{kind}:{ev.id}:{ev.sequence}", "calendar", f"{team} {verb} {names}: {ev.title}",
+                when, thread=thread, url=f"/inbox/desk/t/{thread}/" if thread else "/inbox/desk/calendar/",
+                test=ev.is_test)
 
 
 def save(v, data, eid=None, request=None):

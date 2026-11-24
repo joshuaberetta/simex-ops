@@ -5,7 +5,8 @@
   <div class="gm-ic-title">{{ c.event.title }}</div>
   <div class="gm-ic-when">{{ c.when }}{% if c.sim %} <span class="gm-simdate" title="Scenario time">{% icon "clock" 12 %} {{ c.sim }}</span>{% endif %}</div>
   <div class="gm-ic-where">{{ c.mode }}{% if c.event.location %} · {{ c.event.location }}{% endif %} · organised by {{ c.event.organiser_name }}</div>
-  {% if c.guests %}<ul class="gm-ic-guests">{% for g in c.guests %}<li class="r-{{ g.response }}" title="{% if g.response == 'accepted' %}Yes{% elif g.response == 'tentative' %}Maybe{% elif g.response == 'declined' %}No{% else %}No answer yet{% endif %}">{{ g.name }}</li>{% endfor %}</ul>{% endif %}
+  {% if c.guests %}<ul class="gm-ic-guests">{% for g in c.guests %}<li class="r-{{ g.response }}" title="{% if g.response == 'accepted' %}Yes{% elif g.response == 'tentative' %}Maybe{% elif g.response == 'declined' %}No{% else %}No answer yet{% endif %}">{{ g.name }}{% if g.org %} <span class="gm-ic-org">({{ g.org }})</span>{% endif %}</li>{% endfor %}</ul>{% endif %}
+  {% if c.desk %}<div class="gm-ic-desk">{% if c.desk.owner %}Played by <b>{{ c.desk.owner }}</b>{% if c.desk.auto %} (by the default assignments){% endif %}{% else %}<b>Nobody on the desk has it yet</b>{% endif %} · <a class="gm-link" href="/inbox/desk/t/{{ c.desk.thread }}/">its conversation</a> (take it or give it there, or on the calendar)</div>{% endif %}
   {% if c.answer %}<form method="post" action="{{ base }}/calendar/respond/" class="gm-ic-answer">{% csrf_token %}
     <input type="hidden" name="event" value="{{ c.event.id }}"><input type="hidden" name="layer" value="{{ c.layer }}">
     <input type="hidden" name="next" value="{{ base }}/t/{{ thread }}/">

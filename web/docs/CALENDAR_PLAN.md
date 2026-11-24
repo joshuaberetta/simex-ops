@@ -386,7 +386,7 @@ Start afresh removes them.
 3. **Seed the calendar from the mail** (below). *Built:* Team inboxes → **Meetings in the mail** (`/meetings/`, `ops/cal_seed.py`, `views_cal_seed.py`); items checked against their evidence mails' keys on creation and on every edit. ExCon has SIMEX AI find the meetings already
    proposed or agreed in the mail, reviews them, and applies them quietly as guest events. This
    step comes after invitations because seeded events need guests.
-4. **Personas and the desk.**
+4. **Personas and the desk.** *Built* (`Sender.organisation`; who plays it on the event, Take / Give to through `desk.mark`, the desk calendar's Show filter; desk notices of invitations, changes, cancellations; Compose → Invite to a meeting; AI personas checked to leave invitations to the desk).
    - `Sender.organisation`, persona layers on the desk calendar, answering as a persona with
      `desk.send`, and AI personas' invitations always left to the desk.
    - Who plays it, through `DeskConversation`, with desk notices.

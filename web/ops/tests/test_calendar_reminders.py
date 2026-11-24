@@ -133,7 +133,7 @@ def test_persona_meetings_reach_the_desk_and_exCon(excon, pushed, django_capture
     with django_capture_on_commit_callbacks(execute=True):
         calendar.tick(ev.starts_at - timedelta(minutes=10))
         calendar.tick(ev.starts_at - timedelta(minutes=9))
-    assert DeskNotice.objects.filter(user=anna.person.user, kind="calendar").count() == 1
+    assert DeskNotice.objects.filter(user=anna.person.user, kind="calendar", key__startswith="cal-remind:").count() == 1
     assert Notice.objects.filter(key=f"cal-unstaffed:{ev.id}").count() == 1
     # Once someone has it, no notice for the next one.
     s, e = at(180)

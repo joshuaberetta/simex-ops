@@ -312,7 +312,8 @@ def address_book(v):
     for s in Sender.objects.filter(active=True):
         local = rnd.fill(s.local_part, ctx).lower()
         book.append({"key": f"p:{local}", "name": rnd.fill(s.display_name, ctx) or local,
-                     "addr": rnd.persona_address(s, local, ctx), "kind": "leader" if s.team_leader else "persona"})
+                     "addr": rnd.persona_address(s, local, ctx), "kind": "leader" if s.team_leader else "persona",
+                     "org": s.organisation})  # the organisation it speaks for, shown to the teams
     book += mates
     if v.member_box or (mates and v.person and not v.readonly):  # the team, from a member's own address
         book.append({"key": f"t:{team.id}", "name": team.name, "addr": team_address(team), "kind": "team"})

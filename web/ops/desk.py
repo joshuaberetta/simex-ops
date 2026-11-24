@@ -918,7 +918,10 @@ def _about(threads):
 
 
 def _told_in(mail):
-    """A team wrote in a desk conversation (mail, the desk's Inbox copy): those on it hear."""
+    """A team wrote in a desk conversation (mail, the desk's Inbox copy): those on it hear. An
+    invitation, a change or a cancellation has its own notice (calendar._tell_desk)."""
+    if mail.invite in ("request", "update", "cancel"):
+        return
     who = mail.from_name or mail.from_addr
     notify(audience(mail.thread), f"in:{mail.id}", "reply", f"{_team_name(mail.desk_team)} wrote: {mail.subject}",
            f"{who}: {(mail.body or '').strip()[:200]}", mail.thread, f"/inbox/desk/t/{mail.thread}/", mail.is_test)

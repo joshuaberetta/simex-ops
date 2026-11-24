@@ -1,11 +1,12 @@
 {% extends "ops/mail/base.html" %}{% load static ops %}
 {% block title %}Calendar{% endblock %}
 {% block head %}<meta name="simex-page" content="calendar">{% endblock %}
-{% block search %}<div class="cal-brand">{% icon "clock" 22 %}<span>SIMEX <b>Calendar</b></span></div>{% endblock %}
+{% block search %}<div class="cal-brand">{% icon "event" 22 %}<span>SIMEX <b>Calendar</b></span></div>{% endblock %}
 {% block side %}<nav class="gm-side cal-side" data-cal-side>
   {% if not cal.readonly %}<button class="gm-compose-btn" type="button" data-cal-create>{% icon "add" 24 %}<span>Create</span></button>
   {% else %}<div class="gm-ro-note">{% icon "eye" 20 %}<span>{% if v.leader_mode %}{{ team.name }}'s calendar, read-only.{% elif v.member_box and v.readonly %}{{ v.owner.name }}'s calendar, read-only.{% else %}Read-only: you can see these calendars but not change them.{% endif %}</span></div>{% endif %}
   <div class="cal-mini" data-cal-mini aria-label="Choose a date"></div>
+  {% if v.desk %}<label class="cal-deskfilter">Show <select data-cal-deskfilter><option value="all">All the personas' meetings</option><option value="mine">Mine to play</option><option value="none">Nobody has them</option></select></label>{% endif %}
   <div class="gm-labels-head"><span class="gm-flabel">{% if v.desk %}Personas{% else %}Calendars{% endif %}</span></div>
   <ul class="cal-layers" data-cal-layers>
     {% for l in cal.layers %}<li><label class="cal-layer" title="{{ l.name }}{% if not l.writable %} (read-only){% endif %}">
@@ -59,7 +60,7 @@
       <label class="gm-dfield"><span>Where</span><input name="location" maxlength="200" placeholder="Place, phone number or VTC link" autocomplete="off"></label>
     </div>
     <label class="gm-dfield"><span>Description</span><textarea name="description" rows="4" maxlength="4000"></textarea></label>
-    <label class="gm-dfield"><span>Calendar</span><select name="layer" data-cal-layer-select>{% for l in cal.layers %}{% if l.writable %}<option value="{{ l.key }}">{{ l.name }}</option>{% endif %}{% endfor %}</select></label>
+    <label class="gm-dfield"><span>Calendar</span><select name="layer" data-cal-layer-select required><option value="" disabled>Choose a calendar…</option>{% for l in cal.layers %}{% if l.writable %}<option value="{{ l.key }}">{{ l.name }}</option>{% endif %}{% endfor %}</select></label>
     <div class="gm-dfield"><span>Guests</span>
       <div class="cal-guests" data-cal-guests><input data-cal-guest-input placeholder="Add a name or an exact address" autocomplete="off" aria-label="Add guests"><ul class="cal-gsugg" data-cal-gsugg hidden></ul></div>
     </div>

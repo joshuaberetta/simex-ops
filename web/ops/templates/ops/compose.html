@@ -25,6 +25,30 @@ One message per team or member ticked, in SIMEX Mail or by email as the delivery
   <button class="btn danger" {% if cfg.paused == '1' %}disabled{% endif %}>Send now</button>
 </form>
 
+<form method="post" action="/compose/meeting/" class="card form live-card" style="max-width:760px" id="meeting">{% csrf_token %}
+  <h3>Invite to a meeting</h3>
+  <p class="small muted">A meeting, call or VTC on a persona's calendar (the persona desk's, SIMEX Calendar), with an invitation from the persona to each team, member or team leader ticked, in their SIMEX Mail with Yes / Maybe / No: as on the desk's calendar. Times are real (Nairobi); members see them in the scenario's time.</p>
+  <label>As <select name="from" required><option value="">Choose a persona…</option>
+      {% for p in personas %}<option value="p:{{ p.key|slice:'2:' }}">{{ p.name }} &lt;{{ p.addr }}&gt;</option>{% endfor %}
+    </select></label>
+  <label>Title <input name="title" maxlength="200" required></label>
+  <div class="row">
+    <label>Starts <input type="datetime-local" name="start" required></label>
+    <label>Ends <input type="datetime-local" name="end" required></label>
+    <label>How <select name="mode">{% for k, l in modes %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></label>
+  </div>
+  <label>Where <input name="location" maxlength="200" placeholder="Place, phone number or VTC link"></label>
+  <label>Description <textarea name="description" rows="3"></textarea></label>
+  <fieldset><legend>Guests</legend>
+    {% for g in by_team %}<div>
+      <label class="chk"><input type="checkbox" name="to" value="{{ g.key }}"> <b>{{ g.team.name }}</b>{% if g.team.is_test %} <span class="muted small">test</span>{% endif %}</label>
+      {% for e in g.leaders %}<label class="chk"><input type="checkbox" name="to" value="{{ e.key }}"> {{ e.name }} <span class="muted small">team leader</span></label>{% endfor %}
+      {% for e in g.members %}<label class="chk"><input type="checkbox" name="to" value="{{ e.key }}"> {{ e.name }}</label>{% endfor %}
+    </div>{% endfor %}
+  </fieldset>
+  <button class="btn danger" {% if cfg.paused == '1' %}disabled{% endif %}>Invite</button>
+</form>
+
 <h3>Sent from the desk and here</h3>
 {% if recent %}
 <table class="list">

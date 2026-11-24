@@ -72,6 +72,7 @@
   {% if lt.peers %}<a href="/inbox/leaders/" class="{% if lt.current == 'peer' %}on{% endif %}">{% icon "eye" 20 %} Team leaders <span class="gm-tab-ro">read-only</span></a>{% endif %}
   {% if lt.npcs %}<a href="/inbox/personas/" class="{% if lt.current == 'npcs' %}on{% endif %}">{% icon "eye" 20 %} AI personas <span class="gm-tab-ro">read-only</span></a>{% endif %}
   <a href="/inbox/dashboard/" class="{% if lt.current == 'dashboard' %}on{% endif %}">{% icon "all" 20 %} Dashboard</a>
+  <a href="/inbox/calendar/" class="{% if lt.current == 'calendar' %}on{% endif %}">{% icon "event" 20 %} Calendar</a>
   {% if lt.roleplay %}<a href="/inbox/rp/" class="{% if lt.current == 'roleplay' %}on{% endif %}">{% icon "label" 20 %} My role plays</a>{% endif %}
 </nav>
 {% endwith %}{% elif desk_tabs %}{% with dt=desk_tabs %}
@@ -79,6 +80,7 @@
   <a href="/inbox/desk/" class="{% if dt.current == 'desk' %}on{% endif %}">{% icon "inbox" 20 %} Persona desk<span class="gm-tab-n" data-tab-desk>{% if dt.unread and dt.current != 'desk' %}{{ dt.unread }}{% endif %}</span></a>
   <a href="/inbox/desk/teams/" class="{% if dt.current == 'teams' %}on{% endif %}">{% icon "eye" 20 %} Teams &amp; team leaders <span class="gm-tab-ro">read-only</span></a>
   <a href="/inbox/desk/dashboard/" class="{% if dt.current == 'dashboard' %}on{% endif %}">{% icon "all" 20 %} Dashboard</a>
+  <a href="/inbox/desk/calendar/" class="{% if dt.current == 'calendar' %}on{% endif %}">{% icon "event" 20 %} Calendar</a>
   <a href="/inbox/desk/assign/" class="{% if dt.current == 'assign' %}on{% endif %}">{% icon "person" 20 %} Assign</a>
   {% if dt.chat %}<button type="button" class="gm-chat-tab" data-chat-toggle aria-expanded="false" title="Ask SIMEX AI what has been said already, who a persona is, how to answer a team">{% icon "edit" 20 %} ChatSIMEX</button>{% endif %}
 </nav>
@@ -86,6 +88,7 @@
 <nav class="gm-tabs" aria-label="Mailboxes">
   <a href="/inbox/" class="{% if mt.current == 'team' %}on{% endif %}">{% icon "inbox" 20 %} {{ mt.team.name }} inbox<span class="gm-tab-n" data-tab-teambox>{% if mt.team_unread and mt.current != 'team' %}{{ mt.team_unread }}{% endif %}</span></a>
   <a href="/inbox/me/" class="{% if mt.current == 'me' %}on{% endif %}">{% icon "inbox" 20 %} My mail<span class="gm-tab-n" data-tab-me>{% if mt.me_unread and mt.current != 'me' %}{{ mt.me_unread }}{% endif %}</span></a>
+  <a href="/inbox/calendar/" class="{% if mt.current == 'calendar' %}on{% endif %}">{% icon "event" 20 %} Calendar</a>
 </nav>
 {% endwith %}{% endif %}
 <div class="gm-alerts" id="gm-alerts" hidden>

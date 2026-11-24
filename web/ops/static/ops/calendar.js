@@ -89,7 +89,15 @@
       }).catch(() => showErr("Couldn't reach SIMEX Calendar. Retrying…"));
   }
 
-  const visible = () => events.filter(e => (e.layers || [e.layer]).some(k => shownLayers.has(k)));
+  // The persona desk: Mine / Not assigned / All, this browser's choice.
+  const deskSel = $("[data-cal-deskfilter]");
+  let deskFilter = deskSel ? (localStorage.getItem("simex-cal-desk") || "all") : "all";
+  if (deskSel) {
+    deskSel.value = deskFilter;
+    deskSel.addEventListener("change", () => { deskFilter = deskSel.value; localStorage.setItem("simex-cal-desk", deskFilter); render(); });
+  }
+  const deskOk = e => deskFilter === "all" || (deskFilter === "mine" ? !!(e.desk && e.desk.mine) : !(e.desk && e.desk.ownerId));
+  const visible = () => events.filter(e => (e.layers || [e.layer]).some(k => shownLayers.has(k)) && deskOk(e));
   // How an event looks: cancelled (struck through), declined (faded), not answered yet (outlined).
   const evClass = e => (e.status === "cancelled" ? " cancelled" : "") + (e.response === "declined" ? " declined" : "") +
     (e.answerable && e.response === "needs_action" ? " pending" : "");
@@ -274,10 +282,14 @@
       ${e.location || e.mode !== "in_person" ? `<p class="cal-pop-where"><b>${esc(modeName(e.mode))}</b>${e.location ? " · " + esc(e.location) : ""}</p>` : ""}
       ${e.status === "cancelled" ? `<p class="cal-pop-where"><b>Cancelled</b></p>` : ""}
       ${e.description ? `<div class="cal-pop-desc">${esc(e.description)}</div>` : ""}
-      ${e.guests && e.guests.length ? `<ul class="cal-pop-guests">${e.guests.map(g => `<li class="r-${esc(g.response)}" title="${esc(ANSWER_NAME[g.response] || "No answer yet")}">${esc(g.name)}</li>`).join("")}</ul>` : ""}
+      ${e.guests && e.guests.length ? `<ul class="cal-pop-guests">${e.guests.map(g => `<li class="r-${esc(g.response)}" title="${esc(ANSWER_NAME[g.response] || "No answer yet")}">${esc(g.name)}${g.org ? ` <small>(${esc(g.org)})</small>` : ""}</li>`).join("")}</ul>` : ""}
       ${e.answerable ? `<div class="cal-pop-answer" data-pop-answer><b>Going?</b>${["accepted", "tentative", "declined"].map(a =>
         `<button type="button" class="gm-pill-btn sm${e.response === a ? " on" : ""}" data-answer="${a}">${ANSWER_NAME[a]}</button>`).join("")}
         <input data-answer-note maxlength="500" placeholder="Add a note (optional)" value="${esc(e.comment || "")}"></div>` : ""}
+      ${e.desk && C.desk ? `<div class="cal-pop-desk">${e.desk.owner ? `Played by <b>${esc(e.desk.owner)}</b>${e.desk.auto ? " (by default)" : ""}` : "<b>Nobody on the desk has it</b>"}
+        ${e.desk.mine ? "" : `<button type="button" class="gm-pill-btn sm" data-desk-take>Take it</button>`}
+        <select data-desk-give aria-label="Give it to"><option value="">Give to…</option>${C.desk.assignees.map(a =>
+          `<option value="${a.id}"${a.id === e.desk.ownerId ? " disabled" : ""}>${esc(a.name)}${a.desk ? "" : " (ExCon)"}</option>`).join("")}</select></div>` : ""}
       ${e.invite ? `<p class="cal-pop-cal"><a class="gm-link" href="${esc(e.invite)}">Open the invitation</a></p>` : ""}
       ${e.seeded ? `<p class="cal-pop-cal"><b>From the mail</b>: arranged by email before the calendar</p>` : ""}
       ${e.source ? `<p class="cal-pop-cal">From the email <a class="gm-link" href="${esc(e.source.url)}">${esc(e.source.subject || "(no subject)")}</a></p>` : ""}
@@ -298,6 +310,7 @@
     if (e.target.closest("[data-pop-close]")) closePop();
     else if (e.target.closest("[data-pop-edit]") && ev) { closePop(); openEditor(ev); }
     else if (e.target.closest("[data-pop-del]") && ev) { closePop(); remove(ev); }
+    else if (e.target.closest("[data-desk-take]") && ev && ev.desk) deskMark(ev, "take");
     else if (e.target.closest("[data-answer]") && ev) {
       const note = $("[data-answer-note]", pop);
       post(`${C.base}/calendar/respond/`, { event: ev.id, layer: ev.answerLayer || ev.layer, answer: e.target.closest("[data-answer]").dataset.answer,
@@ -307,6 +320,16 @@
       });
     }
   });
+  pop.addEventListener("change", (e) => {
+    const sel = e.target.closest("[data-desk-give]"), ev = byId(pop.dataset.id);
+    if (sel && sel.value && ev && ev.desk) deskMark(ev, "assign", sel.value);
+  });
+  function deskMark(ev, act, assignee) {  // who plays it: the desk conversation's owner (desk.mark, as on the Assign board)
+    post("/inbox/desk/mark/", { threads: ev.desk.thread, act, assignee: assignee || "" }).then(j => {
+      if (!j.ok) { showErr(j.error || "Couldn't change who has it."); return; }
+      closePop(); load(true);
+    });
+  }
   document.addEventListener("pointerdown", (e) => { if (!pop.hidden && !pop.contains(e.target) && !e.target.closest("[data-id]")) closePop(); });
 
   /* ---------- the editor ---------- */
@@ -317,10 +340,10 @@
     if (!gBox) return;
     $$(".cal-gchip", gBox).forEach(x => x.remove());
     guests.forEach((g, i) => gInput.insertAdjacentHTML("beforebegin",
-      `<span class="cal-gchip" title="${esc(g.addr || "")}">${esc(g.name)}<button type="button" data-gdel="${i}" aria-label="Remove ${esc(g.name)}">×</button></span>`));
+      `<span class="cal-gchip" title="${esc(g.addr || "")}">${esc(g.name)}${g.org ? ` <small>(${esc(g.org)})</small>` : ""}<button type="button" data-gdel="${i}" aria-label="Remove ${esc(g.name)}">×</button></span>`));
   }
   function addGuest(g) {
-    if (g && !guests.some(x => x.key === g.key)) guests.push({ key: g.key, name: g.name, addr: g.addr || "" });
+    if (g && !guests.some(x => x.key === g.key)) guests.push({ key: g.key, name: g.name, addr: g.addr || "", org: g.org || "" });
     gInput.value = ""; gList.hidden = true; renderGuests(); conflicts();
   }
   function suggest() {
@@ -328,7 +351,7 @@
     sugg = q ? (C.book || []).filter(b => !guests.some(g => g.key === b.key) &&
       (b.name.toLowerCase().includes(q) || (b.addr || "").toLowerCase().includes(q))).slice(0, 8) : [];
     suggAt = sugg.length ? 0 : -1;
-    gList.innerHTML = sugg.map((b, i) => `<li data-sugg="${i}" class="${i === suggAt ? "on" : ""}">${esc(b.name)}<small>${esc(b.addr || "")}</small></li>`).join("");
+    gList.innerHTML = sugg.map((b, i) => `<li data-sugg="${i}" class="${i === suggAt ? "on" : ""}">${esc(b.name)}<small>${b.org ? esc(b.org) + " · " : ""}${esc(b.addr || "")}</small></li>`).join("");
     gList.hidden = !sugg.length;
   }
   function lookupGuest() {  // an exact address typed: anyone this mailbox may write to (as in Compose)
@@ -382,12 +405,15 @@
     F("all_day").checked = allDay;
     F("mode").value = e.mode || "in_person";
     F("location").value = e.location || ""; F("description").value = e.description || "";
-    const pick = e.layer || (writable.find(l => shownLayers.has(l.key)) || writable[0] || {}).key;
-    if (pick) F("layer").value = pick;
+    // Which calendar: an event's own; the only one this viewer writes to; made on the grid while only
+    // one of them is shown, that one. Otherwise none, so nothing lands on the first calendar by mistake.
+    const ticked = writable.filter(l => shownLayers.has(l.key));
+    const pick = e.layer || (writable.length === 1 ? writable[0].key : e.fromGrid && ticked.length === 1 ? ticked[0].key : "");
+    F("layer").value = pick;
     $("[data-cal-dtitle]").textContent = isNew ? "New event" : "Edit event";
     $("[data-cal-delete]").hidden = isNew;
     $("[data-cal-ferr]").hidden = true;
-    guests = (e.guests || []).map(g => ({ key: g.key, name: g.name, addr: g.addr || "" }));
+    guests = (e.guests || []).map(g => ({ key: g.key, name: g.name, addr: g.addr || "", org: g.org || "" }));
     renderGuests();
     F("source").value = e.source && e.source.id ? e.source.id : "";
     const from = $("[data-cal-from]");
@@ -428,6 +454,7 @@
       e.preventDefault();
       const t = formTimes();
       const err = $("[data-cal-ferr]");
+      if (!F("layer").value) { err.textContent = "Choose the calendar it goes on."; err.hidden = false; F("layer").focus(); return; }
       post(`${C.base}/calendar/save/`, { id: F("id").value, title: F("title").value, start: t.start, end: t.end, all_day: t.allDay ? "1" : "",
         mode: F("mode").value, location: F("location").value, description: F("description").value, layer: F("layer").value,
         guests: guests.map(g => g.key), guests_given: "1", source: F("source").value })
@@ -538,9 +565,9 @@
     if (d.kind === "create") {
       d.ghost.remove();
       const day0 = toM(d.col.dataset.day), a = Math.min(d.a, d.b), b = Math.max(d.a, d.b);
-      openEditor({ start: fromM(day0 + a), end: fromM(day0 + (b > a ? b : a + 60)) });
+      openEditor({ start: fromM(day0 + a), end: fromM(day0 + (b > a ? b : a + 60)), fromGrid: true });
     } else if (d.kind === "mcreate") {
-      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 5) openEditor({ start: d.day + "T09:00", end: d.day + "T10:00" });
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 5) openEditor({ start: d.day + "T09:00", end: d.day + "T10:00", fromGrid: true });
     } else if (d.kind === "click") {
       if (!d.moved || !d.ev || !d.ev.editable) { openPop(d.el.dataset.id, d.el); return; }
       if (d.month) {
@@ -587,7 +614,7 @@
     const p = C.prefill;
     openEditor(null);
     F("title").value = p.title || "";
-    if (p.layer) F("layer").value = p.layer;
+    F("layer").value = p.layer || F("layer").value;
     guests = (p.guests || []).slice(); renderGuests();
     F("source").value = p.source || "";
     const from = $("[data-cal-from]");

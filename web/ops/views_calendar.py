@@ -23,7 +23,11 @@ def _check(v):
 def page(request, v):
     _check(v)
     pre = cal.prefill(v, request.GET.get("from", "")[:40]) if request.GET.get("from") and not v.readonly else None
-    return render(request, "ops/mail/calendar/page.html", _ctx(v, folder="", cal=cal.page_data(v, pre)))
+    c = _ctx(v, folder="", cal=cal.page_data(v, pre))
+    for tabs in ("desk_tabs", "leader_tabs", "member_tabs"):  # the tab bar: Calendar on
+        if c.get(tabs) and (tabs != "desk_tabs" or v.desk):
+            c[tabs] = {**c[tabs], "current": "calendar"}
+    return render(request, "ops/mail/calendar/page.html", c)
 
 
 @mailbox_view

@@ -47,9 +47,9 @@ SIMEX Mail is your team's mailbox for the exercise. Everything here is **exercis
 - Drafts are saved automatically every few seconds; find them under **Drafts** and click one to continue.
 
 ## Calendar
-- Open **Calendar** from the **grid of nine dots** at the top right (the app drawer, with your mailboxes and this guide). Use it to keep track of the meetings and calls your team arranges.
+- Open **Calendar** from its tab at the top (next to My mail) or the **grid of nine dots** at the top right (the app drawer, with your mailboxes and this guide). Use it to keep track of the meetings and calls your team arranges.
 - Two calendars, on the left: your **team's calendar**, which everyone in your team sees and can change, and **My calendar**, your own. Tick or untick them to show or hide them.
-- **Create** (or drag across the hours) adds an event: a title, when, how (in person, phone, VTC), where and a description, and which calendar it goes on. Click an event to see, edit or delete it; drag it to move it, or its bottom edge to change how long it lasts.
+- **Create** (or drag across the hours) adds an event: a title, when, how (in person, phone, VTC), where and a description, and which calendar it goes on (choose it: it starts empty). Click an event to see, edit or delete it; drag it to move it, or its bottom edge to change how long it lasts.
 - **Day**, **Week**, **Month** and **Schedule** (a list) at the top; **Today** and the arrows move through the days. Times are the scenario's, like your mail.
 - **Guests:** in the event, add guests as in Compose (a name from your address book, or someone's exact address): teammates, your team, the organisations (personas). Each gets an invitation by mail from that calendar's mailbox. A change reaches them as an **Updated invitation**, and deleting the event sends a **Cancelled** mail.
 - **An invitation you get** has a card above the text, marked **Invitation** in the list: click **Yes**, **Maybe** or **No** (with a note if you like). Your answer goes back to the organiser by mail, and the event is on your calendar (dashed until you answer). You can answer on the calendar too.

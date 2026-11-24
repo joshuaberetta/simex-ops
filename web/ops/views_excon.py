@@ -596,6 +596,8 @@ def senders_page(request):
         x.inapp_local, x.domain = inapp_local, domain
         if "category" in P:
             x.category, x.notes = (P.get("category") or "").strip()[:60], (P.get("notes") or "").strip()
+        if "organisation" in P:  # shown to the teams (SIMEX Calendar, the address book)
+            x.organisation = (P.get("organisation") or "").strip()[:200]
         x.colour = P.get("colour") if P.get("colour") in LABEL_COLOURS else x.colour if "colour" not in P else ""
         clash = next((o for o in Sender.objects.exclude(pk=x.pk) if o.inapp_address == x.inapp_address), None)
         if clash:
@@ -1252,7 +1254,36 @@ def compose(request):
     recent = Message.objects.filter(kind="desk").select_related("author").order_by("-id")[:30]
     return render(request, "ops/compose.html", {
         "tab": "compose", "personas": desk_from_choices(), "by_team": by_team, "form": form, "recent": recent,
+        "modes": __import__("ops.calendar", fromlist=["MODES"]).MODES,
         "max_mb": delivery.EMAIL_FILES_MAX // (1024 * 1024)})
+
+
+@excon_required
+@require_POST
+def compose_meeting(request):
+    """Compose → Invite to a meeting: an event on a persona's calendar (the persona desk's), with
+    teams, members or team leaders as guests, each sent an invitation from the persona (desk.send,
+    "Sent by ExCon"), as on the desk's calendar (calendar.save, the same guest rules)."""
+    from . import calendar
+    from .views_inbox import Viewer
+    P = request.POST
+    v = Viewer(request, box="desk")
+    data = {"layer": P.get("from") or "", "title": P.get("title") or "", "start": P.get("start") or "",
+            "end": P.get("end") or "", "all_day": P.get("all_day") or "", "location": P.get("location") or "",
+            "mode": P.get("mode") or "", "description": P.get("description") or "", "guests": P.getlist("to"),
+            "guests_given": "1"}
+    if not data["guests"]:
+        messages.error(request, "Tick who is invited.")
+        return redirect("/compose/#meeting")
+    try:
+        ev, _, warnings = calendar.save(v, data, None, request)
+    except calendar.CalendarError as e:
+        messages.error(request, f"Not saved: {e}")
+        return redirect("/compose/#meeting")
+    messages.success(request, f"“{ev.title}” is on {ev.organiser_name}'s calendar; the invitations went out.")
+    for w in warnings:
+        messages.error(request, w)
+    return redirect("/compose/#meeting")
 
 
 @excon_required

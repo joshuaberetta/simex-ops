@@ -168,6 +168,7 @@ urlpatterns = [
     path("meetings/", cs.meetings),
     path("meetings/<int:sid>/", cs.run),
     path("compose/", x.compose),
+    path("compose/meeting/", x.compose_meeting),
     path("excon/poll/", x.excon_poll),
     path("excon/notices/<int:nid>/", x.notice_open),
     path("excon/notices/<int:nid>/dismiss/", x.notice_action, {"action": "dismiss"}),

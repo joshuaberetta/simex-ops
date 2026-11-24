@@ -1,6 +1,7 @@
 """Senders import (Senders → Import a list of senders): a spreadsheet (.xlsx) or CSV with a
 header row, one persona per row: its SIMEX Mail address (Alias), optionally its username, the
-name shown, ExCon's notes (Organisation / use), a category and Active. Planned first (which
+name shown, the organisation shown to the teams, ExCon's notes (Organisation / use), a category
+and Active. Planned first (which
 sender each row is, what it adds and what it changes, flagging values that replace ones set
 here), applied after ExCon checks the plan. Export (the same columns) gives the file back.
 
@@ -25,13 +26,18 @@ HEADERS = {
     "address": ("address in simex mail", "simex mail address", "alias", "sender alias", "address", "email",
                 "email address", "e-mail"),
     "display_name": ("display name", "name shown", "name", "persona"),
+    # Shown to the teams (SIMEX Calendar, the address book); plain "Organisation" stays ExCon's notes.
+    "organisation": ("organisation (shown to teams)", "organization (shown to teams)", "organisation shown",
+                     "organization shown", "shown organisation", "shown organization"),
     "notes": ("organisation / use", "organization / use", "organisation/use", "organization/use", "notes",
               "description", "organisation", "organization", "use"),
     "category": ("category", "type", "group"),
     "active": ("active",),
 }
-EXPORT = ["Username", "Address in SIMEX Mail", "Display name", "Organisation / use", "Category", "Active"]
-FIELD_LABELS = {"display_name": "name shown", "address": "SIMEX Mail address", "notes": "organisation / use",
+EXPORT = ["Username", "Address in SIMEX Mail", "Display name", "Organisation (shown to teams)", "Organisation / use",
+          "Category", "Active"]
+FIELD_LABELS = {"display_name": "name shown", "address": "SIMEX Mail address", "organisation": "organisation (shown to teams)",
+                "notes": "organisation / use",
                 "category": "category", "active": "active"}
 YES, NO = ("yes", "y", "true", "1", "x", "active"), ("no", "n", "false", "0", "inactive")
 
@@ -73,7 +79,7 @@ def read(name, data):
             continue
         out.append({"line": i, "username": re.sub(r"@.*$", "", cell("username").lower()).replace(" ", ""),
                     "address": cell("address").lower().replace(" ", ""), "display_name": cell("display_name"),
-                    "notes": cell("notes"), "category": cell("category"), "active": cell("active").lower(),
+                    "organisation": cell("organisation"), "notes": cell("notes"), "category": cell("category"), "active": cell("active").lower(),
                     "explicit": "username" in cols})
     return out
 
@@ -138,14 +144,14 @@ def plan(rows):
         if x:
             if addr:  # the default address (username@MAIL_DOMAIN) wasn't set here: not flagged
                 change("address", x.inapp_address, addr, replaces=bool(x.inapp_local or x.domain))
-            for f in ("display_name", "notes", "category"):
+            for f in ("display_name", "organisation", "notes", "category"):
                 if row[f]:
                     change(f, getattr(x, f), row[f])
             if _active(row["active"]) is not None and _active(row["active"]) != x.active:
                 change("active", "yes" if x.active else "no", "yes" if _active(row["active"]) else "no")
         else:
             change("address", "", addr or f"{username}@{settings.MAIL_DOMAIN}".lower())
-            for f in ("display_name", "notes", "category"):
+            for f in ("display_name", "organisation", "notes", "category"):
                 change(f, "", row[f])
             if _active(row["active"]) is False:
                 change("active", "", "no")
@@ -171,7 +177,7 @@ def apply(items, lines, deactivate_missing=()):
         if it["address"] or not x.pk:
             x.inapp_local, x.domain = _split(it["address"] or f"{it['username']}@{settings.MAIL_DOMAIN}".lower(),
                                              x.local_part)
-        for f in ("display_name", "notes", "category"):
+        for f in ("display_name", "organisation", "notes", "category"):
             if row[f]:
                 setattr(x, f, row[f])
         if _active(row["active"]) is not None:
@@ -190,8 +196,9 @@ def export():
     ws.title = "Senders"
     ws.append(EXPORT)
     for x in Sender.objects.all():
-        ws.append([x.local_part, x.inapp_address, x.display_name, x.notes, x.category, "yes" if x.active else "no"])
-    for col, width in zip("ABCDEF", (24, 34, 34, 50, 16, 8)):
+        ws.append([x.local_part, x.inapp_address, x.display_name, x.organisation, x.notes, x.category,
+                   "yes" if x.active else "no"])
+    for col, width in zip("ABCDEFG", (24, 34, 34, 34, 50, 16, 8)):
         ws.column_dimensions[col].width = width
     ws.freeze_panes = "A2"
     buf = io.BytesIO()

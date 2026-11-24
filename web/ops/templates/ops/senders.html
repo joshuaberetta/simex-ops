@@ -8,7 +8,7 @@ In SIMEX Mail a persona can show <b>any address</b>, e.g. <code>news@cnn.com</co
 <code>{team}</code> in a username, and <code>{team_name}</code> in a name, are filled in per team. Reply-to only matters for the email channel (leave it empty so replies are tracked).
 The <b>team leader</b> persona (e.g. <code>undac-{team}-tl</code>) is played by each team's leader in SIMEX Mail: what is sent as it is in the leader's Sent, and the team's mail to it reaches the leader's Inbox.</p>
 <table class="list">
-  <thead><tr><th colspan="6">Name shown · username · address in SIMEX Mail · reply-to (email) · category · organisation / use · injects using it · active · team leader</th></tr></thead>
+  <thead><tr><th colspan="6">Name shown · username · address in SIMEX Mail · reply-to (email) · organisation (teams see it) · category · organisation / use (ExCon) · injects using it · active · team leader</th></tr></thead>
   {% for x in senders %}
   <tr><td colspan="6">
       <form method="post" action="/senders/" class="rowform">{% csrf_token %}
@@ -17,6 +17,7 @@ The <b>team leader</b> persona (e.g. <code>undac-{team}-tl</code>) is played by 
         <input name="local_part" value="{{ x.local_part }}" required title="username">
         <span class="addr" title="address in SIMEX Mail"><input name="inapp_local" value="{{ x.inapp_local }}" placeholder="{{ x.local_part }}"><span>@</span><input name="domain" value="{{ x.domain }}" placeholder="{{ MAIL_DOMAIN }}"></span>
         <input name="reply_to" value="{{ x.reply_to }}" placeholder="reply-to (email)">
+        <input name="organisation" value="{{ x.organisation }}" placeholder="organisation" title="the organisation it speaks for, shown to the teams (SIMEX Calendar, the address book)" size="14">
         <input name="category" value="{{ x.category }}" placeholder="category" title="category (ExCon only)" size="8">
         <input name="notes" value="{{ x.notes }}" placeholder="organisation / use" title="organisation / use (ExCon only)">
         <span class="count">{{ x.usage }}</span>{% if x.npc %}<a href="/npcs/{{ x.npc.id }}/" class="flag ai" title="Answers on its own (AI personas)">AI</a>{% endif %}
@@ -36,13 +37,14 @@ The <b>team leader</b> persona (e.g. <code>undac-{team}-tl</code>) is played by 
   <input name="local_part" placeholder="username, e.g. cnn-news" required>
   <span class="addr" title="address in SIMEX Mail (optional)"><input name="inapp_local" placeholder="news"><span>@</span><input name="domain" placeholder="cnn.com"></span>
   <input name="reply_to" placeholder="reply-to (optional)">
+  <input name="organisation" placeholder="organisation (teams see it)" size="14">
   <input name="category" placeholder="category" size="8">
-  <input name="notes" placeholder="organisation / use">
+  <input name="notes" placeholder="organisation / use (ExCon)">
   <button class="btn small primary">Add sender</button>
 </form>
 <form method="post" action="/senders/import/" enctype="multipart/form-data" class="card form" id="import">{% csrf_token %}
   <h3>Import a list of senders</h3>
-  <p class="small">A spreadsheet (.xlsx) or CSV with a header row: <code>Alias</code> (the address in SIMEX Mail, e.g. <code>who@epeigonia.org</code>), optionally <code>Username</code> (else the alias's username), <code>Display name</code>, <code>Organisation / use</code>, <code>Category</code> and <code>Active</code> (yes / no). A row is the sender with that username (or, without a Username column, that address); the others are added. Empty cells leave a value as it is, and usernames are never renamed. You see the plan, with every value it would change, before anything changes. <a href="/senders/export/">Download the senders</a> in this format to edit and import them again.</p>
+  <p class="small">A spreadsheet (.xlsx) or CSV with a header row: <code>Alias</code> (the address in SIMEX Mail, e.g. <code>who@epeigonia.org</code>), optionally <code>Username</code> (else the alias's username), <code>Display name</code>, <code>Organisation (shown to teams)</code>, <code>Organisation / use</code> (ExCon's notes; a plain <code>Organisation</code> column is read as these), <code>Category</code> and <code>Active</code> (yes / no). A row is the sender with that username (or, without a Username column, that address); the others are added. Empty cells leave a value as it is, and usernames are never renamed. You see the plan, with every value it would change, before anything changes. <a href="/senders/export/">Download the senders</a> in this format to edit and import them again.</p>
   <input type="file" name="file" accept=".xlsx,.csv" required>
   <button class="btn">Check the list</button>
 </form>
