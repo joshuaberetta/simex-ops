@@ -69,6 +69,9 @@ Tick several rows in the Inbox for **I'll take these**, **Assign to…**, **No r
 ## Writing first
 Click **Write as a persona**, choose **From** (each persona with its address), and pick one or more teams, team members (e.g. **Team A (Jane Doe)**) or team leaders (**Team A leader (John Roe)**) in To, Cc or Bcc: start typing a team, a name or an address and every match is suggested. Each gets its own message and only ever sees its own. A member's or a leader's goes to their own mailbox, not the team's. A leader can't answer a persona in SIMEX Mail (only by email). New messages to the teams only go out once ExCon has armed live sending (except to the Test team), and nothing goes while sending is paused.
 
+## Calendar
+Open **Calendar** from the **grid of nine dots** at the top right (the app drawer, which also has the desk's tabs). It has one calendar per persona, in the persona's colour: tick them on the left to show or hide them. **Create** (or drag across the hours) puts a meeting or call on a persona's calendar; drag it to move it, or its bottom edge to change its length. Times are real, with the scenario time beside them (◷). For now an event stays on the persona's calendar: invitations to the teams come later. The teams' calendars are under **Teams & team leaders**, read-only (their mailbox's **Calendar** in the app drawer).
+
 ## What you can't do here
 - Write as the **team leader persona**: each team's leader plays it themselves.
 - Change anything in a team's mailbox, or reach ExCon's screens (injects, grading, settings).

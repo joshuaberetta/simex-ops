@@ -253,6 +253,23 @@ def report_md(text):
     return report.markdown_html(text)
 
 
+@register.simple_tag(takes_context=True)
+def mail_apps(context):
+    """The app drawer's tiles (views_inbox.apps) and the day its Calendar tile shows: the
+    simulation's for a member when the clock is on (they never see a real date), else today."""
+    from ops import simclock
+    from ops.access import participant_of
+    from ops.views_inbox import Viewer, apps
+    request = context.get("request")
+    if request is None:
+        return {"tiles": []}
+    v = context.get("v")
+    tiles = apps(v if isinstance(v, Viewer) else None, request)  # (the role players' pages' v is a version)
+    day = simclock.now() if participant_of(request.user) else None
+    day = timezone.localtime(day) if day else timezone.localtime()
+    return {"tiles": tiles, "day": day.day, "mon": day.strftime("%b")}
+
+
 @register.simple_tag
 def icon(name, size=20, cls=""):
     return format_html('<svg class="ic {}" width="{}" height="{}" viewBox="0 0 24 24" aria-hidden="true">'

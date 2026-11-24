@@ -99,7 +99,8 @@ ACTION_TEXT = {"star": "Starred", "unstar": "Unstarred", "read": "Marked read", 
                "archive": "Archived", "unarchive": "Moved back to the Inbox", "trash": "Deleted", "restore": "Restored",
                "label_add": "Labelled", "label_remove": "Removed a label from", "move": "Moved",
                "discard": "Discarded a draft", "label_create": "Created a label", "label_delete": "Deleted a label",
-               "search": "Searched", "draft": "Saved a draft", "send": "Sent"}
+               "search": "Searched", "draft": "Saved a draft", "send": "Sent",
+               "cal_create": "Added an event", "cal_update": "Changed an event", "cal_cancel": "Deleted an event"}
 GROUPS = {"signin": "Sign-ins", "mail": "In SIMEX Mail", "read": "Reading", "sent": "Sent"}
 
 
@@ -134,8 +135,11 @@ def timeline(person, limit=500, group=""):
             if a.action == "send" and d.get("kind") in ("reply", "forward"):
                 extra = ""
                 what = f"a {d['kind']} in {what}" if what else f"a {d['kind']}"
+            where = _box(person, a.team_id, a.owner_id)
+            if a.action.startswith("cal_"):  # SIMEX Calendar: the calendar of that mailbox
+                where = where.replace("inbox", "calendar").replace("mailbox", "calendar")
             items.append({"at": a.at, "group": "mail", "text": " ".join(x for x in (ACTION_TEXT.get(a.action, a.action), what) if x),
-                          "detail": " · ".join(x for x in (f"“{extra}”" if extra else "", "in " + _box(person, a.team_id, a.owner_id)) if x)})
+                          "detail": " · ".join(x for x in (f"“{extra}”" if extra else "", "in " + where) if x)})
     if group in ("", "read"):
         for e in Event.objects.filter(person=person, type__in=("read", "download")).select_related("message").order_by("-at")[:limit]:
             m = e.message

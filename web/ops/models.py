@@ -1123,3 +1123,70 @@ class ReplySuggestion(models.Model):
 
     class Meta:
         ordering = ["-id"]
+
+
+# --- SIMEX Calendar (ops/calendar.py, views_calendar.py) -------------------------------------------
+
+def _event_uid():
+    return uuid.uuid4().hex[:16]
+
+
+class CalendarEvent(models.Model):
+    """A meeting or appointment on SIMEX Calendar. It belongs to its organiser's mailbox
+    ((team, owner) as Mail; team None and owner None = the persona desk, organiser_key
+    p:<username> the persona organising it) and shows on the calendar of every mailbox with a
+    CalendarAttendee row for it, the organiser's own row included. Times are real (as
+    everywhere in the DB); SIMEX Calendar shows members their simulation time
+    (calendar.to_sim), everyone else both. Participant-facing text only."""
+    uid = models.CharField(max_length=32, unique=True, default=_event_uid)  # also the invitation thread (step 2)
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    owner = models.ForeignKey(Person, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    organiser_key = models.CharField(max_length=140, default="")  # t:<id> | m:<pid> | l:<pid> | p:<username>
+    organiser_name = models.CharField(max_length=200, blank=True, default="")
+    title = models.CharField(max_length=200, default="")
+    location = models.CharField(max_length=200, blank=True, default="")
+    description = models.TextField(blank=True, default="")
+    mode = models.CharField(max_length=12, default="in_person")  # in_person | phone | vtc | other
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField()
+    all_day = models.BooleanField(default=False)
+    status = models.CharField(max_length=12, default="confirmed")  # confirmed | cancelled
+    sequence = models.IntegerField(default=0)  # bumped on changes that matter to the guests
+    source_mail = models.ForeignKey(Mail, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_by = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    is_test = models.BooleanField(default=False)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["starts_at", "id"]
+        indexes = [models.Index(fields=["starts_at"])]
+
+    def __str__(self):
+        return self.title
+
+
+class CalendarAttendee(models.Model):
+    """An event on one mailbox's calendar: the organiser (role organiser) or a guest. (team,
+    owner) is the mailbox whose calendar shows it, as Mail; a persona's row has team None,
+    owner None (the persona desk) and its username in persona."""
+    event = models.ForeignKey(CalendarEvent, on_delete=models.CASCADE, related_name="attendees")
+    key = models.CharField(max_length=140, default="")  # address-book key, as organiser_key
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    owner = models.ForeignKey(Person, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    persona = models.CharField(max_length=120, blank=True, default="")
+    person = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    name = models.CharField(max_length=200, blank=True, default="")
+    addr = models.CharField(max_length=320, blank=True, default="")
+    role = models.CharField(max_length=10, default="required")  # organiser | required | optional
+    response = models.CharField(max_length=14, default="needs_action")  # needs_action | accepted | tentative | declined
+    responded_at = models.DateTimeField(null=True, blank=True)
+    responded_by = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    comment = models.TextField(blank=True, default="")
+    remind_minutes = models.IntegerField(null=True, blank=True)  # None: conf cal_lead
+    reminded_at = models.DateTimeField(null=True, blank=True)
+    hidden = models.BooleanField(default=False)  # removed from this calendar
+
+    class Meta:
+        ordering = ["id"]
+        indexes = [models.Index(fields=["team", "owner"]), models.Index(fields=["persona"])]

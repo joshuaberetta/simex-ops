@@ -36,6 +36,8 @@ def clear_team(team, scope="all", deliveries=False):
             mails.delete()
             MailLabel.objects.filter(team=team, owner__in=owners).delete()
             MailAction.objects.filter(team=team, owner__in=owners).delete()
+            from . import calendar
+            calendar.clear(team, owners)  # their own calendars
             from . import ai_docs
             ai_docs.prune(team)  # readings of files no longer in any mailbox
         else:
@@ -48,6 +50,8 @@ def clear_team(team, scope="all", deliveries=False):
             Mail.objects.filter(team=None, desk_team=team).delete()  # the persona desk's copies of its mail
             MailLabel.objects.filter(team=team).delete()
             MailAction.objects.filter(team=team).delete()
+            from . import calendar
+            calendar.clear(team)  # its calendars: the team's, the leader's and the members' own
             n["grades"] = Grade.objects.filter(team=team).delete()[0] + AiGrade.objects.filter(team=team).delete()[0]
             DocumentAnalysis.objects.filter(team=team).delete()  # the readings of the files it sent
             from . import desk
@@ -63,7 +67,7 @@ def clear_team(team, scope="all", deliveries=False):
 
 def start_afresh(reschedule=True):
     """Everything that happened in the exercise so far, gone, for every team: every mailbox
-    (teams, leaders, members, the persona desk), replies, answers, grades, AI analyses (documents' too), the
+    (teams, leaders, members, the persona desk) and calendar, replies, answers, grades, AI analyses (documents' too), the
     exercise summary and reports, test runs, notifications, role-play progress (every sitting
     pending again), and every delivery in the Log with
     its read/download events (login emails are kept). reschedule: injects already sent (or
@@ -79,6 +83,8 @@ def start_afresh(reschedule=True):
         Mail.objects.all().delete()
         MailLabel.objects.all().delete()
         MailAction.objects.all().delete()
+        from . import calendar
+        calendar.clear()  # every calendar's events (SIMEX Calendar)
         DeskConversation.objects.all().delete()  # the persona desk's to-answer state
         DeskWatch.objects.all().delete()  # who on the desk follows what
         DeskNotice.objects.all().delete()  # and their notices

@@ -1,0 +1,32 @@
+/* The app drawer (ops/mail/_apps.html, apps.js): SIMEX Mail's and the role players' top bars. */
+.sx-apps { position: relative; display: inline-flex; }
+.sx-apps-btn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0;
+  border: 0; border-radius: 50%; background: transparent; color: #444746; cursor: pointer; }
+.sx-apps-btn:hover, .sx-apps.open .sx-apps-btn { background: rgba(68, 71, 70, .1); }
+.sx-apps-btn:focus-visible { outline: 2px solid #0b57d0; outline-offset: 1px; }
+.rp-top .sx-apps-btn { color: inherit; }
+.rp-top .sx-apps-btn:hover, .rp-top .sx-apps.open .sx-apps-btn { background: rgba(255, 255, 255, .15); }
+.sx-apps-panel { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; width: 328px; max-height: min(480px, calc(var(--app-h, 100vh) - 80px));
+  overflow: auto; padding: 12px; border-radius: 24px; background: #e9eef6; color: #1f1f1f;
+  box-shadow: 0 4px 8px 3px rgba(60, 64, 67, .15), 0 1px 3px rgba(60, 64, 67, .3); }
+.sx-apps-panel[hidden] { display: none; }
+.sx-apps-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 10px; font-size: 16px; }
+.sx-apps-close { display: none; border: 0; background: none; font-size: 26px; line-height: 1; color: #444746; cursor: pointer; }
+.sx-apps-grid { list-style: none; margin: 0; padding: 8px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
+  background: #fff; border-radius: 18px; }
+.sx-app { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 4px 10px; border-radius: 14px;
+  color: #1f1f1f; text-decoration: none; text-align: center; font: 13px/1.25 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.sx-app:hover { background: #f0f4f9; }
+.sx-app:focus-visible { outline: 2px solid #0b57d0; outline-offset: -2px; background: #f0f4f9; }
+.sx-app.on { background: #d3e3fd; }
+.sx-app-ic { position: relative; display: block; width: 40px; height: 40px; }
+.sx-app-ic svg { display: block; }
+.sx-app-n { position: absolute; top: -6px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  background: #d93025; color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; box-sizing: border-box; }
+.sx-app-name { max-width: 92px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+@media (max-width: 600px) {
+  .sx-apps-panel { position: fixed; top: auto; bottom: 0; left: 0; right: 0; width: auto; max-height: 75vh;
+    border-radius: 24px 24px 0 0; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .sx-apps-close { display: block; }
+  .sx-apps.open::before { content: ""; position: fixed; inset: 0; z-index: 59; background: rgba(0, 0, 0, .32); }
+}

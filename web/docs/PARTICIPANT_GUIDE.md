@@ -46,6 +46,13 @@ SIMEX Mail is your team's mailbox for the exercise. Everything here is **exercis
 - Add a **subject** and your message, attach files if needed, and click **Send**.
 - Drafts are saved automatically every few seconds; find them under **Drafts** and click one to continue.
 
+## Calendar
+- Open **Calendar** from the **grid of nine dots** at the top right (the app drawer, with your mailboxes and this guide). Use it to keep track of the meetings and calls your team arranges.
+- Two calendars, on the left: your **team's calendar**, which everyone in your team sees and can change, and **My calendar**, your own. Tick or untick them to show or hide them.
+- **Create** (or drag across the hours) adds an event: a title, when, how (in person, phone, VTC), where and a description, and which calendar it goes on. Click an event to see, edit or delete it; drag it to move it, or its bottom edge to change how long it lasts.
+- **Day**, **Week**, **Month** and **Schedule** (a list) at the top; **Today** and the arrows move through the days. Times are the scenario's, like your mail.
+- For now an event is on your calendar only: invite people by email as usual.
+
 ## Shortcuts (when you're not typing)
 `c` compose · `/` search · `v` move to · `l` labels · `j` / `k` next / previous · `Enter` open · `r` reply · `a` reply all · `f` forward · `e` archive · `#` delete · `u` back to the list · `Esc` close the compose window.
 

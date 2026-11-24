@@ -315,6 +315,7 @@ def test_role_play_material_stays_out_of_participant_facing_code():
     """Scripts and expected outcomes are control-side: only the role-play modules read them."""
     here = pathlib.Path(roleplay.__file__).parent
     for name in ("views_inbox.py", "views_leader.py", "ai.py", "npc.py", "report.py", "views_ai.py",
-                 "views_report.py", "importer.py", "render.py", "delivery.py", "desk.py", "inbound.py"):
+                 "views_report.py", "importer.py", "render.py", "delivery.py", "desk.py", "inbound.py", "calendar.py",
+                 "views_calendar.py"):
         src = (here / name).read_text()
         assert not re.search(r"\bRolePlay\b|\.script\b|\.outcomes\b|rp_briefing|rp_faq", src), name

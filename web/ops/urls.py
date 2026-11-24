@@ -1,6 +1,7 @@
 from django.urls import include, path
 
 from . import views_ai as a
+from . import views_calendar as cal
 from . import views_excon as x
 from . import views_desk_board as dbx
 from . import views_inbox as p
@@ -31,6 +32,11 @@ mail_patterns = [
     path("help/", p.guide),
     path("push/", p.push_subscribe),
     path("labels/", p.labels_save),
+    # SIMEX Calendar (views_calendar.py): this mailbox's calendar
+    path("calendar/", cal.page),
+    path("calendar/events/", cal.events),
+    path("calendar/save/", cal.save),
+    path("calendar/delete/<int:eid>/", cal.delete),
 ]
 # A team leader's read-only view of their team's inbox, of another team leader's mailbox
 # (/inbox/leaders/<team id>/) or of one of their members' own (/inbox/members/<person id>/):
@@ -41,6 +47,8 @@ team_patterns = [
     path("poll/", p.poll),
     path("file/<int:fid>/", p.mail_file),
     path("help/", p.guide),
+    path("calendar/", cal.page),
+    path("calendar/events/", cal.events),
 ]
 
 urlpatterns = [

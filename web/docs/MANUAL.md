@@ -383,6 +383,27 @@ With many messages coming in, SIMEX AI can suggest a persona's answer to a team'
 - **Who sees it**: the persona desk and ExCon only, as the notes can quote role-play scripts and planned injects. Participants, team leaders, the AI personas and the reports never see suggestions.
 - **The Library** (Injects → Library, ExCon): the documents the participants have or may be given (baseline documents, inject documents, maps), as text, from the knowledge base. In `undac-simex`, run `python3 -I scripts/export_ops.py` (add `--list` to see what goes in and what is left out) and upload `work/ops-library.json.gz` here. It holds only participant-facing documents: never the MEL, expected outcomes, role-player scripts or management files. Baseline documents are marked *Participants have it*; a document whose name starts with a serial (*3-14 MoH health facility status.pdf*) *Released with* that inject or role play, so a team has it once that inject reached it or that role play was played with it (a file attached to an inject counts as given with it, whatever its setting); the rest (the MapAction maps, for instance) *Not given* until you say otherwise. Correct any document's setting on its row; uploading again keeps your settings and updates the text.
 
+### 5.13 SIMEX Calendar and the app drawer
+Teams arrange meetings by email all through the exercise. **SIMEX Calendar** is a calendar app in SIMEX Mail where they can put those meetings. Everyone with a SIMEX Mail login has it: members, team leaders and the persona desk. It opens from the **app drawer**, the grid of nine dots at the top right of SIMEX Mail, next to **?**. The drawer lists the apps of that login:
+- a member: Mail (and My mail), Calendar and Help;
+- a team leader: My mail, the team inbox, Team members, Calendar, the Dashboard, Role plays (if any) and Help;
+- the persona desk: the desk, Calendar, Teams, the Dashboard, Assign and Help;
+- a role player: Role plays and the briefing.
+
+Viewing a team from ExCon, the drawer also has that mailbox's mail and calendar, and **Back to ExCon**. A red number on a tile is unread mail. On a phone the drawer opens as a sheet from the bottom.
+- **Whose calendar.** A calendar belongs to a mailbox, as mail does, so teams never see each other's:
+  - a member sees their team's calendar, shared by everyone in the team like the team inbox, and their own (**My calendar**, with personal mailboxes on), and can add to both;
+  - a team leader adds to their own calendar, and sees the team's calendar and each member's own read-only (ticked on the left to show them);
+  - the persona desk has one calendar per persona, in the persona's colour, and adds events as any of them;
+  - ExCon (and the desk) viewing a team (**View as team**, or `/inbox/as/<team>/calendar/`) see all of that team's calendars, read-only.
+
+  Another team leader's mailbox (**Team leaders** tab) has no calendar.
+- **Views**: **Day**, **Week** (the default on a computer), **Month** and **Schedule** (a list of the next 30 days, the default on a phone), with **Today**, the arrows, a small month on the left to jump to a date, and a red line for now. Keys: `t` today, `n` / `p` next / previous, `d` `w` `m` `a` the views, `c` create.
+- **Adding an event**: **Create**, or drag across the hours on the Day or Week grid (click once for an hour; in Month, click a day). Give it a title, when it starts and ends (or **All day**), how (in person, phone, VTC, other), where, a description, and which of your calendars it goes on. Click an event to see it; **Edit** or **Delete** your own. Drag your own events to move them (onto another day too) and their bottom edge to make them longer or shorter; in Month, drag them to another day.
+- **Times.** Events are kept in real time. With the simulation clock on (3.4), **members see and enter the scenario's date and time only**, as everywhere in SIMEX Mail. Leaders, the desk and ExCon see the real time, with the scenario time beside it (◷). If you change the simulation clock, events keep their real time and their scenario time moves with the clock. With the clock stopped (speed 0), events are placed as if it ran at 1× from where it stopped.
+- **For now an event is on its own calendar only.** Inviting people, teams and personas, with answers and reminders, comes next (`docs/CALENDAR_PLAN.md`).
+- What members do on their calendars (adding, changing, deleting events) shows in each person's activity (People & logins). It isn't counted as inbox management in the reports or on the Dashboard. **Clear mailboxes** also clears those mailboxes' calendars, **Start afresh** clears every calendar, and backups keep them.
+
 ## 6. After the exercise
 In this order:
 1. **Disarm** and wait for the last answers; **Download backup**.
@@ -403,11 +424,11 @@ In this order:
 
 ### 6.2 Clearing mailboxes and starting afresh
 **One team, or all teams, after a test: Team inboxes → Clear mailboxes.** Pick the team (or **All teams**) and the mailboxes, type `CLEAR`:
-- **Every mailbox** deletes everything in the team inbox, the team leader's mailbox and each member's own (received, sent, drafts, labels, and what was done in them), the team's replies on the Replies tab with their AI analysis, the readings of the documents it sent, the persona answers to them, the team's grades and the persona desk's copies of its mail.
-- **Members' own mailboxes only** empties just the members' My mail; the team inbox and its replies stay.
+- **Every mailbox** deletes everything in the team inbox, the team leader's mailbox and each member's own (received, sent, drafts, labels, and what was done in them), the team's replies on the Replies tab with their AI analysis, the readings of the documents it sent, the persona answers to them, the team's grades, the persona desk's copies of its mail and its calendars (5.13).
+- **Members' own mailboxes only** empties just the members' My mail and their own calendars; the team inbox, its calendar and its replies stay.
 - Deliveries stay in the Log, and in the Dashboard's Delivered and Read, unless you tick **Also delete the deliveries to them**.
 
-**Before going live: Settings → Start afresh.** Type `START AFRESH`. For every team it deletes every mailbox (team inboxes, leaders', members' own, the persona desk), replies, persona answers, grades, AI analyses (documents' too), the exercise summary and reports, test runs, notifications, role-play progress (every sitting pending again at its imported time, slips undone) and every delivery in the Log with its read and download figures: the Dashboard, Replies and Log start from zero. Injects, documents, rubrics, personas, people, logins (and login emails), settings and the audit trail stay, and live sending stays armed or disarmed as it was. With **Put injects already sent back on the schedule** (ticked), injects sent, failed or overdue during testing are scheduled again at their send time (those whose time has passed go overdue: send them by hand or change their time). Received email from before the reset is never synced back.
+**Before going live: Settings → Start afresh.** Type `START AFRESH`. For every team it deletes every mailbox (team inboxes, leaders', members' own, the persona desk) and every calendar, replies, persona answers, grades, AI analyses (documents' too), the exercise summary and reports, test runs, notifications, role-play progress (every sitting pending again at its imported time, slips undone) and every delivery in the Log with its read and download figures: the Dashboard, Replies and Log start from zero. Injects, documents, rubrics, personas, people, logins (and login emails), settings and the audit trail stay, and live sending stays armed or disarmed as it was. With **Put injects already sent back on the schedule** (ticked), injects sent, failed or overdue during testing are scheduled again at their send time (those whose time has passed go overdue: send them by hand or change their time). Received email from before the reset is never synced back.
 
 Neither can be undone: download a backup first.
 
