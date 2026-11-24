@@ -13,6 +13,16 @@ def source(request):
     return {"SOURCE_URL": settings.SOURCE_URL}
 
 
+def whatsnew(request):
+    """What's new (ops/whatsnew.py) for the signed-in login, lazily: only pages that show it ask."""
+    user = getattr(request, "user", None)
+    if not user or not user.is_authenticated:
+        return {}
+    from django.utils.functional import SimpleLazyObject
+    from . import whatsnew as wn
+    return {"whatsnew": SimpleLazyObject(lambda: wn.for_user(user) or {})}
+
+
 def status(request):
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated:

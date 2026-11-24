@@ -1,0 +1,7 @@
+{% load ops %}{% if whatsnew.notes %}<section class="wn" data-wn data-wn-new="{{ whatsnew.new }}" data-wn-url="{{ url }}" data-wn-toggle="{{ toggle }}" aria-label="What's new">
+  <div class="wn-head">{% icon "sparkle" 18 %} <b>What's new</b>{% if whatsnew.new %} <span class="wn-count">{{ whatsnew.new }} new</span>{% endif %}</div>
+  {% for e in whatsnew.notes %}<article class="wn-note{% if e.new %} new{% endif %}" data-wn-key="{{ e.key }}">
+    <div class="wn-title"><b>{{ e.title }}</b><small>{{ e.date|date:"j M Y" }}</small></div>
+    <div class="wn-body">{{ e.body|md }}</div>
+  </article>{% endfor %}
+</section>{% endif %}

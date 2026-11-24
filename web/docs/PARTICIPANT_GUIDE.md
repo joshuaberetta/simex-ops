@@ -37,6 +37,7 @@ SIMEX Mail is your team's mailbox for the exercise. Everything here is **exercis
 ## Replying
 - Open the conversation and click **Reply** (to the sender), **Reply all** (everyone on it) or **Forward**, at the bottom or on a message.
 - Write your answer and click **Send**. Attach files with the **paperclip** next to Send (up to the limit shown if too large).
+- **Formatting and pictures:** the bar under your message has **bold**, *italics*, underline, strikethrough, text colour, bulleted and numbered lists, quotes, links and **remove formatting** (or Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+K for a link; ⌘ on a Mac). The **T** button next to Send shows or hides the bar. To put a **picture in the text**, paste it (e.g. a screenshot), drop it on the message, or use the picture button next to the paperclip; big photos are made smaller for you. A picture in the text is part of the message, not an attachment; to send the file itself, use the paperclip.
 - **Pop out** (the arrow at the top right of the reply) moves your reply into a window at the bottom right, so you can scroll through the conversation while you write. Its top bar minimises it, puts it back under the conversation, or saves it to Drafts and closes it.
 
 ## Writing a new message
@@ -56,6 +57,9 @@ SIMEX Mail is your team's mailbox for the exercise. Everything here is **exercis
 - **An invitation you get** has a card above the text, marked **Invitation** in the list: click **Yes**, **Maybe** or **No** (with a note if you like). Your answer goes back to the organiser by mail, and the event is on your calendar (dashed until you answer). You can answer on the calendar too.
 - **Reminders:** with alerts on, you get a notification a few minutes before each event on your calendars, and a message at the bottom of SIMEX Mail if it is open. **Upcoming** at the bottom of the left side shows your next events (click the arrow to fold it). The red number on the Calendar tile counts invitations to answer and events about to start.
 - **Create event** (the calendar icon at the top of a conversation) starts an event from that conversation, with the people in it as guests.
+
+## What's new
+The **bell** at the top lists what is new in SIMEX Mail. It opens by itself once when there is something new; after that it stays closed until you click it.
 
 ## Shortcuts (when you're not typing)
 `c` compose · `/` search · `v` move to · `l` labels · `j` / `k` next / previous · `Enter` open · `r` reply · `a` reply all · `f` forward · `e` archive · `#` delete · `u` back to the list · `Esc` close the compose window (or a popped-out reply).

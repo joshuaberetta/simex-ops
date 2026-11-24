@@ -1,0 +1,22 @@
+/* What's new (ops/whatsnew.py, templates/ops/_whatsnew.html): in every notifications drawer */
+.wn { border-bottom: 1px solid #e3e3e3; max-height: 46vh; overflow-y: auto; background: #fbfcff; text-align: left; flex: none; }
+.wn-head { display: flex; align-items: center; gap: 6px; padding: 10px 16px 4px; font-size: 13px; color: #0b57d0; }
+.wn-head svg { fill: currentColor; }
+.wn-count { margin-left: auto; font-size: 11px; font-weight: 600; color: #fff; background: #0b57d0; border-radius: 9px; padding: 1px 7px; }
+.wn-note { padding: 8px 16px 10px; font-size: 13px; line-height: 1.45; color: #1f1f1f; border-left: 3px solid transparent; }
+.wn-note + .wn-note { border-top: 1px solid #eef0f3; }
+.wn-note.new { border-left-color: #0b57d0; background: #eef3fd; }
+.wn-title { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.wn-title small { color: #5f6368; white-space: nowrap; }
+.wn-body p { margin: 4px 0 0; }
+.wn-body ul { margin: 4px 0 0; padding-left: 18px; }
+.wn-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: #0b57d0; box-shadow: 0 0 0 2px #fff; }
+.wn-dot[hidden] { display: none; }
+/* ExCon's panel and the role players' bell */
+.notices .wn { margin: 0 -2px 8px; border: 1px solid #e3e3e3; border-radius: 8px; max-height: 40vh; }
+.rp-wn { position: relative; }
+.rp-wn-panel { position: absolute; right: 0; top: 40px; width: 360px; max-width: calc(100vw - 16px); background: #fff; color: #1f1f1f;
+  border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.25); z-index: 50; overflow: hidden; }
+.rp-wn-panel .wn { max-height: 70vh; border: 0; }
+.nt-toggle, .rp-bell { position: relative; }
+[data-wn-panel] .wn { max-height: calc(70vh - 50px); border-bottom: 0; }

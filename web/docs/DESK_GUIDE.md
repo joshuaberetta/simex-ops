@@ -28,6 +28,7 @@ How the desk is keeping up, refreshed every minute: what needs attention and how
 
 ## Answering a team
 - Open the conversation and click **Reply**. **From** is already the persona the team wrote to; **To** is that team. Your answer lands in the team's conversation, in SIMEX Mail or by email, like any other answer from that persona. It is also recorded as the persona's answer on ExCon's Replies tab.
+- **Formatting and pictures:** the bar under your answer has **bold**, *italics*, underline, strikethrough, text colour, bulleted and numbered lists, quotes, links and **remove formatting** (or Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+K for a link; ⌘ on a Mac). The **T** button next to Send shows or hides the bar. To put a **picture in the text**, paste it (e.g. a screenshot), drop it on the message, or use the picture button next to the paperclip; big photos are made smaller for you. A picture in the text is part of the message, not an attachment; to send the file itself, use the paperclip.
 - You can change **From** to have another persona write in the same conversation (e.g. the press picking up on a government message). The team sees it in the same conversation.
 - **Suggest a reply** (under the bar at the top of a conversation): SIMEX AI looks up the documents, injects and role plays the team has had so far and suggests the persona's answer, with what it rests on, what the team got wrong, what isn't in the package and what is still to come for this team (so you don't give it away early). Add what the answer should do if you like (*keep it short*), wait about a minute, then **Reply with this** and read it before you send it. The notes can quote role-play scripts: they are for the desk, never paste them to a team.
 - If an AI persona was going to answer that conversation, your answer replaces its answer: its queued answer is cancelled.
@@ -56,7 +57,7 @@ Tick several rows in the Inbox for **I'll take these**, **Assign to…**, **No r
 
 ## Your conversations and your notifications
 - On the left, **Assigned to me** has the conversations you took or were given, with what needs attention first; its number is how many of them need attention. **Following** has the ones you answered in, set a follow-up on or follow, but don't have.
-- The **bell** at the top (next to ?) is yours alone. It tells you when:
+- The **bell** at the top (next to ?) is yours alone. At its top, **What's new** in SIMEX Mail (the bell opens by itself once when there is something new). It tells you when:
   - a conversation is given to you, or someone takes over or reassigns one you had;
   - one of your follow-ups falls due;
   - a team writes again in a conversation you have or follow;

@@ -937,6 +937,17 @@ class Notice(models.Model):
         ordering = ["-id"]
 
 
+class WhatsNewSeen(models.Model):
+    """A What's new note (ops/whatsnew.py ENTRIES key) a login has seen: the drawer no longer
+    opens by itself for it."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    key = models.CharField(max_length=80)
+    at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "key"], name="whatsnew_seen_once")]
+
+
 class NoticeState(models.Model):
     """What one ExCon user has done with a Notice."""
     notice = models.ForeignKey(Notice, on_delete=models.CASCADE, related_name="states")

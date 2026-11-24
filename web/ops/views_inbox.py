@@ -1941,6 +1941,15 @@ def mail_file(request, fid, as_team=None, box="", pid=None):
     return resp
 
 
+@login_required_any
+@require_POST
+def whatsnew_seen(request):
+    """What's new (ops/whatsnew.py): the notes this login has now seen (the drawer opened)."""
+    from . import whatsnew
+    whatsnew.mark_seen(request.user, request.POST.getlist("key"))
+    return JsonResponse({"ok": True})
+
+
 # --- email webhook -----------------------------------------------------------------------------------
 
 @csrf_exempt

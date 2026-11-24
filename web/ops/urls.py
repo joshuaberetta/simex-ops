@@ -65,6 +65,8 @@ urlpatterns = [
     path("inbox/manifest.webmanifest", p.manifest),
     path("inbox/go/<str:token>/", p.signin_link),
     path("inbox/setup/", p.setup),
+    path("inbox/whatsnew/seen/", p.whatsnew_seen),  # What's new, on the SIMEX Mail host
+    path("whatsnew/seen/", p.whatsnew_seen),  # ... and ExCon's
     path("inbox/as/<int:as_team>/leader/", include(mail_patterns), {"box": "leader"}),
     path("inbox/as/<int:as_team>/member/<int:pid>/", include(mail_patterns), {"box": "member"}),
     path("inbox/as/<int:as_team>/", include(mail_patterns)),

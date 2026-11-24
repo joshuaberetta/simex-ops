@@ -6,6 +6,7 @@
 <title>{% block title %}My role plays{% endblock %} · SIMEX</title>
 <link rel="stylesheet" href="{% static 'ops/rp.css' %}">
 <link rel="stylesheet" href="{% static 'ops/apps.css' %}">
+<link rel="stylesheet" href="{% static 'ops/whatsnew.css' %}">
 <link rel="manifest" href="/inbox/manifest.webmanifest">
 <link rel="apple-touch-icon" href="{% static 'ops/icon-180.png' %}">
 <meta name="apple-mobile-web-app-title" content="SIMEX Mail">
@@ -17,6 +18,8 @@
   <a href="/inbox/rp/" class="rp-brand">SIMEX <b>Role play</b></a>
   <span class="rp-me">{{ me.name }}</span>
   {% include "ops/mail/_apps.html" %}
+  {% if whatsnew.notes %}<span class="rp-wn" data-wn-bell><button type="button" class="rp-bell" data-wn-toggle title="Notifications: what's new" aria-label="Notifications" aria-expanded="false">✨{% if whatsnew.new %}<span class="wn-dot" data-wn-dot></span>{% endif %}</button>
+    <div class="rp-wn-panel" data-wn-panel hidden>{% include "ops/_whatsnew.html" with url="/inbox/whatsnew/seen/" toggle="[data-wn-toggle]" %}</div></span>{% endif %}
   <button type="button" class="rp-bell" data-alerts title="Alerts on this device" aria-label="Alerts">🔔</button>
 </header>
 <nav class="rp-tabs">
@@ -41,5 +44,6 @@
 </footer>
 <script src="{% static 'ops/rp.js' %}" defer></script>
 <script src="{% static 'ops/apps.js' %}" defer></script>
+<script src="{% static 'ops/whatsnew.js' %}" defer></script>
 </body>
 </html>
