@@ -295,6 +295,11 @@ def fetch(response_id):
            + (["status"] if r.status == "ignored" else []))
     if r.fetched:
         notices.reply(r)  # now with its opening words
+        from . import calendar
+        try:  # a guest's iMIP answer to one of our invitations (SIMEX Calendar)
+            calendar.email_reply(r)
+        except Exception:
+            log.exception("calendar reply in received email %s failed", r.pk)
         from . import desk
         desk.on_response(r)
 

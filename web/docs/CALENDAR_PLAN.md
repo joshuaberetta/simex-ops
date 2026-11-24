@@ -396,7 +396,7 @@ Start afresh removes them.
 6. **ExCon and extras.** *Built* (Team inboxes → Meetings, `/meetings/`, with Find meetings in the mail at `/meetings/find/`; Make a role play through `roleplay.from_event`; `report.calendar_figures`; the Network checked; SIMEX AI's "this email proposes a meeting" for the desk left out: Meetings in the mail covers it). The Meetings view and export, "Make a role play", reports, and
    (optional, desk only) SIMEX AI's "this email proposes a meeting" suggestion, run in the AI
    loop.
-7. **The email channel.** `.ics` (METHOD REQUEST / CANCEL) attached to invitation emails, and
+7. **The email channel.** *Built* (`ops/ics.py`; the desk's and Compose's invitations by email carry the .ics; iMIP REPLYs set the answers in `inbound.fetch`). The teams only reach SIMEX Calendar in SIMEX Mail, so in the email channel only the desk and ExCon invite. All the steps of this plan are built; left out on purpose: SIMEX AI's "this email proposes a meeting" suggestion on the desk (Meetings in the mail covers the need). `.ics` (METHOD REQUEST / CANCEL) attached to invitation emails, and
    iMIP REPLY parsing in `inbound`.
 
 Each step is deployable alone, and the tests pass at each.

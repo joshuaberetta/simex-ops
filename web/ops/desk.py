@@ -29,7 +29,7 @@ from django.utils import timezone
 
 from . import conf, inbound, push, render
 from .addresses import member_name
-from .models import Mail, MailAttachment, MessageAttachment, NpcReply, Person, Response, Sender, Team, audit
+from .models import Mail, MailAttachment, Message, MessageAttachment, NpcReply, Person, Response, Sender, Team, audit
 
 log = logging.getLogger("simex.desk")
 
@@ -224,11 +224,14 @@ def skip_ai(response, sender, who):
             .update(status="skipped", note=f"Answered by {who} on the persona desk.", updated_at=timezone.now()))
 
 
-def send(person, user, from_key, entries, subject, body, files=(), docs=(), parent=None):
+def send(person, user, from_key, entries, subject, body, files=(), docs=(), parent=None, idem=None, extra_files=None):
     """Write as a persona (from_key "p:<username>") to the teams in entries (address-book
     entries), one Message each: in a conversation (parent, a desk Mail), the team's message it
     answers gets its answer, else (or as another persona) a Message of kind desk in the same
     conversation. files: (filename, content type, data); docs: inject Attachments (forwarded).
+    idem(team, member): a deterministic idempotency key per recipient (SIMEX Calendar: per event,
+    change and recipient; one already sent is not sent again); extra_files(team, member, channel):
+    more files for that recipient (an invitation's .ics by email).
     Returns (messages, errors); raises DeskError when nothing could go."""
     s = sender_for_key(from_key)
     if not s:
@@ -256,15 +259,20 @@ def send(person, user, from_key, entries, subject, body, files=(), docs=(), pare
     actor = person.user if person and person.user_id else get_user_model().objects.filter(username=user).first()
     token = ACTOR.set(actor)  # those on the conversation hear of it, but not the sender (_told_out)
     try:
-        return _send(s, targets, subject, body, files, docs, parent, person, user, who)
+        return _send(s, targets, subject, body, files, docs, parent, person, user, who, idem, extra_files)
     finally:
         ACTOR.reset(token)
 
 
-def _send(s, targets, subject, body, files, docs, parent, person, user, who):
+def _send(s, targets, subject, body, files, docs, parent, person, user, who, idem=None, extra_files=None):
     msgs, errors = [], []
     from . import delivery
     for t, member in targets:
+        key = idem(t, member) if idem else None
+        done = Message.objects.filter(idem_key=key).first() if key else None
+        if done is not None:  # sent already (the same change to the same recipient): never twice
+            msgs.append(done)
+            continue
         label = _name(member, t)
         ctx = render.team_ctx(t)
         local = render.fill(s.local_part, ctx).lower()
@@ -273,13 +281,16 @@ def _send(s, targets, subject, body, files, docs, parent, person, user, who):
             response = None  # another member's message (or a leader's, never a team's): written to them afresh
         if response is not None and (response.persona or "") == local and (response.channel == "email" or response.team_id):
             from . import calendar
-            m = delivery.answer(response, body, user=user, files=files, attachments=docs, author=person,
-                                subject=subject if calendar.SENDING.get() else None)  # an invitation's answer
+            more = list(extra_files(t, member, response.channel)) if extra_files else []
+            m = delivery.answer(response, body, user=user, files=list(files) + more, attachments=docs, author=person,
+                                subject=subject if calendar.SENDING.get() else None,  # an invitation's answer
+                                idem_key=key)
         elif not conf.flag("live_armed") and not t.is_test:
             errors.append(f"{label}: live sending is not armed (ExCon, Settings).")
             continue
         else:
-            m, err = _new(s, local, ctx, t, subject, body, files, docs, parent, response, person, user, member)
+            m, err = _new(s, local, ctx, t, subject, body, files, docs, parent, response, person, user, member,
+                          idem_key=key, extra_files=extra_files)
             if err:
                 errors.append(f"{label}: {err}")
                 continue
@@ -300,7 +311,8 @@ def _name(person, team):
     return f"{team.name} leader ({person.name})" if person.is_leader else member_name(person)
 
 
-def _new(s, local, ctx, team, subject, body, files, docs, parent, response, person, user, member=None):
+def _new(s, local, ctx, team, subject, body, files, docs, parent, response, person, user, member=None, idem_key=None,
+         extra_files=None):
     """A new message from the persona to a team or one of its members (kind desk), delivered
     now. In-app, a member's goes to their own mailbox only (personal mailboxes; else to the team
     inbox, for them). Returns (Message, error)."""
@@ -333,7 +345,8 @@ def _new(s, local, ctx, team, subject, body, files, docs, parent, response, pers
         d = render.Draft(**common, from_addr=f'"{name}" <{local}@{settings.MAIL_DOMAIN}>', reply_to=None, to=to,
                          cc=[], bcc=render.split_addresses(cfg.get("excon_bcc")), channel="email")
         thread = parent.thread if parent is not None else ""
-    m = delivery.new_message(None, d, "desk", f"desk-{uuid.uuid4().hex}")
+    files = list(files) + (list(extra_files(team, member, channel)) if extra_files else [])
+    m = delivery.new_message(None, d, "desk", idem_key or f"desk-{uuid.uuid4().hex}")
     m.author, m.thread = person, thread
     if channel == "email" and response is not None and response.message_id_header:
         m.extra_headers = {"In-Reply-To": response.message_id_header, "References": response.message_id_header}

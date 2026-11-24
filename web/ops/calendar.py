@@ -623,8 +623,14 @@ def _send(v, lay, entries, ev, kind, request, subject=None, body=None, from_key=
     user = request.user.get_username() if request else ""
     with _sending(ev, kind):
         if w.desk:
+            from_key = from_key or lay["org_key"]
+            if kind == "reply":  # each answer its own: the same guest may answer again
+                idem = lambda t, m: f"cal-{ev.id}-reply-{from_key[2:]}-{int(timezone.now().timestamp() * 1000)}-{_who(t, m)}"
+            else:  # once per event, change and recipient
+                idem = lambda t, m: f"cal-{ev.id}-{ev.sequence}-{kind}-{_who(t, m)}"
             try:
-                _, errors = desk.send(w.person, user, from_key or lay["org_key"], entries, subject, body, parent=parent)
+                _, errors = desk.send(w.person, user, from_key, entries, subject, body, parent=parent, idem=idem,
+                                      extra_files=lambda t, m, channel: _ics_files(ev, kind, from_key, t, m, channel))
             except desk.DeskError as e:
                 raise CalendarError(str(e))
             return errors
@@ -641,6 +647,94 @@ def _send(v, lay, entries, ev, kind, request, subject=None, body=None, from_key=
     if personas and kind in ("request", "update", "cancel"):
         _tell_desk(ev, kind, personas, w)
     return []
+
+
+def _who(team, member):
+    return f"m{member.id}" if member else f"t{team.id}"
+
+
+PARTSTAT = {"accepted": "ACCEPTED", "tentative": "TENTATIVE", "declined": "DECLINED", "needs_action": "NEEDS-ACTION"}
+
+
+def _emails_of(row):
+    """The email-channel addresses of a guest row (a team's, else its members'; a person's own)."""
+    from .render import PLACEHOLDER_DOMAIN
+    if row.persona or row.team_id is None:
+        return []
+    if row.person_id:
+        out = [row.person.email] if row.person and row.person.email else []
+    else:
+        out = [row.team.email] if row.team.email else [p.email for p in
+                                                        Person.objects.participants().filter(team=row.team, active=True)
+                                                        if p.email]
+    return [a for a in out if a and not PLACEHOLDER_DOMAIN.search(a)]
+
+
+def _ics_files(ev, kind, from_key, team, member, channel):
+    """An invitation going by email (the desk's channel for that recipient) carries the event as a
+    text/calendar part (ops/ics.py): REQUEST (a change: REQUEST with the next SEQUENCE) or CANCEL,
+    in real UTC. In SIMEX Mail, none: the card shows it."""
+    if channel != "email" or kind not in ("request", "update", "cancel"):
+        return []
+    from django.conf import settings
+    from . import ics
+    method = "CANCEL" if kind == "cancel" else "REQUEST"
+    local = from_key[2:]
+    s, ctx = rnd.sender_by_local(local)
+    organiser = ((rnd.fill(s.display_name, ctx) if s else "") or local, f"{local}@{settings.MAIL_DOMAIN}")
+    attendees = []
+    for a in ev.attendees.select_related("person", "team").exclude(role="organiser"):
+        for email in _emails_of(a):
+            attendees.append((a.name or email, email, PARTSTAT.get(a.response, "NEEDS-ACTION")))
+    data = ics.build(ev, method, organiser, attendees, description=_body(ev, kind))
+    return [("invite.ics", f"text/calendar; method={method}", data)]
+
+
+def email_reply(r):
+    """A received email (inbound.fetch) with a calendar part answering one of our invitations
+    (iMIP METHOD:REPLY, ops/ics.py): each known guest's answer is set on their row, as an answer
+    on the calendar (no mail back). It stays a Response, but never guessed onto an inject.
+    Returns the number of answers set."""
+    from . import ics
+    from .models import audit
+    parts = []
+    for a in r.attachments.all()[:10]:
+        if a.data and (a.filename.lower().endswith(".ics") or "calendar" in (a.content_type or "").lower()):
+            parts.append(bytes(a.data))
+    if r.text and "BEGIN:VCALENDAR" in r.text.upper():
+        parts.append(r.text)
+    n = 0
+    for p in parts[:5]:
+        rep = ics.parse_reply(p)
+        ev = CalendarEvent.objects.filter(uid=ics.event_uid(rep["uid"])).first() if rep else None
+        if not ev or ev.status != "confirmed":
+            continue
+        for email, answer in rep["answers"]:
+            row, who = _row_for_email(ev, email)
+            if row is None:
+                continue
+            row.response, row.responded_at, row.responded_by = answer, timezone.now(), who
+            row.save(update_fields=["response", "responded_at", "responded_by"])
+            audit("calendar_email_reply", f"{ev.uid}: {email} {answer}")
+            n += 1
+        if r.match == "guess":
+            r.message, r.inject_id, r.match = None, None, "none"
+            r.save(update_fields=["message", "inject", "match"])
+    return n
+
+
+def _row_for_email(ev, email):
+    """(the guest row an email address answers for, the Person) or (None, None)."""
+    rows = list(ev.attendees.exclude(role="organiser").filter(team__isnull=False))
+    p = (Person.objects.filter(Q(email__iexact=email) | Q(personal_email__iexact=email), active=True, team__isnull=False)
+         .first())
+    if p:
+        mine = next((a for a in rows if a.team_id == p.team_id and a.owner_id == p.id), None)
+        team = next((a for a in rows if a.team_id == p.team_id and a.owner_id is None), None)
+        return (mine or team), p
+    t = Team.objects.filter(email__iexact=email).first()
+    row = next((a for a in rows if t and a.team_id == t.id and a.owner_id is None), None)
+    return row, None
 
 
 def _tell_desk(ev, kind, personas, w):
@@ -684,8 +778,6 @@ def save(v, data, eid=None, request=None):
                 raise CalendarError("An event with guests stays on the calendar it was made on.")
             for k, val in fields.items():
                 setattr(ev, k, val)
-            if timing:
-                ev.sequence += 1
             if moved:  # to another of their calendars
                 ev.team, ev.owner, ev.organiser_key, ev.organiser_name = lay["team"], lay["owner"], lay["org_key"], lay["org_name"]
             ev.save()
@@ -730,6 +822,9 @@ def save(v, data, eid=None, request=None):
                 added.append((e, CalendarAttendee.objects.create(
                     event=ev, key=k, team=box["team"], owner=box["owner"], persona=box["persona"], person=box["person"],
                     name=e["name"][:200], addr=e["addr"][:320], role="required")))
+        if eid and (changed or added or removed):  # what goes out now is a new SEQUENCE (iCalendar)
+            ev.sequence += 1
+            ev.save(update_fields=["sequence", "updated_at"])
         from .views_inbox import _resolve, address_book
         book = address_book(w)
         ent = lambda rows: _resolve([a.key for a in rows], book, w)

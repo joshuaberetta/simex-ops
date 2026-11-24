@@ -143,7 +143,9 @@ def payload(msg, attachments, headers=None):
     if msg.reply_to:
         p["reply_to"] = msg.reply_to
     if attachments:
-        p["attachments"] = [{"filename": a.filename, "content": base64.b64encode(bytes(a.data)).decode()}
+        p["attachments"] = [{"filename": a.filename, "content": base64.b64encode(bytes(a.data)).decode(),
+                             # an invitation's calendar part (SIMEX Calendar, ops/ics.py): mail clients read its method
+                             **({"content_type": a.content_type} if (getattr(a, "content_type", "") or "").startswith("text/calendar") else {})}
                             for a in attachments]
     return p
 
