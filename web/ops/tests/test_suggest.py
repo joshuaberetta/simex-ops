@@ -250,7 +250,7 @@ def test_suggestions_stay_out_of_participant_facing_code():
     import re
     here = pathlib.Path(suggest.__file__).parent
     for name in ("views_inbox.py", "views_leader.py", "ai.py", "npc.py", "report.py", "views_ai.py", "views_report.py",
-                 "render.py", "delivery.py", "desk.py", "inbound.py", "desk_ai.py"):
+                 "render.py", "delivery.py", "desk.py", "inbound.py", "desk_ai.py", "suggest_leader.py"):
         src = (here / name).read_text()
         assert not re.search(r"\bimport suggest\b|\bsuggest\.|ReplySuggestion|views_suggest", src), name
 
@@ -329,3 +329,85 @@ def test_excon_adds_guidance_files_that_count_as_background(excon):
     hb.refresh_from_db()
     assert hb.title == "WHO EMT Handbook"
     assert excon.get("/library/").status_code == 200
+
+
+class LeaderLoop(Loop):
+    """A fake model for a team leader: searches, tries to read a document the team hasn't got,
+    then submits citing one it has and one it hasn't."""
+
+    def create(self, **kw):
+        self.calls.append(json.loads(json.dumps(kw, default=str)))
+        n = len(self.calls)
+        usage = NS(input_tokens=1000, output_tokens=100, cache_read_input_tokens=0, cache_creation_input_tokens=0)
+        if n == 1:
+            content = [NS(type="tool_use", id="t1", name="search", input={"query": "Zorba flooded"})]
+        elif n == 2:
+            content = [NS(type="tool_use", id="t2", name="read", input={"ref": "doc:d2"}),
+                       NS(type="tool_use", id="t3", name="read", input={"ref": "inject:3-13"})]
+        else:
+            content = [NS(type="tool_use", id="t4", name="submit", input={
+                "asks": "Where is Zorba?", "body": "Amina, Zorba is in Plaida South. Go.",
+                "facts": [{"fact": "Zorba is in Plaida South", "source": "doc:d1"},
+                          {"fact": "a map", "source": "doc:d3"}],
+                "questions": ["Send someone today?"]})]
+        return NS(model=kw["model"], stop_reason="tool_use", stop_details=None, usage=usage, content=content)
+
+
+def test_team_leader_gets_a_suggestion_from_what_they_may_see(excon):
+    from ops import suggest_leader
+    from ops.models import Inject, LeaderSuggestion, Sender
+    from ops.tests.test_leaders import setup_exercise
+    setup_exercise(excon)
+    docs = [DOCS[0], dict(DOCS[1], serial="3-13"), DOCS[2],
+            {"key": "g1", "path": "x", "title": "EMT handbook", "release": "ref", "text": "Zorba-style EMTCC guidance."}]
+    kb.apply(kb.read_bundle(bundle(docs)))
+    Inject.objects.filter(mel_id="3-13").update(body="PLANNED SECRET ARTICLE")
+    Sender.objects.filter(team_leader=True).update(notes="PERSONA NOTE SECRET")
+    play = RolePlay.objects.create(key="2-10", serial="2-10", title="Zorba visit", script="RP SCRIPT SECRET", outcomes="RP OUTCOME")
+    RolePlaySlot.objects.create(play=play, start=timezone.now() - timedelta(minutes=5), minutes=10)
+    deliver_now("1-15")
+    ta = Team.objects.get(code="a")
+    la, pa, lb = leader("a"), participant("a", "Amina"), leader("b")
+    team_mail = Mail.objects.get(owner=None, team=ta)
+    pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: Update", "body": "Where is Zorba?", "in_reply_to": team_mail.id})
+    got = Mail.objects.get(owner=la.person, folder="inbox")
+    page = la.get(f"/inbox/t/{got.thread}/").content.decode()
+    assert "data-suggest" not in page  # AI off
+    c = LeaderLoop()
+    ai.set_client(c)
+    conf.put("ai_enabled", "1")
+    suggest_leader.RUN_INLINE = True
+    try:
+        page = la.get(f"/inbox/t/{got.thread}/").content.decode()
+        assert 'data-url="/inbox/leader/suggest/"' in page and 'data-mode="leader"' in page
+        assert "data-suggest" not in pa.get(f"/inbox/t/{got.thread}/").content.decode()
+        j = la.post("/inbox/leader/suggest/", {"thread": got.thread, "prompt": "be brief"}, headers=FETCH).json()["suggestion"]
+    finally:
+        suggest_leader.RUN_INLINE = False
+    s = LeaderSuggestion.objects.get()
+    assert j["status"] == "done" and j["mail"] == got.id and s.steps == 3 and s.team == ta
+    assert set(s.body) == {"asks", "body", "facts", "questions", "warnings"}  # no desk notes
+    assert [f["state"] for f in s.body["facts"]] == ["known", "not_given"] and len(s.body["warnings"]) == 1
+    sent = json.dumps(c.calls)
+    assert "Where is Zorba?" in sent and "be brief" in sent and "Hello Team A" in sent
+    assert "Plaida South" in sent and "EMTCC guidance" in sent and "background guidance" in sent
+    for secret in ("PLANNED SECRET", "PERSONA NOTE", "RP SCRIPT", "RP OUTCOME", "homes flooded", "Reference map"):
+        assert secret not in sent, secret
+    # only that leader sees it; nobody else may ask
+    assert la.get(f"/inbox/leader/suggest/?thread={got.thread}").json()["suggestion"]["id"] == s.id
+    assert lb.get(f"/inbox/leader/suggest/{s.id}/").status_code == 404
+    assert lb.get(f"/inbox/leader/suggest/?thread={got.thread}").json()["suggestion"] is None
+    assert lb.post("/inbox/leader/suggest/", {"thread": got.thread}).status_code == 400
+    assert pa.post("/inbox/leader/suggest/", {"thread": got.thread}).status_code == 403
+    assert desk_client().get(f"/inbox/leader/suggest/?thread={got.thread}").status_code == 403
+    conf.put("tl_suggest", "0")
+    assert la.post("/inbox/leader/suggest/", {"thread": got.thread}).status_code == 400
+
+
+def test_leader_suggestions_read_nothing_control_side():
+    import pathlib
+    import re
+    src = (pathlib.Path(suggest.__file__).parent / "suggest_leader.py").read_text()
+    code = src.split('"""', 2)[2]  # past the module's docstring
+    assert not re.search(r"\bRolePlay\b|\.script\b|\.outcomes\b|\.notes\b|NpcProfile|ReplySuggestion|\bplanned\b"
+                         r"|ReplyAnalysis|Grade|\bimport suggest\b|\bsuggest\.|roleplay|rp_briefing|rp_faq", code)

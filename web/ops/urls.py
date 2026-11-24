@@ -62,6 +62,8 @@ urlpatterns = [
     path("inbox/dashboard/", lead.dashboard),
     path("inbox/members/", lead.members),
     path("inbox/personas/", lead.npcs),
+    path("inbox/leader/suggest/", lead.suggestion),
+    path("inbox/leader/suggest/<int:sid>/", lead.suggestion_get),
     path("inbox/members/<int:pid>/", include(team_patterns), {"box": "member"}),
     path("inbox/me/", include(mail_patterns), {"box": "me"}),
     path("inbox/desk/teams/", p.desk_teams),

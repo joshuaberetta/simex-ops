@@ -1106,6 +1106,28 @@ class KbDocument(models.Model):
         return self.title
 
 
+class LeaderSuggestion(models.Model):
+    """Claude's suggested answer for a team leader to a message in their own mailbox from their
+    team or a member, written as the team leader persona (ops/suggest_leader.py). Unlike
+    ReplySuggestion it is built from what the leader may see only (the team's mail, the injects
+    delivered to the team, the documents the team has, background guidance), so it holds no
+    control-side notes: the answer, what it asks, the sources and questions. Never sent."""
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="leader_suggestions")
+    leader = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="leader_suggestions")
+    thread = models.CharField(max_length=40)  # the conversation in the leader's own mailbox
+    mail = models.ForeignKey("Mail", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")  # what it answers
+    prompt = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=10, default="running")  # running | done | failed
+    model = models.CharField(max_length=120, default="")
+    body = models.JSONField(default=dict)
+    error = models.TextField(blank=True, null=True)
+    steps = models.IntegerField(default=0)  # model calls
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-id"]
+
+
 class ReplySuggestion(models.Model):
     """Claude's suggested answer to a team's message to a persona, for the persona desk or ExCon:
     an answer the team may see and notes for the desk (sources, what the team has and hasn't

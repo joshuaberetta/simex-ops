@@ -39,7 +39,7 @@ from django.utils.http import content_disposition_header
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import addresses, conf, delivery, desk, desk_ai, inbound, push, render as rnd, signin, simclock
+from . import addresses, conf, delivery, desk, desk_ai, inbound, push, render as rnd, signin, simclock, suggest_leader
 from .access import desk_of, is_excon, leader_of, login_required_any, participant_of, rp_of
 from .models import (Mail, MailAction, MailAttachment, MailLabel, MessageAttachment, Person, PushSubscription, Response,
                      Sender, Team, ThreadLabel, audit)
@@ -1039,10 +1039,16 @@ def thread_view(request, v, thread):
         desk_state=desk.states([thread], v.user).get(thread) if v.desk else None,
         desk_conv=desk.conversation(thread) if v.desk else None, desk_ai=v.desk and desk_ai.enabled(),
         desk_watching=v.desk and desk.watching(thread, v.user),
+        leader_suggest=v.leader_box and can_reply and suggest_leader.enabled()
+        and bool({m.author_id for m in mails if m.folder == "inbox"} & _member_ids(v.team)),
         next_waiting=_next_waiting(rows, thread) if v.desk else None,
         in_inbox=any(m.folder == "inbox" and not m.archived for m in mails), starred=any(m.starred for m in mails),
         thread_labels=[_label_dict(tl.label) for tl in ThreadLabel.objects.filter(label__in=v.labels(), thread=thread)
                        .select_related("label").order_by("label__name")]))
+
+
+def _member_ids(team):
+    return set(team_members(team).values_list("id", flat=True))
 
 
 def _next_waiting(rows, thread):

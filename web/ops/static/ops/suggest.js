@@ -1,4 +1,5 @@
-// Suggest a reply (ops/suggest.py): the persona desk's conversation page and ExCon's reply page.
+// Suggest a reply (ops/suggest.py): the persona desk's conversation page and ExCon's reply page;
+// and a team leader's own mailbox (ops/suggest_leader.py: the answer, sources and questions only).
 // The panel asks for Claude's suggested answer, polls until it is written, and shows the answer
 // (to use as the reply) with the notes for the desk: sources, what not to get ahead of.
 (() => {
@@ -20,7 +21,7 @@
 
   const useIt = (s) => {
     const body = s.body.body || "";
-    if (panel.dataset.mode === "desk" && window.simexReplyWith) { window.simexReplyWith(String(s.mail || ""), body); return; }
+    if (panel.dataset.mode !== "excon" && window.simexReplyWith) { window.simexReplyWith(String(s.mail || ""), body); return; }
     const ta = document.querySelector("#answer textarea[name=body]");
     if (ta) {
       ta.value = body; ta.focus(); ta.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -45,7 +46,7 @@
     const ans = el("div", "sg-answer");
     ans.append(el("pre", "sg-body", b.body || ""));
     const acts = el("div", "sg-acts");
-    const use = el("button", "sg-btn primary", panel.dataset.mode === "desk" ? "Reply with this" : "Put it in the answer");
+    const use = el("button", "sg-btn primary", panel.dataset.mode === "excon" ? "Put it in the answer" : "Reply with this");
     use.type = "button"; use.onclick = () => useIt(s);
     const copy = el("button", "sg-btn", "Copy"); copy.type = "button";
     copy.onclick = async () => { try { await navigator.clipboard.writeText(b.body || ""); copy.textContent = "Copied"; } catch (e) { copy.textContent = "Copy failed"; } };

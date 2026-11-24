@@ -1,9 +1,9 @@
-{% load static %}{% comment %}Suggest a reply (views_suggest, suggest.js): url, thread or response, mode desk | excon.{% endcomment %}
+{% load static %}{% comment %}Suggest a reply (views_suggest, suggest.js): url, thread or response, mode desk | excon | leader (suggest_leader, views_leader).{% endcomment %}
 <link rel="stylesheet" href="{% static 'ops/suggest.css' %}">
 <div class="sg" data-suggest data-url="{{ url }}" data-mode="{{ mode }}"{% if thread %} data-thread="{{ thread }}"{% else %} data-response="{{ response }}"{% endif %}>
   <div class="sg-head"><b>Suggest a reply</b>
     <input data-sg-prompt maxlength="2000" placeholder="What the answer should do (optional), e.g. keep it short, say no" aria-label="What the answer should do">
-    <button type="button" class="sg-btn primary" data-sg-go title="SIMEX AI looks up the documents, injects and role plays this team has had so far, and drafts the persona's answer. Nothing is sent.">Suggest a reply</button>
+    <button type="button" class="sg-btn primary" data-sg-go title="{% if mode == 'leader' %}SIMEX AI reads this conversation, your team's mail and the injects and documents it has had, and drafts your answer. Nothing is sent.{% else %}SIMEX AI looks up the documents, injects and role plays this team has had so far, and drafts the persona's answer. Nothing is sent.{% endif %}">Suggest a reply</button>
   </div>
   <div data-sg-out></div>
 </div>

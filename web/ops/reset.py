@@ -6,7 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from . import conf
-from .models import (AiGrade, AiReport, DeskConversation, DeskNotice, DeskWatch, DocumentAnalysis, ExerciseReport, Grade, Inject, Mail, MailAction, MailLabel, Message, Notice,
+from .models import (AiGrade, LeaderSuggestion, AiReport, DeskConversation, DeskNotice, DeskWatch, DocumentAnalysis, ExerciseReport, Grade, Inject, Mail, MailAction, MailLabel, Message, Notice,
                      Person, Response, TestRun)
 
 SCOPES = {"all": "Every mailbox: the team inbox, the leader's and each member's own",
@@ -45,6 +45,7 @@ def clear_team(team, scope="all", deliveries=False):
             reps.delete()
             n["mails"] = Mail.objects.filter(team=team).count()
             Mail.objects.filter(team=team).delete()
+            LeaderSuggestion.objects.filter(team=team).delete()
             Mail.objects.filter(team=None, desk_team=team).delete()  # the persona desk's copies of its mail
             MailLabel.objects.filter(team=team).delete()
             MailAction.objects.filter(team=team).delete()
@@ -77,6 +78,7 @@ def start_afresh(reschedule=True):
              "grades": Grade.objects.count(), "test_runs": TestRun.objects.count(), "injects": 0}
         Response.objects.all().delete()  # with attachments, AI analyses, queued AI persona answers, notices
         Mail.objects.all().delete()
+        LeaderSuggestion.objects.all().delete()  # the team leaders' suggested answers
         MailLabel.objects.all().delete()
         MailAction.objects.all().delete()
         DeskConversation.objects.all().delete()  # the persona desk's to-answer state

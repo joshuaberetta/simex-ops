@@ -34,7 +34,7 @@ from datetime import timedelta
 from django.utils import timezone
 
 from . import ai, inbound, kb, simclock
-from .models import AiCall, Inject, KbDocument, Mail, NpcProfile, ReplySuggestion, RolePlay, RolePlaySlot
+from .models import Inject, KbDocument, Mail, NpcProfile, ReplySuggestion, RolePlay, RolePlaySlot
 from .render import fill, sender_by_local, team_ctx
 
 log = logging.getLogger("simex.ai")
@@ -390,53 +390,6 @@ def run_tool(tl, name, args):
 
 # --- the loop ------------------------------------------------------------------------------------------
 
-def _block(b):
-    if hasattr(b, "model_dump"):
-        return b.model_dump(exclude_none=True)
-    return {k: v for k, v in vars(b).items() if v is not None}
-
-
-def _create(params, ref):
-    import anthropic
-    c = ai.client()
-    model = params["model"]
-    try:
-        if ai.provider() == "anthropic" and not ai._no_fallbacks:
-            try:
-                r = c.beta.messages.create(**params, betas=["server-side-fallback-2026-07-01"], fallbacks="default")
-            except anthropic.BadRequestError as e:
-                if "fallback" not in str(e).lower():
-                    raise
-                ai._no_fallbacks = True
-                r = c.messages.create(**params)
-        else:
-            r = c.messages.create(**params)
-    except anthropic.APIStatusError as e:
-        AiCall.objects.create(purpose="suggest", ref=ref, model=model, ok=False, error=f"{e.status_code}: {e.message}"[:2000])
-        raise ai.AiError(f"{type(e).__name__} {e.status_code}: {e.message}"[:500]) from e
-    except anthropic.APIConnectionError as e:
-        AiCall.objects.create(purpose="suggest", ref=ref, model=model, ok=False, error=str(e)[:2000])
-        raise ai.AiError(f"Could not reach the model: {e}"[:500]) from e
-    except Exception as e:
-        log.exception("suggest call failed")
-        AiCall.objects.create(purpose="suggest", ref=ref, model=model, ok=False, error=f"{type(e).__name__}: {e}"[:2000])
-        raise ai.AiError(f"{type(e).__name__}: {e}"[:500]) from e
-    u, used = r.usage, getattr(r, "model", None) or model
-    AiCall.objects.create(purpose="suggest", ref=ref, model=used, input_tokens=u.input_tokens, output_tokens=u.output_tokens,
-                          cache_read_tokens=getattr(u, "cache_read_input_tokens", 0) or 0, cost_usd=ai.cost(used, u))
-    if r.stop_reason == "refusal":
-        raise ai.AiError("The model declined to answer this.")
-    return r, used
-
-
-def _uncache(messages):
-    for m in messages:
-        if isinstance(m.get("content"), list):
-            for b in m["content"]:
-                if isinstance(b, dict):
-                    b.pop("cache_control", None)
-
-
 def suggest(s):
     """Runs the loop; returns (output dict, model, rounds). Raises ai.AiError."""
     text, tl = request_block(s)
@@ -446,12 +399,12 @@ def suggest(s):
     for n in range(1, MAX_ROUNDS + 1):
         if n > 1 and not ai.under_cap():
             raise ai.AiError("The daily AI spending cap was reached (Settings → AI analysis).")
-        _uncache(messages)
+        ai.uncache(messages)
         last = messages[-1]["content"][-1]
         last["cache_control"] = {"type": "ephemeral"}
         params = dict(model=ai.model_id("deep"), max_tokens=MAX_TOKENS, system=system, tools=TOOLS, messages=messages,
                       tool_choice={"type": "auto"}, output_config={"effort": "medium"})
-        r, used = _create(params, f"s{s.id}")
+        r, used = ai.tool_create(params, "suggest", f"s{s.id}")
         if r.stop_reason == "max_tokens":
             raise ai.AiError("The answer was cut off (max_tokens).")
         calls = [b for b in r.content if getattr(b, "type", "") == "tool_use"]
@@ -474,7 +427,7 @@ def suggest(s):
             out["facts"] = [f for f in out["facts"] if isinstance(f, dict)]
             out["hold_back"] = [h for h in out["hold_back"] if isinstance(h, dict)]
             return out, used, n
-        messages.append({"role": "assistant", "content": [_block(b) for b in r.content]})
+        messages.append({"role": "assistant", "content": [ai.block_dict(b) for b in r.content]})
         results = [{"type": "tool_result", "tool_use_id": b.id, "content": run_tool(tl, b.name, b.input or {}),
                     **({"is_error": True} if isinstance(b, NoSearch) else {})} for b in calls]
         if n >= MAX_ROUNDS - 2:

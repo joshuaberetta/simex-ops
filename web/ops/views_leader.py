@@ -1,18 +1,20 @@
 """A team leader's Dashboard (the Dashboard tab above their SIMEX Mail): their team's replies
 and Claude's reading of them. The figures come from views_ai.dashboard_data, as ExCon's
 Dashboard, for this team only and without grades. The AI personas tab shows the team's
-conversations with them (ops/npc.py). Every view is leader_required; a leader
+conversations with them (ops/npc.py). Suggest a reply drafts their answer to a member's
+message from what they may see (ops/suggest_leader.py). Every view is leader_required; a leader
 never sees another team's inbox (only, read-only, the other team leaders' mailboxes)."""
 
 from collections import Counter
 from datetime import timedelta
 
-from django.shortcuts import redirect, render
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from . import ai, conf, npc, push
+from . import ai, conf, npc, push, suggest_leader
 from .access import leader_required, leader_of
-from .models import Event, Mail, NpcProfile, PushSubscription, Response
+from .models import Event, LeaderSuggestion, Mail, NpcProfile, PushSubscription, Response
 from .views_ai import dashboard_data
 from .views_inbox import ai_band, box_theme, leader_tabs, member_address, member_locals, peer_teams, team_members
 
@@ -108,3 +110,33 @@ def npcs(request):
         "personas": personas, "convs": npc.team_conversations(team), "now": timezone.now(),
         "simex_js": {"base": "/inbox", "readonly": True, "book": [], "team": team.name, "leader": True,
                      "folder": "", "unread": 0, "vapid": push.public_key(), "pushBase": "/inbox", "labels": []}})
+
+
+@leader_required
+def suggestion(request):
+    """Suggest a reply in the leader's own mailbox. GET ?thread=: the latest suggestion for that
+    conversation; POST thread, prompt: ask for a new one."""
+    lead = leader_of(request.user)
+    suggest_leader.expire()
+    if request.method != "POST":
+        s = suggest_leader.latest(lead, request.GET.get("thread") or "")
+        return JsonResponse({"suggestion": suggest_leader.as_json(s) if s else None, "ai": suggest_leader.enabled()})
+    thread = (request.POST.get("thread") or "")[:40]
+    if not suggest_leader.enabled():
+        return JsonResponse({"error": "Suggestions are off: ask ExCon."}, status=400)
+    if not ai.under_cap():
+        return JsonResponse({"error": "Today's AI budget is spent: ask ExCon."}, status=400)
+    mail = suggest_leader.target(lead, thread)
+    if not mail:
+        return JsonResponse({"error": "There is no message from your team in this conversation to answer."}, status=400)
+    running = LeaderSuggestion.objects.filter(leader=lead, status="running").first()
+    s = running or suggest_leader.start(lead, thread, mail, request.POST.get("prompt") or "")
+    return JsonResponse({"suggestion": suggest_leader.as_json(s), "ai": True})
+
+
+@leader_required
+def suggestion_get(request, sid):
+    s = get_object_or_404(LeaderSuggestion, pk=sid, leader=leader_of(request.user))
+    suggest_leader.expire()
+    s.refresh_from_db()
+    return JsonResponse({"suggestion": suggest_leader.as_json(s), "ai": suggest_leader.enabled()})

@@ -204,6 +204,57 @@ def call(purpose, ref, kind, system, content, schema, effort, max_tokens):
         raise AiError("The model's answer was not valid JSON.") from e
 
 
+def tool_create(params, purpose, ref):
+    """One request of a tool loop (Suggest a reply), logged as an AiCall. Returns (response,
+    model used); raises AiError."""
+    global _no_fallbacks
+    import anthropic
+    c, model = client(), params["model"]
+    try:
+        if provider() == "anthropic" and not _no_fallbacks:
+            try:
+                r = c.beta.messages.create(**params, betas=["server-side-fallback-2026-07-01"], fallbacks="default")
+            except anthropic.BadRequestError as e:
+                if "fallback" not in str(e).lower():
+                    raise
+                _no_fallbacks = True
+                r = c.messages.create(**params)
+        else:
+            r = c.messages.create(**params)
+    except anthropic.APIStatusError as e:
+        AiCall.objects.create(purpose=purpose, ref=ref, model=model, ok=False, error=f"{e.status_code}: {e.message}"[:2000])
+        raise AiError(f"{type(e).__name__} {e.status_code}: {e.message}"[:500]) from e
+    except anthropic.APIConnectionError as e:
+        AiCall.objects.create(purpose=purpose, ref=ref, model=model, ok=False, error=str(e)[:2000])
+        raise AiError(f"Could not reach the model: {e}"[:500]) from e
+    except Exception as e:
+        log.exception("tool loop call failed")
+        AiCall.objects.create(purpose=purpose, ref=ref, model=model, ok=False, error=f"{type(e).__name__}: {e}"[:2000])
+        raise AiError(f"{type(e).__name__}: {e}"[:500]) from e
+    u, used = r.usage, getattr(r, "model", None) or model
+    AiCall.objects.create(purpose=purpose, ref=ref, model=used, input_tokens=u.input_tokens, output_tokens=u.output_tokens,
+                          cache_read_tokens=getattr(u, "cache_read_input_tokens", 0) or 0, cost_usd=cost(used, u))
+    if r.stop_reason == "refusal":
+        raise AiError("The model declined to answer this.")
+    return r, used
+
+
+def block_dict(b):
+    """A response content block as a dict, to send back in the next request of a tool loop."""
+    if hasattr(b, "model_dump"):
+        return b.model_dump(exclude_none=True)
+    return {k: v for k, v in vars(b).items() if v is not None}
+
+
+def uncache(messages):
+    """Drops the cache breakpoints of a tool loop's messages (the caller sets one on the last)."""
+    for m in messages:
+        if isinstance(m.get("content"), list):
+            for b in m["content"]:
+                if isinstance(b, dict):
+                    b.pop("cache_control", None)
+
+
 def _cached(text):
     return {"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}
 

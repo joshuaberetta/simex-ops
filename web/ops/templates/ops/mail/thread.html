@@ -35,6 +35,7 @@
   {% if v.desk %}<div class="gm-presence" data-presence hidden></div>
   {% if desk_state %}{% include "ops/mail/_desk_bar.html" with st=desk_state c=desk_conv %}{% endif %}
   {% if desk_state.last_in %}{% include "ops/suggest/_panel.html" with url="/inbox/desk/suggest/" mode="desk" thread=thread %}{% endif %}{% endif %}
+  {% if leader_suggest %}{% include "ops/suggest/_panel.html" with url="/inbox/leader/suggest/" mode="leader" thread=thread %}{% endif %}
   {% for m in mails %}
   <article class="gm-msg {% if forloop.last %}open{% else %}closed{% endif %}{% if m.desk_chip %} desk-{{ m.folder }}{% endif %}" data-msg="{{ m.id }}"{% if m.desk_chip %} style="--persona: {{ m.desk_chip.colour }}"{% endif %}>
     <div class="gm-avatar" style="background: {% if m.desk_chip and m.folder == 'sent' %}{{ m.desk_chip.colour }}{% else %}{{ m.from_name|default:m.from_addr|avatar_colour }}{% endif %}">{{ m.from_name|default:m.from_addr|initial }}</div>
