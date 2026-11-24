@@ -17,6 +17,12 @@ EVERYONE = {PARTICIPANT, LEADER, DESK, RP, EXCON}
 SHOWN = 8  # notes listed in the drawer (the newest)
 
 ENTRIES = [
+    {"key": "2026-11-desk-copy-personas", "date": date(2026, 11, 24), "who": {DESK, EXCON},
+     "title": "Copy other personas on a message",
+     "body": "When you write as a persona to a team, you can now put **other personas in To or Cc** too "
+             "(type their name or address). The team sees them on the message, and when it answers with "
+             "**Reply all**, the answer reaches them as well. They get no copy of their own: the persona "
+             "desk already has it. ExCon's **Compose** has a **Cc other personas** list for the same."},
     {"key": "2026-11-rich-mail", "date": date(2026, 11, 24), "who": MAIL | {EXCON},
      "title": "Formatting and pictures in your messages",
      "body": "Messages in SIMEX Mail can now have **bold**, *italics*, underline, colours, lists, quotes and "

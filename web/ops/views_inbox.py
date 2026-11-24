@@ -295,11 +295,12 @@ def address_book(v):
     ({team} filled with the own team, so the team leader persona is their own leader), their
     teammates (personal mailboxes), from their own mailbox the team itself and, if allowed,
     the other teams. In a team leader's mailbox: their own team and its members only. On the
-    persona desk: every active team."""
+    persona desk: every active team, member and team leader, and the other personas (copied on
+    a message to a team: desk.copy_entries)."""
     if v.desk:
         teams = list(Team.objects.filter(active=True))
         return ([{"key": f"t:{t.id}", "name": t.name, "addr": team_address(t), "kind": "team"} for t in teams]
-                + desk_members(teams) + desk_leaders(teams))
+                + desk_members(teams) + desk_leaders(teams) + desk.copy_entries())
     team = v.team
     mates = []
     if conf.flag("personal_mailboxes"):
@@ -1459,7 +1460,7 @@ def send(request, v):
     parent = v.mails().filter(pk=_id(P.get("in_reply_to"))).first()
     rich = (html, inline)
     if v.desk:
-        return _send_desk(request, v, P, to + cc + bcc, subject, body, files, parent, fwd, fail, ajax, rich)
+        return _send_desk(request, v, P, to, cc, bcc, subject, body, files, parent, fwd, fail, ajax, rich)
     w = sender_box(v, P.get("from"))  # a member chooses which address it goes from
     if not v.leader_box and not w.member_box and not [e for e in to + cc + bcc if e["key"] != f"t:{v.team.id}"]:
         return fail(f"That is {v.team.name}'s own address: send it from your own address, or add someone else.")
@@ -1490,9 +1491,13 @@ def send(request, v):
     return redirect(url)
 
 
-def _send_desk(request, v, P, entries, subject, body, files, parent, fwd, fail, ajax, rich=("", [])):
+def _send_desk(request, v, P, to, cc, bcc, subject, body, files, parent, fwd, fail, ajax, rich=("", [])):
     """The persona desk writes as a persona to one or more teams (desk.send). Each team's
-    message goes on its own: one not armed or not deliverable doesn't stop the others."""
+    message goes on its own: one not armed or not deliverable doesn't stop the others. Other
+    personas in To or Cc are shown on it (desk.send copies); one in Bcc is left out (the
+    desk is every persona's mailbox: it has the message already)."""
+    entries = [e for e in to + cc + bcc if e["kind"] != "persona"]
+    copies = {"to": [e for e in to if e["kind"] == "persona"], "cc": [e for e in cc if e["kind"] == "persona"]}
     uploads = [(re.sub(r"[\r\n]+", " ", f.name) or "file", f.content_type or "application/octet-stream", f.read())
                for f in files] + list(rich[1])
     docs = []
@@ -1505,7 +1510,7 @@ def _send_desk(request, v, P, entries, subject, body, files, parent, fwd, fail, 
             uploads.append((a.filename, a.content_type, bytes(a.data)))
     try:
         msgs, errors = desk.send(v.person, request.user.get_username(), P.get("from"), entries, subject, body,
-                                 uploads, docs, parent, body_html=rich[0])
+                                 uploads, docs, parent, body_html=rich[0], copies=copies)
     except desk.DeskError as e:
         return fail(str(e))
     v.mails().filter(pk=_id(P.get("draft_id")), folder="drafts").delete()

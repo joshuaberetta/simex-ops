@@ -17,6 +17,10 @@ One message per team or member ticked, in SIMEX Mail or by email as the delivery
     </div>{% empty %}<p class="muted small">No active teams (People &amp; logins).</p>{% endfor %}
     <p class="hint">A member's message goes to their own mailbox only (with personal mailboxes off, to the team inbox, for them; by email, to their own email address). A team leader's goes to their own mailbox only (by email, to their email address); it doesn't reach the team.</p>
   </fieldset>
+  {% if copy_personas %}<fieldset><legend>Cc other personas</legend>
+    {% for e in copy_personas %}<label class="chk"><input type="checkbox" name="cc" value="{{ e.key }}" {% if e.key in form.cc %}checked{% endif %}> {{ e.name }} <span class="muted small">{{ e.addr }}</span></label>{% endfor %}
+    <p class="hint">Shown on each team's message (by email, in its Cc), so a team's reply all reaches them too. They get no copy of their own: the persona desk is every persona's mailbox.</p>
+  </fieldset>{% endif %}
   <label>Subject <input name="subject" value="{{ form.subject }}"></label>
   <label>Message <textarea name="body" rows="8">{{ form.body }}</textarea></label>
   <label>Files <span class="hint">max {{ max_mb }} MB in all</span> <input type="file" name="files" multiple></label>

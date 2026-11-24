@@ -4,6 +4,7 @@ every team's mailbox read-only, with no access to the ExCon screens."""
 
 import re
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import Client
 from django.urls import URLPattern, URLResolver, get_resolver
@@ -413,3 +414,54 @@ def test_desk_has_no_default_persona(excon):
     r = dc.post("/inbox/desk/send/", {"to": f"t:{team.id}", "subject": "Hello", "body": "Hi"}, headers=FETCH)
     assert r.json()["error"] == "Choose the persona it goes from."
     assert not Message.objects.filter(kind="desk").exists()
+
+
+def test_desk_copies_other_personas(excon):
+    """A desk message can be addressed to other personas too (To or Cc, beside a team): the team
+    sees them on it and reply all reaches them; they get no mail of their own."""
+    setup(excon)
+    ta = Team.objects.get(code="a")
+    d = desk_client()
+    keys = {b["key"] for b in d.get("/inbox/desk/").context["simex_js"]["book"]}
+    assert {"p:donotreply", "p:cnn"} <= keys and "p:undac-{team}-tl" not in keys
+    r = d.post("/inbox/desk/send/", {"from": "p:cnn", "to": f"t:{ta.id},p:donotreply", "cc": "p:cnn",
+                                     "subject": "Breaking", "body": "A statement?"}, headers=FETCH)
+    assert r.json()["ok"], r.json()
+    m = Message.objects.get(kind="desk")
+    got = Mail.objects.get(team=ta, owner=None, folder="inbox", message=m)
+    assert "<donotreply@" in got.to_label and got.cc_label == ""  # the persona writing isn't copied to itself
+    assert got.recipients == {"to": ["p:donotreply"], "cc": []}
+    assert "<donotreply@" in Mail.objects.get(team=None, folder="sent", message=m).to_label
+    assert not Mail.objects.filter(team=None, folder="inbox").exists()  # no persona gets a copy of its own
+    # Cc, then the team's reply all reaches both personas: one desk copy.
+    d.post("/inbox/desk/send/", {"from": "p:cnn", "to": f"t:{ta.id}", "cc": "p:donotreply", "subject": "Again",
+                                 "body": "?"}, headers=FETCH)
+    got = Mail.objects.get(team=ta, owner=None, folder="inbox", subject="Again")
+    assert "<donotreply@" in got.cc_label
+    pa = participant("a")
+    t = pa.get(f"/inbox/t/{got.thread}/").context["thread_js"]
+    assert set(t["replyAll"]) == {"p:cnn", "p:donotreply"}
+    pa.post("/inbox/send/", {"to": ",".join(t["replyAll"]), "subject": "Re: Again", "body": "Both.", "in_reply_to": got.id})
+    assert Mail.objects.filter(team=None, folder="inbox", subject="Re: Again").count() == 1
+    # Personas alone: no team to write to.
+    r = d.post("/inbox/desk/send/", {"from": "p:cnn", "to": "p:donotreply", "body": "x"}, headers=FETCH)
+    assert r.status_code == 400 and "copied" in r.json()["error"]
+    # ExCon's Compose: Cc other personas.
+    excon.post("/compose/", {"from": "p:cnn", "to": f"t:{ta.id}", "cc": "p:donotreply", "subject": "Compose",
+                             "body": "x"})
+    assert "<donotreply@" in Mail.objects.get(team=ta, owner=None, folder="inbox", subject="Compose").cc_label
+
+
+def test_desk_email_copies_other_personas(excon):
+    setup(excon)
+    conf.put("channel_mode", "email")
+    ta = Team.objects.get(code="a")
+    ta.email = "team-a@kobotoolbox.org"
+    ta.save()
+    d = desk_client()
+    j = d.post("/inbox/desk/send/", {"from": "p:cnn", "to": f"t:{ta.id}", "cc": "p:donotreply", "subject": "Breaking",
+                                     "body": "A statement?"}, headers=FETCH).json()
+    assert j["ok"], j
+    m = Message.objects.get(kind="desk")
+    assert m.channel == "email" and m.to == ["team-a@kobotoolbox.org"] and m.cc == [f"donotreply@{settings.MAIL_DOMAIN}"]
+

@@ -260,14 +260,22 @@ def _guest_box(e):
     return None
 
 
+def _book(w):
+    """Who w's calendar may invite or answer (views_inbox.address_book): on the desk, not the
+    other personas, whom a desk message can only copy."""
+    from .views_inbox import address_book
+    book = address_book(w)
+    return [b for b in book if b["kind"] != "persona"] if w.desk else book
+
+
 def guest_entries(w, keys, lay):
     """Address-book entries of the guests keys, from the organiser's mailbox w: exactly who it
     may write to (views_inbox.address_book, as on send), less the organiser itself."""
-    from .views_inbox import _resolve, address_book
+    from .views_inbox import _resolve
     keys = [k for k in dict.fromkeys((k or "").strip() for k in keys) if k and k != lay["org_key"]]
     if len(keys) > MAX_GUESTS:
         raise CalendarError(f"{MAX_GUESTS} guests at most.")
-    entries = _resolve(keys, address_book(w), w)
+    entries = _resolve(keys, _book(w), w)
     got = {e["key"] for e in entries}
     bad = [k for k in keys if k not in got]
     if bad:
@@ -425,7 +433,7 @@ def _is_excon(user):
 def prefill(v, thread):
     """A new event from a conversation (a thread's Create event): its subject, the people in it
     the viewer may invite, and the latest message as the source."""
-    from .views_inbox import _key_for_sender, _resolve, address_book
+    from .views_inbox import _key_for_sender, _resolve
     mails = list(v.mails().filter(thread=thread).exclude(folder="drafts").order_by("id"))
     if not mails:
         return None
@@ -451,7 +459,7 @@ def prefill(v, thread):
     mine = {lay["org_key"]} if lay else set()
     if v.member_box:
         mine.add(f"m:{v.owner.id}")
-    book = address_book(v)
+    book = _book(v)
     guests = [{k: e[k] for k in ("key", "name", "addr", "kind")}
               for e in _resolve([k for k in dict.fromkeys(keys) if k and k not in mine], book, v)]
     title = re.sub(r"^\s*((re|fwd?|aw|tr)\s*:\s*)+", "", mails[0].subject or "", flags=re.I).strip()
@@ -825,8 +833,8 @@ def save(v, data, eid=None, request=None):
         if eid and (changed or added or removed):  # what goes out now is a new SEQUENCE (iCalendar)
             ev.sequence += 1
             ev.save(update_fields=["sequence", "updated_at"])
-        from .views_inbox import _resolve, address_book
-        book = address_book(w)
+        from .views_inbox import _resolve
+        book = _book(w)
         ent = lambda rows: _resolve([a.key for a in rows], book, w)
         if removed:
             ids = [a.id for a in removed]
@@ -853,7 +861,7 @@ def _role_play_follows(ev):
 def delete(v, eid, request=None):
     """Delete an event the viewer organised. With guests it is cancelled instead (a
     cancellation to each), so their calendars show it struck through. Returns warnings."""
-    from .views_inbox import _resolve, address_book, track
+    from .views_inbox import _resolve, track
     warnings = []
     with transaction.atomic():
         ev, lay = _own_event(v, eid)
@@ -864,7 +872,7 @@ def delete(v, eid, request=None):
                 ev.status, ev.sequence = "cancelled", ev.sequence + 1
                 ev.save(update_fields=["status", "sequence", "updated_at"])
                 w = _box_viewer(v, lay)
-                warnings = _send(v, lay, _resolve([a.key for a in guests], address_book(w), w), ev, "cancel", request)
+                warnings = _send(v, lay, _resolve([a.key for a in guests], _book(w), w), ev, "cancel", request)
             else:  # cancelled already: off the organiser's calendar
                 ev.attendees.filter(role="organiser").update(hidden=True)
             _role_play_follows(ev)
@@ -882,7 +890,7 @@ def respond(v, eid, layer_key, answer, note="", request=None):
     conversation, where their mailbox can write to the organiser (a team leader can't write to
     a persona: then the answer is only on the calendar). On the desk, as the persona invited.
     Returns (event, warnings)."""
-    from .views_inbox import _resolve, address_book, track
+    from .views_inbox import _resolve, track
     if answer not in ANSWERS:
         raise CalendarError("Answer Yes, Maybe or No.")
     lay = _writable(v, layer_key)
@@ -904,7 +912,7 @@ def respond(v, eid, layer_key, answer, note="", request=None):
         if key.startswith("l:") and not w.desk:  # a team's leader is reached as the team leader persona
             lp = rnd.leader_persona(w.team) if w.team else None
             key = f"p:{lp['local']}" if lp else key
-        to = _resolve([key], address_book(w), w)
+        to = _resolve([key], _book(w), w)
         if to:
             who = row.name or lay["org_name"]
             subject = f"{ANSWERS[answer]}: {ev.title}"

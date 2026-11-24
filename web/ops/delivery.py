@@ -404,13 +404,15 @@ def drafted(m, draft, text):
 
 
 def answer(response, body, user="", files=(), attachments=(), ai_draft=None, idem_key=None, npc=False, author=None,
-           subject=None, body_html=""):
+           subject=None, body_html="", also=None):
     """Reply as the persona the participant wrote to: into their team's inbox (in-app
     thread) or by email (email thread), with files ExCon uploaded ((filename, content_type,
     data[, cid]) tuples: with a cid, an image in body_html, its clean HTML from SIMEX Mail's
     composer) and inject documents (Attachment rows). Returns the Message. An AI
     persona's answer (npc) passes its own deterministic idem_key; one from the persona desk,
-    the desk member who wrote it (author)."""
+    the desk member who wrote it (author). also: {"to", "cc"}, more addresses on an email
+    answer (other personas the desk copied on it)."""
+    also = also or {}
     idem_key = idem_key or f"reply-{response.id}-{uuid.uuid4().hex}"
     persona = response.persona or ""
     sender, ctx = render.sender_by_local(persona)
@@ -446,7 +448,8 @@ def answer(response, body, user="", files=(), attachments=(), ai_draft=None, ide
             body_html += richtext.quote_html(response.text or "", False,
                                              f"On {local_time}, {response.from_name or response.from_addr} wrote:")
         d = render.Draft(target=response.team.name if response.team else response.from_addr, from_addr=from_addr,
-                         reply_to=None, to=[response.from_addr], cc=[], bcc=render.split_addresses(cfg.get("excon_bcc")),
+                         reply_to=None, to=[response.from_addr] + list(also.get("to", [])), cc=list(also.get("cc", [])),
+                         bcc=render.split_addresses(cfg.get("excon_bcc")),
                          subject=subject, body=text_body, footer=cfg.get("footer", ""), body_html=body_html,
                          attachment_ids=[a.id for a in attachments],
                          team_id=response.team_id, person_id=response.person_id, reply_local=persona, channel="email")

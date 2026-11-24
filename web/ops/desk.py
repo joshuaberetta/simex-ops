@@ -78,6 +78,59 @@ def is_leader_persona(local):
     return bool(s and s.team_leader)
 
 
+def copy_entries():
+    """The personas a desk message can also be addressed to (To or Cc, beside its teams): the
+    desk's personas as address-book entries, {team} unfilled. They get no mail of their own
+    (the desk is every persona's mailbox): the teams see them on the message and reply all
+    reaches them."""
+    email_mode = conf.get("channel_mode") == "email"
+    return [{"key": f"p:{s.local_part}", "name": s.display_name or s.local_part, "kind": "persona",
+             "addr": f"{s.local_part}@{settings.MAIL_DOMAIN}" if email_mode else s.inapp_address,
+             "org": s.organisation} for s in personas()]
+
+
+def _copied(copies, sender):
+    """{"to": [Sender], "cc": [Sender]} from address-book entries (copy_entries), less the
+    persona writing and any no longer on the desk."""
+    by = {s.local_part: s for s in personas()}
+    out, seen = {"to": [], "cc": []}, {sender.local_part}
+    for part in ("to", "cc"):
+        for e in (copies or {}).get(part, []):
+            s = by.get((e.get("key") or "")[2:]) if (e.get("key") or "").startswith("p:") else None
+            if s and s.local_part not in seen:
+                seen.add(s.local_part)
+                out[part].append(s)
+    return out
+
+
+def _copy_list(copied, ctx, channel):
+    """{"to"/"cc": [(key, label, email address)]} of the personas copied, {team} filled for a team."""
+    out = {}
+    for part, senders in copied.items():
+        out[part] = []
+        for s in senders:
+            local = render.fill(s.local_part, ctx).lower()
+            name = (render.fill(s.display_name, ctx) or local).replace('"', "'")
+            addr = render.persona_address(s, local, ctx, channel)
+            out[part].append((f"p:{local}", f"{name} <{addr}>", f"{local}@{settings.MAIL_DOMAIN}"))
+    return out
+
+
+def _show_copied(m, listed):
+    """The personas copied on m, on every Mail it made (the team's, its members', the desk's
+    Sent): added to To, in Cc, and in its recipients so that reply all reaches them."""
+    if not (listed["to"] or listed["cc"]):
+        return
+    more_to = ", ".join(x[1] for x in listed["to"])
+    cc = ", ".join(x[1] for x in listed["cc"])
+    rec = {"to": [x[0] for x in listed["to"]], "cc": [x[0] for x in listed["cc"]]}
+    for mail in Mail.objects.filter(message=m):
+        mail.to_label = ", ".join(x for x in (mail.to_label, more_to) if x)
+        mail.cc_label = ", ".join(x for x in (mail.cc_label, cc) if x)
+        mail.recipients = {k: list((mail.recipients or {}).get(k, [])) + rec[k] for k in ("to", "cc")}
+        mail.save(update_fields=["to_label", "cc_label", "recipients"])
+
+
 def sender_for_key(key):
     """The Sender behind a desk From choice ("p:<username>", {team} unfilled), or None."""
     return personas().filter(local_part=key[2:]).first() if key and key.startswith("p:") else None
@@ -226,7 +279,7 @@ def skip_ai(response, sender, who):
 
 
 def send(person, user, from_key, entries, subject, body, files=(), docs=(), parent=None, idem=None, extra_files=None,
-         body_html=""):
+         body_html="", copies=None):
     """Write as a persona (from_key "p:<username>") to the teams in entries (address-book
     entries), one Message each: in a conversation (parent, a desk Mail), the team's message it
     answers gets its answer, else (or as another persona) a Message of kind desk in the same
@@ -235,6 +288,8 @@ def send(person, user, from_key, entries, subject, body, files=(), docs=(), pare
     idem(team, member): a deterministic idempotency key per recipient (SIMEX Calendar: per event,
     change and recipient; one already sent is not sent again); extra_files(team, member, channel):
     more files for that recipient (an invitation's .ics by email).
+    copies: {"to": [...], "cc": [...]}, other personas it is also addressed to (copy_entries):
+    shown on each team's message (by email, in its To / Cc), reply all reaching them.
     Returns (messages, errors); raises DeskError when nothing could go."""
     s = sender_for_key(from_key)
     if not s:
@@ -257,17 +312,22 @@ def send(person, user, from_key, entries, subject, body, files=(), docs=(), pare
             if p and (p.team, p) not in targets:
                 targets.append((p.team, p))
     if not targets:
-        raise DeskError("Write to one or more teams, team members or team leaders.")
+        raise DeskError("Write to one or more teams, team members or team leaders."
+                        + (" Other personas can only be copied on a message to them." if copies and (
+                            copies.get("to") or copies.get("cc")) else ""))
+    copied = _copied(copies, s)
     who = person.name if person else user
     actor = person.user if person and person.user_id else get_user_model().objects.filter(username=user).first()
     token = ACTOR.set(actor)  # those on the conversation hear of it, but not the sender (_told_out)
     try:
-        return _send(s, targets, subject, body, files, docs, parent, person, user, who, idem, extra_files, body_html)
+        return _send(s, targets, subject, body, files, docs, parent, person, user, who, idem, extra_files, body_html,
+                     copied)
     finally:
         ACTOR.reset(token)
 
 
-def _send(s, targets, subject, body, files, docs, parent, person, user, who, idem=None, extra_files=None, body_html=""):
+def _send(s, targets, subject, body, files, docs, parent, person, user, who, idem=None, extra_files=None, body_html="",
+          copied=None):
     msgs, errors = [], []
     from . import delivery
     for t, member in targets:
@@ -282,21 +342,26 @@ def _send(s, targets, subject, body, files, docs, parent, person, user, who, ide
         response = answering(parent, t)
         if response is not None and member and (response.person_id != member.id or member.is_leader):
             response = None  # another member's message (or a leader's, never a team's): written to them afresh
+        channel = response.channel if response is not None else (
+            "email" if conf.get("channel_mode") == "email" else "inapp")
+        listed = _copy_list(copied or {"to": [], "cc": []}, ctx, channel)
+        by_email = {"to": [x[2] for x in listed["to"]], "cc": [x[2] for x in listed["cc"]]}
         if response is not None and (response.persona or "") == local and (response.channel == "email" or response.team_id):
             from . import calendar
             more = list(extra_files(t, member, response.channel)) if extra_files else []
             m = delivery.answer(response, body, user=user, files=list(files) + more, attachments=docs, author=person,
                                 subject=subject if calendar.SENDING.get() else None,  # an invitation's answer
-                                idem_key=key, body_html=body_html)
+                                idem_key=key, body_html=body_html, also=by_email)
         elif not conf.flag("live_armed") and not t.is_test:
             errors.append(f"{label}: live sending is not armed (ExCon, Settings).")
             continue
         else:
             m, err = _new(s, local, ctx, t, subject, body, files, docs, parent, response, person, user, member,
-                          idem_key=key, extra_files=extra_files, body_html=body_html)
+                          idem_key=key, extra_files=extra_files, body_html=body_html, also=by_email)
             if err:
                 errors.append(f"{label}: {err}")
                 continue
+        _show_copied(m, listed)
         if response is not None:
             skip_ai(response, s, who)
         if m.status == "failed":
@@ -315,7 +380,7 @@ def _name(person, team):
 
 
 def _new(s, local, ctx, team, subject, body, files, docs, parent, response, person, user, member=None, idem_key=None,
-         extra_files=None, body_html=""):
+         extra_files=None, body_html="", also=None):
     """A new message from the persona to a team or one of its members (kind desk), delivered
     now. In-app, a member's goes to their own mailbox only (personal mailboxes; else to the team
     inbox, for them). Returns (Message, error)."""
@@ -345,8 +410,9 @@ def _new(s, local, ctx, team, subject, body, files, docs, parent, response, pers
         to = [a for a in to if not render.PLACEHOLDER_DOMAIN.search(a)]
         if not to:
             return None, "no email address (People & logins)."
-        d = render.Draft(**common, from_addr=f'"{name}" <{local}@{settings.MAIL_DOMAIN}>', reply_to=None, to=to,
-                         cc=[], bcc=render.split_addresses(cfg.get("excon_bcc")), channel="email")
+        also = also or {}
+        d = render.Draft(**common, from_addr=f'"{name}" <{local}@{settings.MAIL_DOMAIN}>', reply_to=None,
+                         to=to + list(also.get("to", [])), cc=list(also.get("cc", [])), bcc=render.split_addresses(cfg.get("excon_bcc")), channel="email")
         thread = parent.thread if parent is not None else ""
     files = list(files) + (list(extra_files(team, member, channel)) if extra_files else [])
     m = delivery.new_message(None, d, "desk", idem_key or f"desk-{uuid.uuid4().hex}")
