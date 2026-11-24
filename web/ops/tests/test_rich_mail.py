@@ -110,3 +110,31 @@ def test_the_desk_answers_with_formatting_in_app_and_by_email(excon):
     assert 'src="cid:img-1"' in m.html and "<b>the road status</b>" in m.html
     p = mailer.payload(m, list(m.files.all()))
     assert p["attachments"][0]["content_id"] == "img-1" and p["attachments"][0]["content_type"] == "image/png"
+
+
+def test_participants_read_it_in_every_mailbox(excon):
+    """A formatted message with a picture from the desk to a team: every member reads it formatted,
+    picture shown, in the team inbox and their own mailbox; so does the leader, read-only."""
+    from ops.tests.test_leaders import leader
+    setup(excon)
+    ta = Team.objects.get(code="a")
+    jane, john = participant("a", "Jane"), participant("a", "John")
+    tl = leader("a")
+    d = desk_client()
+    r = d.post("/inbox/desk/send/", {"from": "p:donotreply", "to": f"t:{ta.id}", "subject": "Road map", "html": HTML,
+                                     "inline": [image()], "inline_cid": ["img-1"]}, headers=FETCH)
+    assert r.json()["ok"], r.json()
+    team = Mail.objects.get(team=ta, owner=None, folder="inbox", subject="Road map")
+    for c, base, owner in ((jane, "/inbox", None), (john, "/inbox", None), (jane, "/inbox/me", jane.person),
+                           (john, "/inbox/me", john.person), (tl, "/inbox/team", None)):
+        m = Mail.objects.get(team=ta, owner=owner, folder="inbox", subject="Road map")
+        f = m.files.get()
+        page = c.get(f"{base}/t/{m.thread}/").content.decode()
+        assert "<b>the road status</b>" in page and f'<img src="{base}/file/{f.id}/?inline=1"' in page, (base, owner)
+        assert "<script>alert" not in page
+        shown = c.get(f"{base}/file/{f.id}/?inline=1")
+        assert shown.status_code == 200 and shown["Content-Type"] == "image/png", (base, owner)
+    assert team.html and "&lt;b&gt;" not in team.html
+    # Another team's member never reads it.
+    pb = participant("b")
+    assert pb.get(f"/inbox/file/{team.files.get().id}/?inline=1").status_code == 404
