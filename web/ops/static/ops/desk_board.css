@@ -55,6 +55,9 @@ body.gm-ab-dragging, body.gm-ab-dragging * { cursor: grabbing !important; }
 
 /* Default assignments */
 .gm-ad { overflow-y: auto; padding-bottom: 32px; }
+/* .gm-ab is a full-height flex column for the board; here the page scrolls instead, so nothing may shrink
+   (the grid's overflow-x wrapper would otherwise collapse to a sliver under the list below it). */
+.gm-ad > * { flex-shrink: 0; }
 .gm-ad-intro { max-width: 860px; color: var(--ink2); margin: 0 0 8px; }
 .gm-ad-warn { background: #fef7e0; color: #7a4f01; border-radius: 8px; padding: 6px 12px; max-width: 860px; }
 .gm-ad-apply { display: flex; align-items: center; gap: 10px; margin: 8px 0 12px; }
@@ -72,7 +75,8 @@ body.gm-ab-dragging, body.gm-ab-dragging * { cursor: grabbing !important; }
 .gm-ad .muted { color: var(--muted); }
 .gm-ad h2 { font-size: 18px; font-weight: 500; margin: 24px 0 8px; }
 .gm-ad-item { display: inline-block; margin: 0 12px 4px 0; }
-.gm-ad-by td { padding: 4px 8px; vertical-align: top; }
+.gm-ad-by { width: auto; min-width: 420px; max-width: 100%; }
+.gm-ad-by td { padding: 4px 12px; vertical-align: top; }
 @media (max-width: 720px) {
   .gm-ab-col { flex-basis: 84vw; }
   .gm-ab-hint { margin-left: 0; }
