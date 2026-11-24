@@ -65,6 +65,12 @@ conversations, never on what another team wrote or was told ("other team: don't 
 other teams' mail to keep the persona consistent, and say so.
 - "team-internal" mail is what a team wrote among itself (its inbox, its leader's and members' own mailboxes). A \
 persona can't know it. Use it only to brief the desk member; never in a draft.
+The people playing:
+- THE ROSTER (below, and the roster tool) is ExCon's own list of who is actually playing: each team's members, team \
+roles, team leader and SIMEX Mail addresses. For who is on a team, who leads it, who someone is among the \
+participants, always answer from the roster. Team lists in the exercise documents (stand-by messages, \
+deployment lists) are the scenario's fictional or planned teams: mention them only as that, if at all.
+- The personas tool lists every persona (organisation, category, AI or not); who briefs one.
 
 How to work:
 - Look things up before answering: search the documents, injects and role plays, and the mail, for the names, \
@@ -152,6 +158,15 @@ TOOLS = [
      "description": "Who is a name: matching personas (with their profile, notes, injects, role plays, what they said to "
                     "each team and what is open), role-play characters, documents naming them, participants.",
      "input_schema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
+    {"name": "roster",
+     "description": "ExCon's roster of who is actually playing: each team (or one team, by name) with its team "
+                    "address, team leader, members with their team roles and own addresses, whether each is active and "
+                    "when last seen in SIMEX Mail, and the team's desk conversations (how many, how many waiting).",
+     "input_schema": {"type": "object", "properties": {"team": {"type": "string"}}}},
+    {"name": "personas",
+     "description": "Every persona on the Senders list: username, name, address, organisation and role (AI persona "
+                    "profile), category, AI persona or not, active or not, the team leader persona. Optional filter words.",
+     "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}}},
     {"name": "read",
      "description": "Read one item in full by its ref: doc:<key> (in parts: part 1, 2...), inject:<serial>, rp:<key>, "
                     "mail:<id>, thread:<id> (a whole desk conversation), persona:<username>.",
@@ -376,6 +391,83 @@ def tool_conversations(sc, team="", persona=""):
     return "\n".join(out) or "No desk conversations" + (f" for {t.name}" if t else "") + "."
 
 
+# --- the roster and the personas (the ops side) -------------------------------------------------------
+
+def _seen(dt, now):
+    if not dt:
+        return "never signed in"
+    mins = (now - dt).total_seconds() / 60
+    if mins < 5:
+        return "online now"
+    return f"last seen {_hm(dt)}"
+
+
+def roster(teams, detail=False):
+    """Who is actually playing, from People & logins: per team its address, leader and members
+    (team role, own address). detail: active, last seen, the desk conversations. Never their
+    email or personal email."""
+    from . import addresses
+    from .render import leader_persona
+    now = timezone.now()
+    locs = addresses.member_addresses() if conf.flag("personal_mailboxes") else {}
+    people = list(Person.objects.filter(team__in=teams, role__in=["member", "tl"])
+                  .select_related("team_role").order_by("name"))
+    out = []
+    for t in teams:
+        lead = next((p for p in people if p.team_id == t.id and p.role == "tl" and p.active), None) or \
+            next((p for p in people if p.team_id == t.id and p.role == "tl"), None)
+        members = [p for p in people if p.team_id == t.id and p.role == "member" and (p.active or detail)]
+        lines = [f"{t.name} (code {t.code}{', the Test team' if t.is_test else ''}{'' if t.active else ', inactive'}) | "
+                 f"team address {addresses.team_address(t)}"]
+        if lead:
+            lp = leader_persona(t)
+            lines.append(f"  Team leader (ExCon, plays the team leader persona{' ' + lp['addr'] if lp else ''}): {lead.name}"
+                         + (f" ({_seen(lead.last_seen_at, now)})" if detail else ""))
+        else:
+            lines.append("  Team leader: none set")
+        lines.append(f"  {len(members)} member{'s' if len(members) != 1 else ''}:" if members else "  No members yet.")
+        for p in members:
+            bits = [p.team_role.name] if p.team_role else []
+            if p.id in locs:
+                bits.append(locs[p.id])
+            if detail:
+                bits += ([] if p.active else ["inactive"]) + [_seen(p.last_seen_at, now)]
+            lines.append(f"  - {p.name}" + (f" ({'; '.join(bits)})" if bits else ""))
+        if detail:
+            threads = desk_mails().filter(desk_team=t).exclude(thread="").values_list("thread", flat=True).distinct()
+            st = desk.states(list(threads))
+            lines.append(f"  Desk conversations: {len(st)}, {sum(1 for x in st.values() if x.get('waiting'))} waiting for an answer.")
+        out.append("\n".join(lines))
+    return "\n\n".join(out) or "No teams."
+
+
+def tool_roster(sc, team=""):
+    t = sc.find_team(team) if team else None
+    if team and not t:
+        return f"No team {team!r}. Teams: " + ", ".join(x.name for x in sc.all_teams)
+    teams = [t] if t else [x for x in sc.all_teams]
+    return roster(teams, detail=True)
+
+
+def tool_personas(sc, query=""):
+    ctx = team_ctx(sc.teams[0]) if len(sc.teams) == 1 else {}
+    from .render import persona_address
+    rows = []
+    for s in Sender.objects.select_related("npc").order_by("-active", "category", "display_name", "local_part"):
+        p = _npc(s)
+        name = fill(s.display_name or "", ctx) or s.local_part
+        text = f"{name} {s.local_part} {s.category} {p.organisation if p else ''} {p.role if p else ''}"
+        if query and not any(w in text.lower() for w in _words(query)):
+            continue
+        bits = [x for x in (p.role if p else "", p.organisation if p else "", s.category) if x]
+        flags = (["team leader persona (each team's leader plays it)"] if s.team_leader else []) + \
+            ([("AI persona, answers by itself" if p.enabled else "AI persona profile")] if p else []) + \
+            ([] if s.active else ["inactive"])
+        rows.append(f"- persona:{s.local_part} | {name} <{persona_address(s, fill(s.local_part, ctx).lower(), ctx)}>"
+                    + (f" | {', '.join(bits)}" if bits else "") + (f" [{'; '.join(flags)}]" if flags else ""))
+    return "\n".join(rows[:150]) or "No personas" + (f" matching {query!r}" if query else "") + "."
+
+
 # --- who is ... ------------------------------------------------------------------------------------
 
 def _words(text):
@@ -458,9 +550,9 @@ def tool_who(sc, name):
     people = [p for p in Person.objects.filter(role__in=["member", "tl"]).select_related("team", "team_role")
               if name_score(name, p.name)]
     if people:
-        out.append("Participants and team leaders with that name:\n" + "\n".join(
+        out.append("Participants and team leaders with that name (the roster: who is actually playing):\n" + "\n".join(
             f"- {p.name}: {'team leader' if p.role == 'tl' else 'member'} of {p.team.name if p.team else 'no team'}"
-            + (f", {p.team_role.name}" if p.team_role else "") for p in people[:8]))
+            + (f", {p.team_role.name}" if p.team_role else "") + ("" if p.active else " (inactive)") for p in people[:8]))
     return _clip("\n\n".join(out), RESULT_CHARS)
 
 
@@ -613,6 +705,10 @@ def run_tool(sc, name, args):
             return _clip(tool_conversations(sc, str(args.get("team") or ""), str(args.get("persona") or "")), RESULT_CHARS)
         if name == "who":
             return tool_who(sc, str(args.get("name") or ""))
+        if name == "roster":
+            return _clip(tool_roster(sc, str(args.get("team") or "")), RESULT_CHARS)
+        if name == "personas":
+            return _clip(tool_personas(sc, str(args.get("query") or "")), RESULT_CHARS)
         if name == "read":
             return _clip(tool_read(sc, str(args.get("ref") or ""), int(args.get("part") or 1)), RESULT_CHARS)
     except Exception as e:  # a tool error goes back to the model, never fails the turn
@@ -644,6 +740,8 @@ def context_block(sc, question):
     parts.append(f"The desk has {n} conversation{'s' if n != 1 else ''}; {Sender.objects.filter(active=True).count()} "
                  "active personas. " + suggest.library_line()
                  + (" Members have their own mailboxes." if conf.flag("personal_mailboxes") else ""))
+    parts.append("THE ROSTER (People & logins: who is actually playing; the roster tool has more):\n\n"
+                 + _clip(roster(sc.teams if sc.team else sc.all_teams), 8000))
     if sc.persona:
         s = next((x for x in Sender.objects.all() if sc.persona.lower() in persona_locals(x, sc)), None)
         parts.append("The persona in scope:\n" + (persona_brief(sc, s) if s else sc.persona))

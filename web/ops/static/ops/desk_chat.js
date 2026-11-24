@@ -130,7 +130,7 @@
   };
 
   const TOOL = { search: "searching the material for", search_mail: "searching the mail for", conversations: "listing the conversations",
-    who: "looking up", read: "reading" };
+    who: "looking up", read: "reading", roster: "reading the roster", personas: "listing the personas" };
   const turnEl = (t) => {
     const w = el("div", "cx-turn"); w.dataset.turn = t.id;
     const qq = el("div", "cx-q"); qq.append(el("p", null, t.question));

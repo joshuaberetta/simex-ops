@@ -224,3 +224,30 @@ def test_chat_stays_out_of_participant_facing_code():
                  "render.py", "delivery.py", "desk.py", "inbound.py", "desk_ai.py", "suggest_leader.py", "suggest.py"):
         src = (here / name).read_text()
         assert not re.search(r"\bdesk_chat\.|import desk_chat|DeskChat|views_desk_chat", src), name
+
+
+def test_the_roster_is_who_is_actually_playing(excon, chat_on):
+    from ops.models import TeamRole
+    w = world(excon)
+    jane = Person.objects.get(name="Jane")
+    jane.team_role = TeamRole.objects.create(name="Deputy Team Leader")
+    jane.personal_email = "jane.private@gmail.com"
+    jane.save()
+    la = leader("a")
+    out = desk_chat.tool_roster(desk_chat.Scope(), "Team A")
+    assert out.startswith("Team A (code a)") and "Team leader (ExCon" in out and la.person.name in out
+    assert "- Jane (Deputy Team Leader;" in out and "Omar" not in out
+    assert "Desk conversations: 1, 1 waiting" in out
+    assert "gmail.com" not in out and "kobotoolbox.org" not in out  # never their email addresses
+    # in every question's context, for the teams in scope
+    fake = Script([[("answer", {"answer": "Jane.", "sources": []})]])
+    ai.set_client(fake)
+    d = desk_client()
+    c = d.post("/inbox/desk/chat/", {"team": w.ta.id}, headers=FETCH).json()["chat"]
+    d.post(f"/inbox/desk/chat/{c['id']}/ask/", {"question": "Who is on Team A?", "team": w.ta.id}, headers=FETCH)
+    first = fake.calls[0]["messages"][0]["content"][0]["text"]
+    assert "THE ROSTER" in first and "- Jane (Deputy Team Leader" in first and "Omar" not in first
+    assert "always answer from the roster" in fake.calls[0]["system"][0]["text"]
+    personas = desk_chat.tool_personas(desk_chat.Scope(), "")
+    assert "persona:donotreply" in personas and "persona:cnn" in personas
+    assert "persona:cnn" in desk_chat.tool_personas(desk_chat.Scope(), "news") and "donotreply" not in desk_chat.tool_personas(desk_chat.Scope(), "news")
