@@ -145,7 +145,9 @@ def payload(msg, attachments, headers=None):
     if attachments:
         p["attachments"] = [{"filename": a.filename, "content": base64.b64encode(bytes(a.data)).decode(),
                              # an invitation's calendar part (SIMEX Calendar, ops/ics.py): mail clients read its method
-                             **({"content_type": a.content_type} if (getattr(a, "content_type", "") or "").startswith("text/calendar") else {})}
+                             **({"content_type": a.content_type} if (getattr(a, "content_type", "") or "").startswith("text/calendar") else {}),
+                             # an image in the text: the HTML shows it as cid:<content_id>
+                             **({"content_id": a.cid, "content_type": a.content_type} if getattr(a, "cid", "") else {})}
                             for a in attachments]
     return p
 

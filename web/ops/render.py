@@ -42,6 +42,7 @@ class Draft:
     inbox_owner_id: int | None = None  # in-app: ... or that team leader's own mailbox
     to_label: str = ""  # in-app: what the To line shows
     from_name: str = ""
+    body_html: str = ""  # the body's formatting and images (clean HTML, ops/richtext.py), or "" for plain text
 
     @property
     def reply_display(self):
@@ -54,7 +55,7 @@ class Draft:
 
     @property
     def html(self):
-        return wrap_html(text_to_html(self.body), self.footer, banner=self.banner)
+        return wrap_html(self.body_html or text_to_html(self.body), self.footer, banner=self.banner)
 
 
 def split_addresses(value):

@@ -49,6 +49,16 @@ def mailbody(text):
 
 
 @register.filter
+def richbody(m, base=""):
+    """A Mail's body for SIMEX Mail: its formatting and images (ops/richtext.py), cleaned again
+    on the way out, else the plain text as paragraphs."""
+    if getattr(m, "html", ""):
+        from .. import richtext
+        return mark_safe(richtext.render(m.html, m.files.all(), lambda f: f"{base}/file/{f.id}/?inline=1"))
+    return mailbody(m.body)
+
+
+@register.filter
 def joinlist(v, sep=", "):
     if isinstance(v, str):
         return v

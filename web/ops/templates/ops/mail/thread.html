@@ -68,7 +68,7 @@
         </div>
         <div class="gm-msg-meta">
           {% if m.note.meter %}{% include "ops/mail/_ai_meter.html" with ai=m.note.meter %}{% endif %}
-          {% if m.files.all %}<span class="gm-att">{% icon "attach" 18 %}</span>{% endif %}
+          {% if m.attached %}<span class="gm-att">{% icon "attach" 18 %}</span>{% endif %}
           <span class="gm-msg-date">{% msgdate m %}</span>
           <button type="button" class="gm-star sm{% if m.starred %} on{% endif %}" data-star-mail="{{ m.id }}" aria-label="Star" {% if readonly %}disabled{% endif %}>{% if m.starred %}{% icon "star" 20 %}{% else %}{% icon "star_border" 20 %}{% endif %}</button>
           {% if not readonly %}
@@ -89,12 +89,12 @@
           </div>{% endwith %}{% endif %}
         {% if m.banner %}<div class="gm-banner">{{ m.banner }}</div>{% endif %}
         {% if m.cal %}{% include "ops/mail/_invite_card.html" with c=m.cal %}{% endif %}
-        <div class="gm-text">{{ m.body|mailbody }}</div>
+        <div class="gm-text{% if m.html %} rich{% endif %}">{{ m|richbody:base }}</div>
         {% if m.footer %}<div class="gm-footer">{{ m.footer|mailbody }}</div>{% endif %}
-        {% if m.files.all %}
+        {% if m.attached %}
         <div class="gm-files">
-          <div class="gm-files-head">{{ m.files.all|length }} attachment{{ m.files.all|length|pluralize }}</div>
-          {% for a in m.files.all %}
+          <div class="gm-files-head">{{ m.attached|length }} attachment{{ m.attached|length|pluralize }}</div>
+          {% for a in m.attached %}
           <a class="gm-file" href="{{ base }}/file/{{ a.id }}/" download title="Download {{ a.filename }}">
             <span class="gm-file-icon {{ a.filename|file_kind }}">{{ a.filename|file_kind|upper }}</span>
             <span class="gm-file-name">{{ a.filename }}</span>

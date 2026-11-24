@@ -33,6 +33,21 @@ NUMBER = re.compile(r"^\d{1,4}%?$")
 BLOCK = {"p", "div", "li", "blockquote", "h1", "h2", "h3", "h4", "pre", "tr", "table", "ul", "ol", "hr"}
 
 
+def image_type(data):
+    """The type of an image in the text from its first bytes (never what the browser said), or
+    None if it isn't one we show."""
+    head = bytes(data[:16])
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if head.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if head[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
 def new_cid():
     return f"img-{secrets.token_hex(8)}"
 
@@ -87,7 +102,7 @@ class _Cleaner(HTMLParser):
                 return
             self.cids.append(cid)
             kept.append(("src", url))
-            if self.image is not None:
+            if not url.startswith("cid:"):  # shown from its file: the editor keeps which one
                 kept.append(("data-cid", cid))
             for k in ("alt", "width", "height"):
                 if k in a and (k == "alt" or NUMBER.match(a[k])):

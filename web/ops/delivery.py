@@ -20,7 +20,7 @@ from django.db import IntegrityError, connection, transaction
 from django.db.models import F
 from django.utils import timezone
 
-from . import addresses, conf, mailer, notices, push, render, simclock
+from . import addresses, conf, mailer, notices, push, render, richtext, simclock
 from .models import (Attachment, Inject, Mail, MailAttachment, Message, MessageAttachment, Person, Team, TestRun,
                      TestRunItem, audit)
 
@@ -59,7 +59,7 @@ def new_message(inj, d, kind, idem_key, run=None):
                    subject=d.subject, text=d.text, html=d.html, attachment_ids=d.attachment_ids,
                    team_id=d.team_id, person_id=d.person_id, reply_token=token if email_reply else None,
                    inbox_team_id=d.inbox_team_id, inbox_owner_id=d.inbox_owner_id, banner=d.banner or "",
-                   body=d.body, footer=d.footer, persona=d.reply_local or "")
+                   body=d.body, body_html=d.body_html, footer=d.footer, persona=d.reply_local or "")
 
 
 def _put_mail(m):
@@ -71,8 +71,8 @@ def _put_mail(m):
         thread=m.thread or (parent.thread if parent else ""),
         from_name=name, from_addr=addr, to_label=(m.to or [""])[0],
         to_person_id=None if m.inbox_owner_id else m.person_id,
-        persona=m.persona or addr.split("@")[0], subject=m.subject, body=m.body, footer=m.footer, banner=m.banner,
-        message=m, inject_id=m.inject_id, in_reply_to=parent, is_test=m.kind in ("test", "oneoff"))
+        persona=m.persona or addr.split("@")[0], subject=m.subject, body=m.body, html=m.body_html, footer=m.footer,
+        banner=m.banner, message=m, inject_id=m.inject_id, in_reply_to=parent, is_test=m.kind in ("test", "oneoff"))
     _attach(mail, m)
     push.notify_mail(mail)
     if not m.inbox_owner_id:
@@ -81,7 +81,8 @@ def _put_mail(m):
     if lead:  # sent as the team leader persona: the leader has it in Sent, in the same conversation
         sent = Mail.objects.create(
             team_id=m.inbox_team_id, owner=lead, folder="sent", thread=mail.thread, from_name=name, from_addr=addr,
-            to_label=mail.to_label or mail.team.name, persona="", subject=m.subject, body=m.body, footer=m.footer,
+            to_label=mail.to_label or mail.team.name, persona="", subject=m.subject, body=m.body, html=m.body_html,
+            footer=m.footer,
             banner=m.banner, message=m, inject_id=m.inject_id, is_test=mail.is_test, read_at=timezone.now(),
             author_id=m.author_id, sim_at=mail.sim_at)
         _attach(sent, m)
@@ -92,7 +93,7 @@ def _put_mail(m):
 
 # What a copy of a Mail in another mailbox keeps (the mailbox state, star, read..., starts afresh).
 COPIED = ["thread", "from_name", "from_addr", "to_label", "cc_label", "to_person_id", "persona", "to_team_id", "subject",
-          "body", "footer", "banner", "author_id", "message_id", "inject_id", "is_test", "recipients", "created_at",
+          "body", "html", "footer", "banner", "author_id", "message_id", "inject_id", "is_test", "recipients", "created_at",
           "sim_at", "event_id", "invite"]
 
 
@@ -102,7 +103,7 @@ def copy_mail(src, **over):
     mail = Mail.objects.create(**{**{f: getattr(src, f) for f in COPIED}, "team_id": src.team_id, **over})
     for a in src.files.all():
         MailAttachment.objects.create(mail=mail, attachment=a.attachment, filename=a.filename, size=a.size,
-                                      content_type=a.content_type, data=a.data, sha256=a.sha256)
+                                      content_type=a.content_type, data=a.data, sha256=a.sha256, cid=a.cid)
     return mail
 
 
@@ -124,7 +125,7 @@ def _attach(mail, m):
                                       size=a.size)
     for f in m.files.all():  # files ExCon uploaded to an answer: the Mail gets its own copy
         MailAttachment.objects.create(mail=mail, filename=f.filename, content_type=f.content_type, size=f.size,
-                                      data=f.data)
+                                      data=f.data, cid=f.cid)
 
 
 def deliver_personal(m, people, to_label, cc_label="", recipients=None):
@@ -136,7 +137,7 @@ def deliver_personal(m, people, to_label, cc_label="", recipients=None):
     m.save()
     name, addr = email.utils.parseaddr(m.from_addr)
     common = dict(team_id=m.inbox_team_id, thread=m.thread or "", from_name=name, from_addr=addr, to_label=to_label,
-                  cc_label=cc_label, subject=m.subject, body=m.body, footer=m.footer, message=m, inject_id=m.inject_id,
+                  cc_label=cc_label, subject=m.subject, body=m.body, html=m.body_html, footer=m.footer, message=m, inject_id=m.inject_id,
                   is_test=m.kind in ("test", "oneoff") or Team.objects.filter(pk=m.inbox_team_id, is_test=True).exists(),
                   author_id=m.author_id, recipients=recipients or {})
     sent = Mail.objects.create(**common, owner_id=m.author_id, folder="sent", read_at=now)
@@ -403,10 +404,11 @@ def drafted(m, draft, text):
 
 
 def answer(response, body, user="", files=(), attachments=(), ai_draft=None, idem_key=None, npc=False, author=None,
-           subject=None):
+           subject=None, body_html=""):
     """Reply as the persona the participant wrote to: into their team's inbox (in-app
     thread) or by email (email thread), with files ExCon uploaded ((filename, content_type,
-    data) tuples) and inject documents (Attachment rows). Returns the Message. An AI
+    data[, cid]) tuples: with a cid, an image in body_html, its clean HTML from SIMEX Mail's
+    composer) and inject documents (Attachment rows). Returns the Message. An AI
     persona's answer (npc) passes its own deterministic idem_key; one from the persona desk,
     the desk member who wrote it (author)."""
     idem_key = idem_key or f"reply-{response.id}-{uuid.uuid4().hex}"
@@ -426,7 +428,7 @@ def answer(response, body, user="", files=(), attachments=(), ai_draft=None, ide
         own = response.person if (response.person_id and thread and Mail.objects.filter(
             team=team, owner=response.person, thread=thread, message__inbox_owner=response.person).exists()) else None
         d = render.Draft(target=team.name if team else "", from_addr=from_addr, reply_to=None, to=[], cc=[], bcc=[],
-                         subject=subject, body=body, footer=cfg.get("footer", ""),
+                         subject=subject, body=body, footer=cfg.get("footer", ""), body_html=body_html,
                          attachment_ids=[a.id for a in attachments],
                          team_id=response.team_id, person_id=response.person_id, reply_local=persona,
                          channel="inapp", inbox_team_id=response.team_id, inbox_owner_id=own.id if own else None,
@@ -440,9 +442,12 @@ def answer(response, body, user="", files=(), attachments=(), ai_draft=None, ide
         local_time = timezone.localtime(response.received_at).strftime("%a %d %b %H:%M")
         text_body = body + (f"\n\nOn {local_time}, {response.from_name or response.from_addr} wrote:\n{quoted}"
                             if quoted else "")
+        if body_html and quoted:
+            body_html += richtext.quote_html(response.text or "", False,
+                                             f"On {local_time}, {response.from_name or response.from_addr} wrote:")
         d = render.Draft(target=response.team.name if response.team else response.from_addr, from_addr=from_addr,
                          reply_to=None, to=[response.from_addr], cc=[], bcc=render.split_addresses(cfg.get("excon_bcc")),
-                         subject=subject, body=text_body, footer=cfg.get("footer", ""),
+                         subject=subject, body=text_body, footer=cfg.get("footer", ""), body_html=body_html,
                          attachment_ids=[a.id for a in attachments],
                          team_id=response.team_id, person_id=response.person_id, reply_local=persona, channel="email")
         m = new_message(response.inject, d, "reply", idem_key)
@@ -453,15 +458,20 @@ def answer(response, body, user="", files=(), attachments=(), ai_draft=None, ide
     m.npc, m.author = npc, author
     with transaction.atomic():  # the files are in place before anything can deliver the Message
         m.save()
-        for name, ctype, data in files:
-            MessageAttachment.objects.create(message=m, filename=name[:300], content_type=ctype[:120], size=len(data),
-                                             data=data)
+        save_files(m, files)
     audit("reply_answer", f"#{response.id} ({response.channel})", user)
     deliver([m])
     return m
 
 
 # --- follow-ups: more from the persona in the thread of a delivered inject ------------------
+
+def save_files(m, files):
+    """A Message's own files: (filename, content type, data[, cid]) tuples."""
+    for name, ctype, data, *cid in files:
+        MessageAttachment.objects.create(message=m, filename=name[:300], content_type=ctype[:120], size=len(data),
+                                         data=data, cid=(cid[0] if cid else "")[:80])
+
 
 def followup_targets(inj):
     """The latest live delivery of an inject to each recipient (team inbox, person, set of

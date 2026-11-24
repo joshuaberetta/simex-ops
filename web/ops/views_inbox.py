@@ -40,7 +40,8 @@ from django.utils.http import content_disposition_header
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import addresses, conf, delivery, desk, desk_ai, inbound, push, render as rnd, signin, simclock, suggest_leader
+from . import (addresses, conf, delivery, desk, desk_ai, inbound, push, render as rnd, richtext, signin, simclock,
+               suggest_leader)
 from .access import desk_of, is_excon, leader_of, login_required_any, participant_of, rp_of
 from .models import (CalendarEvent, Mail, MailAction, MailAttachment, MailLabel, MessageAttachment, Person, PushSubscription, Response,
                      Sender, Team, ThreadLabel, audit)
@@ -592,7 +593,7 @@ def conversations(v, folder, q=""):
     mails = list(_folder_qs(v, folder, q).prefetch_related(FILES).order_by("-created_at", "-id")[:2000])
     if folder == "drafts":
         return [{"thread": m.thread, "latest": m, "count": 1, "unread": False, "starred": m.starred,
-                 "has_files": bool(m.files.all()), "people": "Draft", "draft": True, "subject": m.subject}
+                 "has_files": bool(m.attached), "people": "Draft", "draft": True, "subject": m.subject}
                 for m in mails]
     threads = {}
     order = []
@@ -635,7 +636,7 @@ def conversations(v, folder, q=""):
         rows.append({"thread": t, "latest": latest, "count": len(conv), "subject": first.subject,
                      "unread": any(m.folder == "inbox" and m.read_at is None for m in conv),
                      "starred": any(m.starred for m in conv), "people": people,
-                     "has_files": any(m.files.all() for m in threads[t]), "draft": False,
+                     "has_files": any(m.attached for m in threads[t]), "draft": False,
                      "labels": sorted(on.get(t, []), key=lambda x: x["name"].lower()), "all_labels": ids_on.get(t, []),
                      "desk": desk_chips(conv, memo, team_names) if v.desk else None,
                      "replied": replied and folder != "sent",
@@ -1115,6 +1116,7 @@ def thread_view(request, v, thread):
     thread_js = {"subject": subject, "thread": thread, "last": last.id,
                  "reply": [k for k in reply_to if k], "replyAll": [k for k in reply_all if k],
                  "msgs": {str(m.id): {"from": m.from_name, "addr": m.from_addr, "body": m.body, "subject": m.subject,
+                                      "html": shown_html(v, m),
                                       "date": timezone.localtime(m.sim_at or m.created_at).strftime("%a, %b %-d, %Y at %H:%M"),
                                       "to": m.to_label,
                                       "reply": ([f"t:{m.desk_team_id}"] if m.desk_team_id else []) if v.desk
@@ -1341,7 +1343,8 @@ def _keys(value):
 @mailbox_view
 @require_POST
 def draft_save(request, v):
-    """Autosave of the compose window (no files: those are attached on send)."""
+    """Autosave of the compose window (no files: those are attached on send; but the images in
+    the text are kept with the draft, so it opens again as it was)."""
     P = request.POST
     d = v.mails().filter(pk=_id(P.get("draft_id")), folder="drafts").first()
     if d is None and _id(P.get("draft_id")):
@@ -1355,12 +1358,18 @@ def draft_save(request, v):
     if P.get("from") in {f["key"] for f in from_choices(v)}:
         d.recipients["from"] = P["from"]
     d.to_label = _label(_resolve(d.recipients["to"], address_book(v), v))
-    d.subject, d.body = P.get("subject") or "", (P.get("body") or "").replace("\r\n", "\n")
     d.in_reply_to = parent
     d.forward_of = v.mails().filter(pk=_id(P.get("forward_of"))).first()
+    d.subject = P.get("subject") or ""
+    d.body, d.html, inline = _composed(request, v, d if not new else None, d.forward_of)
     d.thread = parent.thread if parent else (d.thread or "")
     d.created_at, d.sim_at = timezone.now(), simclock.now()
     d.save()
+    have = set(d.files.exclude(cid="").values_list("cid", flat=True)) if not new else set()
+    for name, ctype, data, cid in inline:
+        if cid not in have:
+            MailAttachment.objects.create(mail=d, filename=name, content_type=ctype, size=len(data), data=data, cid=cid)
+    d.files.exclude(cid="").exclude(cid__in=[x[3] for x in inline]).delete()
     if new:
         track(v, "draft", [d.thread], draft=d.id)
     shown = d.sim_at if d.sim_at and sees_sim_only(v) else d.created_at
@@ -1372,8 +1381,44 @@ def draft_get(request, v, mid):
     d = get_object_or_404(v.mails(), pk=mid, folder="drafts")
     return JsonResponse({"id": d.id, "to": d.recipients.get("to", []), "cc": d.recipients.get("cc", []),
                          "bcc": d.recipients.get("bcc", []), "subject": d.subject, "body": d.body,
+                         "html": shown_html(v, d),
                          "in_reply_to": d.in_reply_to_id, "forward_of": d.forward_of_id,
                          "from": d.recipients.get("from", "")})
+
+
+def shown_html(v, m):
+    """A Mail's formatted body for SIMEX Mail (its images from its files), or ""."""
+    if not m.html:
+        return ""
+    return richtext.render(m.html, m.files.all(), lambda f: f"{v.base}/file/{f.id}/?inline=1")
+
+
+def _composed(request, v, draft=None, fwd=None):
+    """(text, html, inline) of the body the composer posted: html its clean HTML ("" when it has
+    no formatting: the text says it all), inline the images in it as (filename, content type,
+    data, cid), each uploaded now ("inline" files, "inline_cid" their cids) or kept from the
+    draft or the mail it forwards; an image with none of those is left out."""
+    P = request.POST
+    text = (P.get("body") or "").replace("\r\n", "\n").rstrip()
+    if not (P.get("html") or "").strip():
+        return text, "", []
+    found = {}
+    for f, cid in zip(request.FILES.getlist("inline"), P.getlist("inline_cid")):
+        data = f.read()
+        ctype = richtext.image_type(data)
+        if ctype and richtext.CID.match(cid or ""):
+            ext = ctype.split("/")[1].replace("jpeg", "jpg")
+            name = re.sub(r"[\r\n/\\]+", " ", f.name or "")[:200] or "image"
+            found[cid] = (name if "." in name else f"{name}.{ext}", ctype, data, cid)
+    for m in (draft, fwd):
+        for a in (m.files.exclude(cid="") if m is not None else []):
+            data = a.content()
+            if a.cid not in found and data is not None:
+                found[a.cid] = (a.filename, a.content_type, data, a.cid)
+    html = richtext.clean(P["html"], image=lambda c: f"cid:{c}" if c in found else None)
+    inline = [found[c] for c in richtext.cids(html)]
+    text = richtext.to_text(html) or text
+    return text, (html if richtext.is_rich(html) else ""), inline
 
 
 def _id(v):
@@ -1393,8 +1438,10 @@ def send(request, v):
     cc = _resolve(_keys(P.get("cc")), book, v)
     bcc = _resolve(_keys(P.get("bcc")), book, v)
     subject = (P.get("subject") or "").strip() or "(no subject)"
-    body = (P.get("body") or "").replace("\r\n", "\n").rstrip()
     files = request.FILES.getlist("files")
+    fwd = v.mails().filter(pk=_id(P.get("forward_of"))).first()
+    draft = v.mails().filter(pk=_id(P.get("draft_id")), folder="drafts").first()
+    body, html, inline = _composed(request, v, draft, fwd)
     limit = int(conf.get("max_upload_mb") or 10) * 1024 * 1024
     ajax = request.headers.get("x-requested-with") == "fetch"
 
@@ -1407,24 +1454,24 @@ def send(request, v):
         return fail("Add at least one recipient.")
     if not body and not files and not P.get("forward_of"):
         return fail("Write a message first.")
-    if sum(f.size for f in files) > limit:
-        return fail(f"Attachments are over {limit // (1024 * 1024)} MB.")
+    if sum(f.size for f in files) + sum(len(x[2]) for x in inline) > limit:
+        return fail(f"Attachments and images are over {limit // (1024 * 1024)} MB.")
     parent = v.mails().filter(pk=_id(P.get("in_reply_to"))).first()
-    fwd = v.mails().filter(pk=_id(P.get("forward_of"))).first()
+    rich = (html, inline)
     if v.desk:
-        return _send_desk(request, v, P, to + cc + bcc, subject, body, files, parent, fwd, fail, ajax)
+        return _send_desk(request, v, P, to + cc + bcc, subject, body, files, parent, fwd, fail, ajax, rich)
     w = sender_box(v, P.get("from"))  # a member chooses which address it goes from
     if not v.leader_box and not w.member_box and not [e for e in to + cc + bcc if e["key"] != f"t:{v.team.id}"]:
         return fail(f"That is {v.team.name}'s own address: send it from your own address, or add someone else.")
     try:
         with transaction.atomic():  # all or nothing: a failure must not leave a Sent copy to send again
             if v.leader_box:
-                sent = _send_as_leader(request, v, P, to, cc, bcc, subject, body, files, parent, fwd)
+                sent = _send_as_leader(request, v, P, to, cc, bcc, subject, body, files, parent, fwd, rich)
             else:
                 # It continues the conversation as that mailbox has it (the same delivery), if it does.
                 twin = (w.mails().filter(thread=parent.thread, message_id=parent.message_id, folder=parent.folder).first()
                         if w is not v and parent and parent.message_id else None)
-                sent = _send(request, w, P, to, cc, bcc, subject, body, files, twin or parent, fwd)
+                sent = _send(request, w, P, to, cc, bcc, subject, body, files, twin or parent, fwd, rich)
                 if w is not v and v.member_box:  # from the team's address: in their own Sent as well
                     delivery.copy_mail(sent, owner=v.owner, folder="sent", read_at=sent.read_at, persona=sent.persona,
                                        in_reply_to=parent, forward_of=fwd)
@@ -1434,7 +1481,7 @@ def send(request, v):
     started = MailAction.objects.filter(**v.box, action="draft", detail__draft=_id(P.get("draft_id"))).first() \
         if _id(P.get("draft_id")) else None
     track(v, "send", [sent.thread], kind="forward" if fwd else ("reply" if parent else "new"), to=len(to), cc=len(cc),
-          bcc=len(bcc), files=len(files),
+          bcc=len(bcc), files=len(files), images=len(inline), formatted=bool(html),
           draft_minutes=round((timezone.now() - started.at).total_seconds() / 60, 1) if started else None)
     url = f"{(v if v.mails().filter(thread=sent.thread).exists() else w).base}/t/{sent.thread}/?folder=sent"
     if ajax:
@@ -1443,20 +1490,22 @@ def send(request, v):
     return redirect(url)
 
 
-def _send_desk(request, v, P, entries, subject, body, files, parent, fwd, fail, ajax):
+def _send_desk(request, v, P, entries, subject, body, files, parent, fwd, fail, ajax, rich=("", [])):
     """The persona desk writes as a persona to one or more teams (desk.send). Each team's
     message goes on its own: one not armed or not deliverable doesn't stop the others."""
     uploads = [(re.sub(r"[\r\n]+", " ", f.name) or "file", f.content_type or "application/octet-stream", f.read())
-               for f in files]
+               for f in files] + list(rich[1])
     docs = []
     for a in (fwd.files.all() if fwd else []):  # forwarded: inject documents by reference, other files copied
+        if a.cid:
+            continue  # an image in its text: in rich[1] if still in the forward's
         if a.attachment_id:
             docs.append(a.attachment)
         elif a.data is not None:
             uploads.append((a.filename, a.content_type, bytes(a.data)))
     try:
         msgs, errors = desk.send(v.person, request.user.get_username(), P.get("from"), entries, subject, body,
-                                 uploads, docs, parent)
+                                 uploads, docs, parent, body_html=rich[0])
     except desk.DeskError as e:
         return fail(str(e))
     v.mails().filter(pk=_id(P.get("draft_id")), folder="drafts").delete()
@@ -1507,7 +1556,7 @@ class SendFailed(Exception):
     pass
 
 
-def _send(request, v, P, to, cc, bcc, subject, body, files, parent, fwd):
+def _send(request, v, P, to, cc, bcc, subject, body, files, parent, fwd, rich=("", [])):
     """A member's message, from the team inbox or their own mailbox. To personas it is a
     Response, always on the team inbox's Sent copy (so the team, its leader and ExCon see every
     answer); to teammates, a copy in their own mailbox; to the team (from their own mailbox),
@@ -1520,13 +1569,15 @@ def _send(request, v, P, to, cc, bcc, subject, body, files, parent, fwd):
         to_label=_label(to), cc_label=_label(cc), recipients={"to": [e["key"] for e in to], "cc": [e["key"] for e in cc],
                                                              "bcc": [e["key"] for e in bcc]},
         persona=personas[0] if personas else "",
-        subject=subject, body=body, author=v.person, in_reply_to=parent, forward_of=fwd,
+        subject=subject, body=body, html=rich[0], author=v.person, in_reply_to=parent, forward_of=fwd,
         inject=parent.inject if parent else (fwd.inject if fwd else None), is_test=v.team.is_test, read_at=timezone.now())
     for f in files:
         MailAttachment.objects.create(mail=sent, filename=f.name[:300], size=f.size,
                                       content_type=f.content_type or "application/octet-stream", data=f.read())
+    for name, ctype, data, cid in rich[1]:
+        MailAttachment.objects.create(mail=sent, filename=name, size=len(data), content_type=ctype, data=data, cid=cid)
     if fwd:  # forwarded attachments travel with the message (as references, not copies)
-        for a in fwd.files.all():
+        for a in fwd.files.filter(cid=""):
             MailAttachment.objects.create(mail=sent, attachment=a.attachment, filename=a.filename, size=a.size,
                                           content_type=a.content_type, data=a.data)
     # What the team sees: written from a member's own mailbox to a persona, the team inbox's Sent has it too.
@@ -1568,7 +1619,7 @@ def _send(request, v, P, to, cc, bcc, subject, body, files, parent, fwd):
     return sent
 
 
-def _send_as_leader(request, v, P, to, cc, bcc, subject, body, files, parent, fwd):
+def _send_as_leader(request, v, P, to, cc, bcc, subject, body, files, parent, fwd, rich=("", [])):
     """A team leader writes as the team leader persona: to their team, a Message delivered to
     the team inbox (and so every member's own mailbox) at once, which also puts it in the
     leader's Sent (delivery._put_mail); to some members only, a Message to those members' own
@@ -1588,7 +1639,7 @@ def _send_as_leader(request, v, P, to, cc, bcc, subject, body, files, parent, fw
                .order_by("-id").first() if thread else None)
     to_label = team.name if [e["key"] for e in to] == [f"t:{team.id}"] and not cc else _label(to)
     d = rnd.Draft(target=team.name, from_addr=f'"{lp["name"]}" <{lp["addr"]}>', reply_to=None, to=[], cc=[], bcc=[],
-                  subject=subject, body=body, footer="",
+                  subject=subject, body=body, body_html=rich[0], footer="",
                   attachment_ids=[a.attachment_id for a in fwd.files.all() if a.attachment_id] if fwd else [],
                   team_id=team.id, reply_local=lp["local"], channel="inapp", inbox_team_id=team.id, to_label=to_label)
     inj = answers.inject if answers else (parent.inject if parent else (fwd.inject if fwd else None))
@@ -1600,7 +1651,8 @@ def _send_as_leader(request, v, P, to, cc, bcc, subject, body, files, parent, fw
     for f in files:
         MessageAttachment.objects.create(message=m, filename=f.name[:300], size=f.size,
                                          content_type=f.content_type or "application/octet-stream", data=f.read())
-    for a in (fwd.files.all() if fwd else []):
+    delivery.save_files(m, rich[1])
+    for a in (fwd.files.filter(cid="") if fwd else []):
         if not a.attachment_id and a.data is not None:
             MessageAttachment.objects.create(message=m, filename=a.filename, size=a.size, content_type=a.content_type,
                                              data=a.data)
@@ -1872,6 +1924,14 @@ def mail_file(request, fid, as_team=None, box="", pid=None):
     data = a.content()
     if data is None:
         raise Http404
+    shown = richtext.image_type(data) if a.cid and request.GET.get("inline") else None
+    if shown:  # an image in the text, shown where it is (never counted as a download)
+        resp = HttpResponse(data, content_type=shown)
+        resp["Content-Disposition"] = "inline"
+        resp["X-Content-Type-Options"] = "nosniff"
+        resp["Content-Security-Policy"] = "default-src 'none'; sandbox"
+        resp["Cache-Control"] = "private, max-age=86400"
+        return resp
     if mine and mail.folder == "inbox" and mail.message_id:
         inbound.record_read([mail], person or leader, request.META.get("HTTP_USER_AGENT", ""), what="download",
                             link=a.filename)

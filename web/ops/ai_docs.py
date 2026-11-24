@@ -46,7 +46,7 @@ def team_files():
     """(team id, sha256, values) of every stored file a team sent: what members and leaders
     attached in SIMEX Mail (their Sent copy; never a forwarded inject document) and the files of
     emails teams sent in."""
-    mail = (MailAttachment.objects.filter(data__isnull=False, attachment__isnull=True, mail__folder="sent",
+    mail = (MailAttachment.objects.filter(data__isnull=False, attachment__isnull=True, cid="", mail__folder="sent",
                                           mail__team__isnull=False, mail__author__role__in=AUTHORS,
                                           mail__author__team__isnull=False)
             .exclude(sha256="").order_by("id")

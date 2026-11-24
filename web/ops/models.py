@@ -295,6 +295,7 @@ class Message(models.Model):
     thread = models.CharField(max_length=40, blank=True, default="")
     banner = models.TextField(blank=True, default="")
     body = models.TextField(blank=True, default="")  # in-app: text without footer/banner
+    body_html = models.TextField(blank=True, default="")  # its formatting and images (ops/richtext.py), or ""
     footer = models.TextField(blank=True, default="")
     persona = models.CharField(max_length=120, blank=True, default="")  # the sender's username (Sender.local_part, filled)
     # Follow-up (kind followup): the delivery of the inject it continues, in that thread.
@@ -318,6 +319,7 @@ class MessageAttachment(models.Model):
     content_type = models.CharField(max_length=120, default="application/octet-stream")
     size = models.IntegerField(default=0)
     data = models.BinaryField()
+    cid = models.CharField(max_length=80, blank=True, default="")  # an image in the text (body_html)
 
 
 class Event(models.Model):
@@ -352,6 +354,9 @@ class Mail(models.Model):
     to_team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")  # team-to-team
     subject = models.TextField(default="")
     body = models.TextField(default="")
+    # The body with its formatting and images (clean HTML, ops/richtext.py; images as cid: files
+    # of this Mail), or "" for plain text. body is always the text.
+    html = models.TextField(blank=True, default="")
     footer = models.TextField(blank=True, default="")
     banner = models.TextField(blank=True, default="")  # test deliveries
     author = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
@@ -383,6 +388,11 @@ class Mail(models.Model):
     class Meta:
         ordering = ["-created_at", "-id"]
         indexes = [models.Index(fields=["team", "folder", "thread"])]
+
+    @property
+    def attached(self):
+        """Its files listed as attachments (not the images in its text)."""
+        return [f for f in self.files.all() if not f.cid]
 
     def save(self, *args, **kwargs):
         if self._state.adding and not self.event_id:
@@ -579,6 +589,7 @@ class MailAttachment(models.Model):
     size = models.IntegerField(default=0)
     data = models.BinaryField(null=True, blank=True)
     sha256 = models.CharField(max_length=64, blank=True, default="", db_index=True)  # of its own data (ops/ai_docs.py)
+    cid = models.CharField(max_length=80, blank=True, default="")  # an image in the text (Mail.html), not listed
 
     def save(self, *args, **kwargs):
         if self.data is not None and not self.sha256:

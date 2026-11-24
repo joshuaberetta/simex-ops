@@ -29,7 +29,7 @@ from django.utils import timezone
 
 from . import conf, inbound, push, render
 from .addresses import member_name
-from .models import Mail, MailAttachment, Message, MessageAttachment, NpcReply, Person, Response, Sender, Team, audit
+from .models import Mail, MailAttachment, Message, NpcReply, Person, Response, Sender, Team, audit
 
 log = logging.getLogger("simex.desk")
 
@@ -94,7 +94,7 @@ def _files(desk_mail, mail=None, m=None, response=None):
     if mail is not None:
         for a in mail.files.all():
             MailAttachment.objects.create(mail=desk_mail, attachment=a.attachment, filename=a.filename, size=a.size,
-                                          content_type=a.content_type, data=a.data)
+                                          content_type=a.content_type, data=a.data, cid=a.cid)
     if m is not None:
         from .models import Attachment
         for a in Attachment.objects.filter(id__in=m.attachment_ids or []):
@@ -102,7 +102,7 @@ def _files(desk_mail, mail=None, m=None, response=None):
                                           content_type=a.content_type, size=a.size)
         for f in m.files.all():
             MailAttachment.objects.create(mail=desk_mail, filename=f.filename, content_type=f.content_type,
-                                          size=f.size, data=f.data)
+                                          size=f.size, data=f.data, cid=f.cid)
     if response is not None:
         for a in response.attachments.all():
             if a.data is not None:  # too large to keep: on the Replies tab only as a name
@@ -138,7 +138,8 @@ def _on_delivered(m, mail):
     team = Team.objects.filter(pk=team_id).first() if team_id else None
     desk_mail = Mail.objects.create(
         team=None, owner=None, folder="sent", thread=thread, from_name=name, from_addr=addr, to_label=m.target,
-        persona=m.persona, desk_team=team, subject=m.subject, body=m.body or "", footer=m.footer, banner=m.banner,
+        persona=m.persona, desk_team=team, subject=m.subject, body=m.body or "", html=m.body_html, footer=m.footer,
+        banner=m.banner,
         message=m, inject_id=m.inject_id, is_test=m.kind in ("test", "oneoff") or bool(team and team.is_test),
         read_at=timezone.now(), author_id=m.author_id, sim_at=mail.sim_at if mail is not None else None)
     _files(desk_mail, mail=mail) if mail is not None else _files(desk_mail, m=m)
@@ -178,7 +179,7 @@ def _on_response(r, personas_):
         from_name=(src.from_name if src else r.from_name) or r.from_addr, from_addr=r.from_addr,
         to_label=", ".join(f"{describe(p, team, memo)['name']} <{render.persona_addr(p, r.channel)}>" for p in to),
         cc_label=src.cc_label if src else ", ".join(r.cc or []), persona=to[0], desk_team=team, desk_response=r,
-        subject=r.subject, body=body, inject_id=r.inject_id, is_test=r.kind == "test" or bool(team and team.is_test),
+        subject=r.subject, body=body, html=src.html if src else "", inject_id=r.inject_id, is_test=r.kind == "test" or bool(team and team.is_test),
         created_at=r.received_at, author_id=r.person_id, sim_at=src.sim_at if src else None)
     _files(mail, mail=src) if src else _files(mail, response=r)
     push.notify_mail(mail)
@@ -224,11 +225,13 @@ def skip_ai(response, sender, who):
             .update(status="skipped", note=f"Answered by {who} on the persona desk.", updated_at=timezone.now()))
 
 
-def send(person, user, from_key, entries, subject, body, files=(), docs=(), parent=None, idem=None, extra_files=None):
+def send(person, user, from_key, entries, subject, body, files=(), docs=(), parent=None, idem=None, extra_files=None,
+         body_html=""):
     """Write as a persona (from_key "p:<username>") to the teams in entries (address-book
     entries), one Message each: in a conversation (parent, a desk Mail), the team's message it
     answers gets its answer, else (or as another persona) a Message of kind desk in the same
-    conversation. files: (filename, content type, data); docs: inject Attachments (forwarded).
+    conversation. files: (filename, content type, data[, cid]: an image in body_html, the clean
+    HTML of a formatted body, ops/richtext.py); docs: inject Attachments (forwarded).
     idem(team, member): a deterministic idempotency key per recipient (SIMEX Calendar: per event,
     change and recipient; one already sent is not sent again); extra_files(team, member, channel):
     more files for that recipient (an invitation's .ics by email).
@@ -259,12 +262,12 @@ def send(person, user, from_key, entries, subject, body, files=(), docs=(), pare
     actor = person.user if person and person.user_id else get_user_model().objects.filter(username=user).first()
     token = ACTOR.set(actor)  # those on the conversation hear of it, but not the sender (_told_out)
     try:
-        return _send(s, targets, subject, body, files, docs, parent, person, user, who, idem, extra_files)
+        return _send(s, targets, subject, body, files, docs, parent, person, user, who, idem, extra_files, body_html)
     finally:
         ACTOR.reset(token)
 
 
-def _send(s, targets, subject, body, files, docs, parent, person, user, who, idem=None, extra_files=None):
+def _send(s, targets, subject, body, files, docs, parent, person, user, who, idem=None, extra_files=None, body_html=""):
     msgs, errors = [], []
     from . import delivery
     for t, member in targets:
@@ -284,13 +287,13 @@ def _send(s, targets, subject, body, files, docs, parent, person, user, who, ide
             more = list(extra_files(t, member, response.channel)) if extra_files else []
             m = delivery.answer(response, body, user=user, files=list(files) + more, attachments=docs, author=person,
                                 subject=subject if calendar.SENDING.get() else None,  # an invitation's answer
-                                idem_key=key)
+                                idem_key=key, body_html=body_html)
         elif not conf.flag("live_armed") and not t.is_test:
             errors.append(f"{label}: live sending is not armed (ExCon, Settings).")
             continue
         else:
             m, err = _new(s, local, ctx, t, subject, body, files, docs, parent, response, person, user, member,
-                          idem_key=key, extra_files=extra_files)
+                          idem_key=key, extra_files=extra_files, body_html=body_html)
             if err:
                 errors.append(f"{label}: {err}")
                 continue
@@ -312,7 +315,7 @@ def _name(person, team):
 
 
 def _new(s, local, ctx, team, subject, body, files, docs, parent, response, person, user, member=None, idem_key=None,
-         extra_files=None):
+         extra_files=None, body_html=""):
     """A new message from the persona to a team or one of its members (kind desk), delivered
     now. In-app, a member's goes to their own mailbox only (personal mailboxes; else to the team
     inbox, for them). Returns (Message, error)."""
@@ -322,7 +325,7 @@ def _new(s, local, ctx, team, subject, body, files, docs, parent, response, pers
     channel = response.channel if response is not None else (
         "email" if conf.get("channel_mode") == "email" else "inapp")
     label = _name(member, team)
-    common = dict(target=label, subject=subject, body=body, footer=cfg.get("footer", ""),
+    common = dict(target=label, subject=subject, body=body, body_html=body_html, footer=cfg.get("footer", ""),
                   attachment_ids=[a.id for a in docs], team_id=team.id, reply_local=local,
                   person_id=member.id if member else None)
     thread = ""
@@ -352,9 +355,7 @@ def _new(s, local, ctx, team, subject, body, files, docs, parent, response, pers
         m.extra_headers = {"In-Reply-To": response.message_id_header, "References": response.message_id_header}
     with transaction.atomic():  # the files are in place before anything can deliver the Message
         m.save()
-        for fname, ctype, data in files:
-            MessageAttachment.objects.create(message=m, filename=fname[:300], content_type=ctype[:120], size=len(data),
-                                             data=data)
+        delivery.save_files(m, files)
     audit("desk_send", f"{local} -> {team.name}: {subject[:80]}", user)
     delivery.deliver([m])
     return m, None
