@@ -13,7 +13,7 @@ SIMEX ops and SIMEX Mail are open source under the GNU AGPL-3.0: every page of b
 - **Injects.** Each email inject from the MEL is one row on the **Injects** tab, with a send time, a persona as sender (e.g. `ccdpr@simex.kobolabs.dev`), recipients, a subject, a body and attachments.
 - **Delivery.** One switch in **Settings → Delivery channel** decides how injects reach the teams (the status bar shows it: *via email* / *via SIMEX Mail*):
   - **Email (Resend)**, the main flow: injects go to the participants' real addresses from the personas (`ccdpr@simex.kobolabs.dev`), and their replies come back into the app.
-  - **SIMEX Mail**, the backup: injects land in the teams' mailboxes inside this site, a webmail client participants open in their browser. No real email is involved. Use it if email has problems (see 5.6).
+  - **SIMEX Mail**, the backup: injects land in the teams' mailboxes inside this site, a webmail client participants open in their browser. No real email is involved. Use it if email has problems (see 5.6). As in Gmail or Outlook, a return arrow before a conversation's subject in the list means the mailbox has replied since the last message it received.
   - **Per inject**: each inject's own channel field decides (mixing both).
 - **When.** At each inject's time the scheduler delivers it, but only if **live sending is armed** and nothing is paused. One inject usually becomes one message per team.
 - **Answers.** Participants reply to (or write to) personas from SIMEX Mail. Every answer appears on the **Replies** tab, matched exactly to the inject and team it answers. You read it, answer in character, and grade it against the inject's rubric.
