@@ -231,6 +231,22 @@ body.side-collapsed .gm-labels-head, body.side-collapsed .gm-lmore { display: no
 .gm-inline-reply { display: flex; gap: 12px; margin: 20px 0 0 -56px; }
 .gm-inline-form { flex: 1; border-radius: 12px; box-shadow: var(--shadow); padding: 4px 12px 8px; background: #fff; }
 .gm-inline-form .gm-body-input { min-height: 160px; }
+/* the inline reply, popped out into a window so the conversation scrolls behind it */
+.gm-inline-win { flex: 1; position: relative; min-width: 0; }
+.gm-inline-reply:not(.popped) .gm-inline-head { display: none; }
+.gm-popout { position: absolute; top: 6px; right: 6px; z-index: 2; }
+.gm-inline-reply.popped { position: fixed; right: 16px; bottom: 0; width: 540px; height: 520px; max-height: calc(100vh - 72px); margin: 0; z-index: 41; }
+body:has(#compose:not([hidden])) .gm-inline-reply.popped { right: 572px; }
+.gm-inline-reply:not(.popped) .gm-inline-form > .gm-field:first-of-type { padding-right: 32px; }
+.gm-inline-reply.popped > .gm-avatar, .gm-inline-reply.popped .gm-popout { display: none; }
+.gm-inline-reply.popped .gm-inline-win { display: flex; flex-direction: column; background: #fff; border-radius: 12px 12px 0 0;
+  box-shadow: 0 8px 10px 1px rgba(0,0,0,.14), 0 3px 14px 2px rgba(0,0,0,.12), 0 5px 5px -3px rgba(0,0,0,.2); }
+.gm-inline-reply.popped .gm-inline-head { display: flex; }
+.gm-inline-reply.popped .gm-inline-form { flex: 1; display: flex; flex-direction: column; min-height: 0; box-shadow: none; border-radius: 0; padding: 0 16px; }
+.gm-inline-reply.popped .gm-inline-form .gm-body-input { min-height: 80px; }
+.gm-inline-reply.popped.min { height: 40px; width: 280px; }
+.gm-inline-reply.popped.min .gm-inline-form { display: none; }
+body.reply-popped .gm-thread { padding-bottom: 540px; }
 
 /* compose window */
 .gm-compose { position: fixed; right: 16px; bottom: 0; width: 540px; height: 520px; background: #fff; border-radius: 12px 12px 0 0;
@@ -317,6 +333,9 @@ body.readonly .gm-hover, body.readonly .gm-tb-selected { display: none !importan
   .gm-details { min-width: 0; width: calc(100vw - 32px); left: -52px; }
   .gm-compose, .gm-compose.full { width: 100%; height: 100%; right: 0; bottom: 0; top: 0; border-radius: 0; transform: none; }
   .gm-compose.min { height: 40px; top: auto; }
+  .gm-inline-reply.popped, body:has(#compose:not([hidden])) .gm-inline-reply.popped { width: 100%; right: 0; height: 55vh; }
+  .gm-inline-reply.popped.min { width: 100%; }
+  body.reply-popped .gm-thread { padding-bottom: 60vh; }
   .gm-reply-actions { flex-wrap: wrap; }
   .gm-file { width: 100%; }
 }

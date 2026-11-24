@@ -37,6 +37,7 @@ SIMEX Mail is your team's mailbox for the exercise. Everything here is **exercis
 ## Replying
 - Open the conversation and click **Reply** (to the sender), **Reply all** (everyone on it) or **Forward**, at the bottom or on a message.
 - Write your answer and click **Send**. Attach files with the **paperclip** next to Send (up to the limit shown if too large).
+- **Pop out** (the arrow at the top right of the reply) moves your reply into a window at the bottom right, so you can scroll through the conversation while you write. Its top bar minimises it, puts it back under the conversation, or saves it to Drafts and closes it.
 
 ## Writing a new message
 - Click **Compose** (top left; on a phone, the button at the bottom right). A *New Message* window opens at the bottom right; you can minimise it or make it full screen.
@@ -57,7 +58,7 @@ SIMEX Mail is your team's mailbox for the exercise. Everything here is **exercis
 - **Create event** (the calendar icon at the top of a conversation) starts an event from that conversation, with the people in it as guests.
 
 ## Shortcuts (when you're not typing)
-`c` compose · `/` search · `v` move to · `l` labels · `j` / `k` next / previous · `Enter` open · `r` reply · `a` reply all · `f` forward · `e` archive · `#` delete · `u` back to the list · `Esc` close the compose window.
+`c` compose · `/` search · `v` move to · `l` labels · `j` / `k` next / previous · `Enter` open · `r` reply · `a` reply all · `f` forward · `e` archive · `#` delete · `u` back to the list · `Esc` close the compose window (or a popped-out reply).
 
 ## What ExCon sees
 Your team leader and ExCon can read your team inbox and your My mail (read-only: they never mark anything read for you). SIMEX Mail records what your team does in it, for the debrief: who reads and writes what and when, which files you open, and how you organise the mailbox (stars, labels, archive, searches, drafts). Your team's debrief report describes how the team handled its mail, without naming anyone.

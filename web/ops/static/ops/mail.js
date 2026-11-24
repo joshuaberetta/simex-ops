@@ -532,12 +532,30 @@
         }
         inline.load(d);
         $(".gm-inline-form", box).dataset.mode = mode;
-        box.hidden = false; $("[data-reply-actions]").hidden = true;
+        box.hidden = false; box.classList.remove("min"); $("[data-reply-actions]").hidden = true;
+        title();
         const ta = $("[name=body]", box); ta.focus(); ta.setSelectionRange(0, 0); ta.scrollTop = 0;
-        box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        if (!box.classList.contains("popped")) box.scrollIntoView({ block: "nearest", behavior: "smooth" });
         if (mode === "forward") $('[data-chip-input="to"]', box).focus();
       };
-      inline.opts.onClose = () => { box.hidden = true; $("[data-reply-actions]").hidden = false; };
+      // Pop out (as in webmail): the same reply, in a window over the page, so the conversation
+      // scrolls while it is written; pop in puts it back under the conversation.
+      const title = () => { $("[data-reply-title]", box).textContent = inline.form.elements.subject.value || "Reply"; };
+      inline.form.elements.subject.addEventListener("input", title);
+      const pop = (on) => {
+        box.classList.toggle("popped", on); box.classList.remove("min");
+        document.body.classList.toggle("reply-popped", on);
+        const ta = $("[name=body]", box); ta.focus();
+        if (!on) box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      };
+      const shut = () => { box.hidden = true; box.classList.remove("popped", "min"); document.body.classList.remove("reply-popped"); $("[data-reply-actions]").hidden = false; };
+      $("[data-reply-popout]", box).onclick = () => pop(true);
+      $("[data-reply-popin]", box).onclick = (e) => { e.stopPropagation(); pop(false); };
+      $("[data-reply-minimize]", box).onclick = (e) => { e.stopPropagation(); box.classList.toggle("min"); };
+      $("[data-reply-head]", box).onclick = () => box.classList.remove("min");
+      $("[data-reply-close]", box).onclick = async (e) => { e.stopPropagation(); await inline.save(); shut(); if (inline.form.elements.draft_id.value) snack("Draft saved"); };
+      window.simexReplyPopped = () => !box.hidden && box.classList.contains("popped");
+      inline.opts.onClose = shut;
       $$("[data-reply]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); openInline("reply", b.dataset.reply); });
       $$("[data-reply-all]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); openInline("all", b.dataset.replyAll); });
       $$("[data-forward]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); openInline("forward", b.dataset.forward); });
@@ -577,6 +595,7 @@
     const t = e.target;
     if (e.key === "Escape") {
       if (win && !win.hidden) { $("[data-compose-close]", win).click(); }
+      else if (window.simexReplyPopped && window.simexReplyPopped()) { $("[data-reply-close]").click(); }
       if (t.matches && t.matches("input, textarea")) t.blur();
       return;
     }

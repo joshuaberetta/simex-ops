@@ -117,9 +117,20 @@
   </div>
   <div class="gm-inline-reply" hidden>
     <div class="gm-avatar" style="background: {{ team.name|avatar_colour }}">{% if me %}{{ me.name|initial }}{% else %}{{ team.name|initial }}{% endif %}</div>
-    <form class="gm-inline-form" data-composer data-inline enctype="multipart/form-data">
-      {% include "ops/mail/_composer_fields.html" %}
-    </form>
+    <div class="gm-inline-win">
+      <div class="gm-compose-head gm-inline-head" data-reply-head>
+        <span class="gm-compose-title" data-reply-title>Reply</span>
+        <span class="gm-compose-ctl">
+          <button type="button" class="gm-icon-btn sm" data-reply-minimize title="Minimise" aria-label="Minimise">{% icon "minimize" 18 %}</button>
+          <button type="button" class="gm-icon-btn sm" data-reply-popin title="Put the reply back under the conversation" aria-label="Pop in">{% icon "pop_in" 16 %}</button>
+          <button type="button" class="gm-icon-btn sm" data-reply-close title="Save &amp; close" aria-label="Save and close">{% icon "close" 18 %}</button>
+        </span>
+      </div>
+      <button type="button" class="gm-icon-btn sm gm-popout" data-reply-popout title="Pop out the reply (scroll the conversation while you write)" aria-label="Pop out reply">{% icon "pop_out" 16 %}</button>
+      <form class="gm-inline-form" data-composer data-inline enctype="multipart/form-data">
+        {% include "ops/mail/_composer_fields.html" %}
+      </form>
+    </div>
   </div>
   {% endif %}
 </div>
