@@ -9,22 +9,32 @@
 </div>
 <p class="small muted">Personas the teams can write to that answer on their own, like non-player characters: SIMEX AI writes each answer in character from the persona's profile (who they are, what they know and may share, their limits), after a delay drawn from its timing, in the same conversation, in SIMEX Mail or by email.
 Put only what the teams may learn in a profile: never control-side material. Answers go out as the persona and are on the Replies tab; team leaders see their team's conversations with them.</p>
+<p class="small muted">A profile also shapes <b>Suggest a reply</b> and <b>ChatSIMEX</b> on the persona desk, even while it doesn't answer on its own: give every persona the desk plays one, then switch any of them to answer on its own when the desk needs a hand.</p>
 
 <div class="cols">
 <section class="col-main">
+<form method="post" action="/npcs/switch/" id="switch">{% csrf_token %}
 <table class="list">
-  <thead><tr><th>Persona</th><th>Timing</th><th>Answers</th><th></th></tr></thead>
+  <thead><tr><th><input type="checkbox" aria-label="All" onclick="for (const c of this.form.querySelectorAll('input[name=pid]')) c.checked = this.checked"></th><th>Persona</th><th>Timing</th><th>Answers</th><th></th></tr></thead>
   <tbody>
   {% for p in profiles %}<tr>
+    <td>{% if p.gen_status != 'running' %}<input type="checkbox" name="pid" value="{{ p.id }}" aria-label="{{ p.sender.local_part }}">{% endif %}</td>
     <td><a href="/npcs/{{ p.id }}/"><b>{{ p.sender.display_name|default:p.sender.local_part }}</b></a> <span class="muted small">{{ p.sender.inapp_address }}</span>
       <div class="small muted">{{ p.role }}{% if p.role and p.organisation %}, {% endif %}{{ p.organisation }}</div></td>
     <td class="small">{{ p.timing_text }}</td>
     <td class="small">{% if p.n_open %}<b>{{ p.n_open }} open</b> · {% endif %}{{ p.n_sent }} sent</td>
     <td class="nowrap">{% if p.gen_status == 'running' %}<span class="status running">writing</span>{% elif p.gen_status == 'done' %}<span class="status queued">to review</span>{% elif p.gen_status == 'failed' %}<span class="status failed">failed</span>{% elif p.enabled %}<span class="status sent">answers</span>{% else %}<span class="status cancelled">off</span>{% endif %}
       {% if not p.sender.active %}<div class="small muted">not in the address book</div>{% endif %}</td>
-  </tr>{% empty %}<tr><td colspan="4" class="muted">None yet: generate one, or make an existing persona answer on its own.</td></tr>{% endfor %}
+  </tr>{% empty %}<tr><td colspan="5" class="muted">None yet: import profiles, write them from the injects, generate one, or give an existing persona a profile.</td></tr>{% endfor %}
   </tbody>
 </table>
+{% if profiles %}<div class="card">
+  <b>Ticked:</b> <button class="btn primary" name="action" value="on" data-confirm="The ticked personas answer the teams on their own from now on{% if not on %} (once Settings → AI personas is on){% endif %}.">Answer on their own</button>
+  <label class="chk small"><input type="checkbox" name="waiting" value="1" checked> and answer the conversations already waiting on the desk for them (within minutes)</label>
+  · <button class="btn" name="action" value="off">Stop answering</button> <span class="hint">the desk answers them again</span>
+  {% if not on %}<p class="small warn">Settings → AI personas is off: switched-on personas answer only once it is on{% if scope != 'all' %}, and the Test team only until you choose every team there{% endif %}.</p>{% elif scope != 'all' %}<p class="small muted">They answer the Test team only until you choose every team in <a href="/settings/#npc">Settings</a>.</p>{% endif %}
+</div>{% endif %}
+</form>
 
 <h3>Waiting answers</h3>
 <table class="list"><tbody>
@@ -35,6 +45,13 @@ Put only what the teams may learn in a profile: never control-side material. Ans
 </section>
 
 <section class="col-side">
+<form method="post" action="/npcs/import/" enctype="multipart/form-data" class="card form" id="import">{% csrf_token %}
+  <h3>Import profiles</h3>
+  <p class="small">A spreadsheet or CSV, one persona per row by its <b>Username</b>: Organisation, Role, Personality and voice, What they know and may share, Boundaries, Timing, Office hours from / to, Sends straight away, Answers on its own. Empty cells leave a value as it is. You see what it adds and changes first.</p>
+  <input type="file" name="file" accept=".xlsx,.xlsm,.csv" required>
+  <button class="btn">Read it</button>
+  <p class="hint"><a href="/npcs/export/">Export</a> gives the profiles in these columns, then a row for each persona without one: fill them in and import it back. Only personas on the <a href="/senders/">Senders</a> tab.</p>
+</form>
 <form method="post" action="/npcs/" class="card form">{% csrf_token %}
   <h3>Generate with AI</h3>
   <label>Who is it? <span class="hint">role, organisation, temperament, what they know, how fast they answer</span>

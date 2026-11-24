@@ -1,0 +1,25 @@
+{% extends "ops/base.html" %}
+{% block title %}Import AI persona profiles · SIMEX ops{% endblock %}
+{% block body %}
+<h1><a href="/npcs/" class="muted">AI personas</a> / {{ filename }}</h1>
+<form method="post" action="/npcs/import/apply/">{% csrf_token %}
+<div class="card">
+  <p><b>{{ counts.add }}</b> new profile{{ counts.add|pluralize }} · <b>{{ counts.update }}</b> to update{% if counts.replaces %} (<span class="warn"><b>{{ counts.replaces }}</b> change values set here, marked <b>changes</b></span>){% endif %} · {{ counts.same }} unchanged{% if counts.skip %} · <span class="warn"><b>{{ counts.skip }}</b> skipped (see below)</span>{% endif %}</p>
+  {% if counts.turns_on %}<p class="warn small"><b>{{ counts.turns_on }}</b> would start answering the teams on their own (Answers on its own: yes){% if not on %} once Settings → AI personas is on{% endif %}. Untick them to keep them with the desk.</p>{% endif %}
+  <p class="small">Untick a row to leave that persona as it is. What a profile says reaches the teams through the persona's answers, and shapes Suggest a reply and ChatSIMEX: only what the teams may learn, never control-side material. Names and addresses stay with the <a href="/senders/">Senders</a> tab.</p>
+  <button class="btn primary">Apply</button> <a href="/npcs/" class="btn">Cancel</a>
+</div>
+<table class="list">
+  <thead><tr><th></th><th>Line</th><th>Persona</th><th>Action</th><th>Changes</th></tr></thead>
+  {% for i in items %}
+  <tr><td>{% if i.action == 'add' or i.action == 'update' %}<input type="checkbox" name="line" value="{{ i.row.line }}" checked>{% endif %}</td>
+    <td class="small">{{ i.row.line }}</td>
+    <td>{% if i.sender %}<b>{{ i.sender.display_name|default:i.sender.local_part }}</b> <span class="small muted">{{ i.sender.local_part }}</span>{% else %}{{ i.row.username|default:i.row.address }}{% endif %}</td>
+    <td><span class="status {% if i.action == 'add' %}scheduled{% elif i.action == 'skip' %}failed{% elif i.action == 'update' and i.replaces %}overdue{% elif i.action == 'update' %}draft{% else %}sent{% endif %}">{% if i.action == 'update' and i.replaces %}changes{% elif i.action == 'add' %}new profile{% else %}{{ i.action }}{% endif %}</span>
+      {% if i.turns_on and i.action != 'skip' %}<div class="warn small">answers on its own</div>{% endif %}
+      {% for x in i.problems %}<div class="warn small">{{ x }}</div>{% endfor %}</td>
+    <td class="small">{% for c in i.changes %}<div><b>{{ c.field }}</b>{% if c.replaces %} <span class="warn">(replaces)</span>{% endif %}: <span class="old">{{ c.old|default:'—'|truncatechars:80 }}</span> → <span class="new">{{ c.new|truncatechars:160 }}</span></div>{% endfor %}</td></tr>
+  {% endfor %}
+</table>
+</form>
+{% endblock %}

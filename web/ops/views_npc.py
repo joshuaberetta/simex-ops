@@ -6,12 +6,15 @@ import re
 
 from django.conf import settings
 from django.contrib import messages
+from django.db import transaction
 from django.db.models import Count, Q
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_POST
 
-from . import ai, conf, npc
+from . import ai, conf, npc, npc_import
 from . import render as rnd
 from .access import excon_required
 from .models import NpcProfile, NpcReply, NpcSandbox, Sender, audit
@@ -237,3 +240,80 @@ def settings_npc(request):
     messages.success(request, "AI personas: " + ("on, for " + ("every team." if conf.get("npc_scope") == "all"
                                                                else "the Test team only.") if npc.active() else "off."))
     return redirect("/settings/#npc")
+
+
+@excon_required
+def npcs_import(request):
+    """AI personas → Import profiles (spreadsheet or CSV): POST a file to see the plan, then apply it."""
+    if request.method == "POST" and request.FILES.get("file"):
+        up = request.FILES["file"]
+        try:
+            rows = npc_import.read(up.name, up.read())
+        except Exception as e:  # not a spreadsheet, no header row...
+            messages.error(request, f"{up.name}: {e}")
+            return redirect("/npcs/#import")
+        request.session["npc_rows"] = rows
+        request.session["npc_name"] = up.name
+        return redirect("/npcs/import/")
+    rows = request.session.get("npc_rows")
+    if not rows:
+        return redirect("/npcs/#import")
+    items = npc_import.plan(rows)
+    counts = {a: sum(1 for i in items if i["action"] == a) for a in ("add", "update", "same", "skip")}
+    counts["replaces"] = sum(1 for i in items if i["action"] == "update" and i["replaces"])
+    counts["turns_on"] = sum(1 for i in items if i["action"] != "skip" and i["turns_on"])
+    return render(request, "ops/npc_import.html", {"tab": "npcs", "items": items, "counts": counts,
+                                                   "filename": request.session.get("npc_name"), "on": npc.active()})
+
+
+@excon_required
+@require_POST
+@transaction.atomic
+def npcs_import_apply(request):
+    rows = request.session.pop("npc_rows", None)
+    if not rows:
+        messages.error(request, "Nothing to import: upload the file again.")
+        return redirect("/npcs/#import")
+    items = npc_import.plan(rows)  # planned again: the profiles may have changed since
+    lines = {_int(v) for v in request.POST.getlist("line")}
+    added, updated = npc_import.apply(items, lines)
+    audit("npc_import", f"{request.session.get('npc_name')}: {added} added, {updated} updated", _u(request))
+    messages.success(request, f"AI persona profiles imported: {added} added, {updated} updated.")
+    return redirect("/npcs/")
+
+
+@excon_required
+def npcs_export(request):
+    resp = HttpResponse(npc_import.export(),
+                        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = content_disposition_header(True, "simex-ai-personas.xlsx")
+    return resp
+
+
+@excon_required
+@require_POST
+def npcs_switch(request):
+    """Take over (or hand back): the ticked profiles answer on their own, or stop answering."""
+    on = request.POST.get("action") == "on"
+    ids = [i for i in (_int(v) for v in request.POST.getlist("pid")) if i]
+    if not ids:
+        messages.error(request, "Tick the personas first.")
+        return redirect("/npcs/")
+    qs = NpcProfile.objects.filter(pk__in=ids).exclude(gen_status="running")
+    names = [p.sender.local_part for p in qs.select_related("sender")]
+    n = qs.update(enabled=on, updated_at=timezone.now())
+    if on:
+        NpcProfile.objects.filter(pk__in=ids, gen_status="done").update(gen_status="")
+    audit("npc_switch", f"{'on' if on else 'off'}: {', '.join(names)}"[:500], _u(request))
+    if on:
+        waiting = npc.take_over(NpcProfile.objects.filter(pk__in=ids, enabled=True)) if request.POST.get("waiting") == "1" else 0
+        where = (" Settings → AI personas is off, so nothing answers yet." if not npc.active() else
+                 " (the Test team only: widen it in Settings → AI personas)." if conf.get("npc_scope") != "all" else "")
+        messages.success(request, f"{n} persona{'s' if n != 1 else ''} now answer{'' if n != 1 else 's'} on "
+                                  f"{'their' if n != 1 else 'its'} own." + where
+                         + (f" {waiting} conversation{'s' if waiting != 1 else ''} waiting on the desk "
+                            f"{'are' if waiting != 1 else 'is'} queued for an answer within minutes." if waiting else ""))
+    else:
+        messages.success(request, f"{n} persona{'s' if n != 1 else ''} stopped answering on their own: the desk "
+                                  "answers them (an answer already queued is skipped when it comes due).")
+    return redirect("/npcs/")

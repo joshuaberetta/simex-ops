@@ -235,7 +235,7 @@ def test_generate_and_sandbox(excon, fake):
 
 def test_tab_and_setting(excon):
     conf.put("npc_enabled", "0")
-    assert 'href="/npcs/"' not in excon.get("/injects/").content.decode()
+    assert 'href="/npcs/"' in excon.get("/injects/").content.decode()  # always: profiles shape the desk's suggestions
     excon.post("/settings/npc/", {"npc_enabled": "1", "npc_scope": "all"})
     assert conf.flag("npc_enabled") and conf.get("npc_scope") == "all"
     assert 'href="/npcs/"' in excon.get("/injects/").content.decode()
