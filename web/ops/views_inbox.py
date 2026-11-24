@@ -1247,8 +1247,9 @@ def action(request, v):
                  request.POST.get("to", ""), request.POST.get("from", ""))
     elif act == "discard":
         ids = [int(x) for x in request.POST.getlist("draft_ids") if x.isdigit()]
+        keys = [k for k in request.POST.getlist("draft_key") if _draft_key({"draft_key": k})]
         drafts = v.mails().filter(folder="drafts")
-        (drafts.filter(id__in=ids) if ids else drafts.filter(thread__in=threads)).delete()
+        (drafts.filter(Q(id__in=ids) | Q(draft_key__in=keys)) if ids or keys else drafts.filter(thread__in=threads)).delete()
     if act in ("label_add", "label_remove", "move"):
         names = list(v.labels().filter(pk__in=[int(x) for x in request.POST.getlist("label") + [request.POST.get("to", "")]
                                                if str(x).isdigit()]).values_list("name", flat=True))
@@ -1347,8 +1348,12 @@ def draft_save(request, v):
     """Autosave of the compose window (no files: those are attached on send; but the images in
     the text are kept with the draft, so it opens again as it was)."""
     P = request.POST
+    key = _draft_key(P)
     d = v.mails().filter(pk=_id(P.get("draft_id")), folder="drafts").first()
-    if d is None and _id(P.get("draft_id")):
+    if d is None and key and not _id(P.get("draft_id")):  # its first save's answer never came back
+        d = v.mails().filter(folder="drafts", draft_key=key).order_by("id").first()
+    if d is None and (_id(P.get("draft_id")) or
+                      (key and Mail.objects.filter(draft_key=key).exclude(folder="drafts").exists())):
         return JsonResponse({"error": "This draft was sent or discarded."}, status=410)
     new = d is None
     if new:
@@ -1365,7 +1370,10 @@ def draft_save(request, v):
     d.body, d.html, inline = _composed(request, v, d if not new else None, d.forward_of)
     d.thread = parent.thread if parent else (d.thread or "")
     d.created_at, d.sim_at = timezone.now(), simclock.now()
+    d.draft_key = key or d.draft_key
     d.save()
+    if d.draft_key:  # two saves of one session that crossed on the way: one draft
+        v.mails().filter(folder="drafts", draft_key=d.draft_key).exclude(pk=d.pk).delete()
     have = set(d.files.exclude(cid="").values_list("cid", flat=True)) if not new else set()
     for name, ctype, data, cid in inline:
         if cid not in have:
@@ -1374,14 +1382,30 @@ def draft_save(request, v):
     if new:
         track(v, "draft", [d.thread], draft=d.id)
     shown = d.sim_at if d.sim_at and sees_sim_only(v) else d.created_at
-    return JsonResponse({"id": d.id, "saved": timezone.localtime(shown).strftime("%H:%M")})
+    return JsonResponse({"id": d.id, "key": d.draft_key, "saved": timezone.localtime(shown).strftime("%H:%M")})
+
+
+def _draft_key(P):
+    """The composer's session key (mail.js), or "" if none or not one of ours."""
+    key = (P.get("draft_key") or "").strip()
+    return key if re.fullmatch(r"[A-Za-z0-9-]{8,40}", key) else ""
+
+
+def _drop_draft(v, P, sent=None):
+    """After a send: its draft (by id, or by its session key if the id never reached the
+    composer), and the key kept on the Sent copy so a late autosave makes no new draft."""
+    key = _draft_key(P)
+    q = Q(pk=_id(P.get("draft_id"))) | Q(draft_key=key) if key else Q(pk=_id(P.get("draft_id")))
+    v.mails().filter(q, folder="drafts").delete()
+    if key and sent is not None:
+        Mail.objects.filter(pk=sent.pk).update(draft_key=key)
 
 
 @mailbox_view
 def draft_get(request, v, mid):
     d = get_object_or_404(v.mails(), pk=mid, folder="drafts")
     return JsonResponse({"id": d.id, "to": d.recipients.get("to", []), "cc": d.recipients.get("cc", []),
-                         "bcc": d.recipients.get("bcc", []), "subject": d.subject, "body": d.body,
+                         "bcc": d.recipients.get("bcc", []), "subject": d.subject, "body": d.body, "key": d.draft_key,
                          "html": shown_html(v, d),
                          "in_reply_to": d.in_reply_to_id, "forward_of": d.forward_of_id,
                          "from": d.recipients.get("from", "")})
@@ -1476,7 +1500,7 @@ def send(request, v):
                 if w is not v and v.member_box:  # from the team's address: in their own Sent as well
                     delivery.copy_mail(sent, owner=v.owner, folder="sent", read_at=sent.read_at, persona=sent.persona,
                                        in_reply_to=parent, forward_of=fwd)
-            v.mails().filter(pk=_id(P.get("draft_id")), folder="drafts").delete()
+            _drop_draft(v, P, sent)
     except SendFailed as e:
         return fail(str(e))
     started = MailAction.objects.filter(**v.box, action="draft", detail__draft=_id(P.get("draft_id"))).first() \
@@ -1513,8 +1537,8 @@ def _send_desk(request, v, P, to, cc, bcc, subject, body, files, parent, fwd, fa
                                  uploads, docs, parent, body_html=rich[0], copies=copies)
     except desk.DeskError as e:
         return fail(str(e))
-    v.mails().filter(pk=_id(P.get("draft_id")), folder="drafts").delete()
     sent = v.mails().filter(message__in=msgs, folder="sent").order_by("id").first()
+    _drop_draft(v, P, sent)
     url = f"{v.base}/t/{sent.thread}/?folder=sent" if sent else f"{v.base}/?folder=sent"
     warning = f"Not sent to {'; '.join(errors)}" if errors else ""
     if ajax:

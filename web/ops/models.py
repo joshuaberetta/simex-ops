@@ -376,6 +376,10 @@ class Mail(models.Model):
     # Address-book keys chosen in compose ({"to": ["p:cnn", "t:3"], "cc": [...], "bcc": [...]}),
     # kept on drafts and sent items.
     recipients = models.JSONField(default=dict, blank=True)
+    # A draft's compose session (a random key from the composer, mail.js), so an autosave whose
+    # answer was lost on a flaky connection updates that draft rather than starting another; kept
+    # on the Sent copy, so a late autosave of a message already sent makes no draft.
+    draft_key = models.CharField(max_length=40, blank=True, default="", db_index=True)
     forward_of = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     # The persona desk's copies: the team on the other side, and for what a team wrote, its Response.
     desk_team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.CASCADE, related_name="+")

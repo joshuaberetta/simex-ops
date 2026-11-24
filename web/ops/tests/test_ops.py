@@ -1171,6 +1171,37 @@ def test_draft_autosave_after_send_does_not_make_a_new_draft():
     assert pa.post("/inbox/draft/", {"subject": "x", "in_reply_to": "abc", "forward_of": "1.5"}).status_code == 200
 
 
+def test_draft_saves_whose_answer_was_lost_keep_one_draft():
+    """Flaky wifi: the composer's saves go without the draft's id when the first one's answer
+    never came back; its session key keeps them on one draft, and the send drops it."""
+    from ops.models import Sender
+    Sender.objects.create(local_part="cnn", display_name="CNN")
+    pa = participant("a")
+    key = "0b8f6c1e-2a4d-4c55-9a77-1f2e3d4c5b6a"
+    ids = {pa.post("/inbox/draft/", {"to": "p:cnn", "subject": "Q", "body": b, "draft_key": key}).json()["id"]
+           for b in ("Th", "Thanks s", "Thanks so much, U")}
+    drafts = Mail.objects.filter(folder="drafts")
+    assert len(ids) == 1 and drafts.count() == 1 and drafts.get().body == "Thanks so much, U"
+    # two that crossed before the key was there (an older page): merged by the next save
+    Mail.objects.create(team=drafts.get().team, folder="drafts", subject="Q", body="Thanks", draft_key=key)
+    pa.post("/inbox/draft/", {"to": "p:cnn", "subject": "Q", "body": "Thanks so much", "draft_key": key})
+    assert drafts.count() == 1
+    # sent without the id (it never reached the page): the draft goes, and a late save makes none
+    pa.post("/inbox/send/", {"to": "p:cnn", "subject": "Q", "body": "Thanks so much!", "draft_key": key})
+    assert not drafts.exists()
+    r = pa.post("/inbox/draft/", {"to": "p:cnn", "subject": "Q", "body": "Thanks so much", "draft_key": key})
+    assert r.status_code == 410 and not drafts.exists()
+    # discarded by key alone
+    k2 = "a1b2c3d4-0000-4000-8000-000000000001"
+    pa.post("/inbox/draft/", {"to": "p:cnn", "subject": "R", "body": "x", "draft_key": k2})
+    pa.post("/inbox/action/", {"action": "discard", "draft_key": k2})
+    assert not drafts.exists()
+    # another mailbox's key is no way into its draft
+    pa.post("/inbox/draft/", {"to": "p:cnn", "subject": "S", "body": "mine", "draft_key": k2 + "x"})
+    participant("b").post("/inbox/draft/", {"subject": "S", "body": "theirs", "draft_key": k2 + "x"})
+    assert set(drafts.values_list("body", flat=True)) == {"mine", "theirs"}
+
+
 def test_download_keeps_a_non_latin_file_name(excon):
     from ops.models import MailAttachment
     pa = participant("a")

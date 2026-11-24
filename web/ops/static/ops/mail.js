@@ -17,9 +17,15 @@
   const colour = (s) => { let h = 0; for (const c of s || "?") h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLOURS[h % COLOURS.length]; };
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-  function post(url, data) {
+  function post(url, data, signal) {
     const body = data instanceof FormData ? data : new URLSearchParams(data);
-    return fetch(url, { method: "POST", body, headers: { "X-CSRFToken": csrf(), "X-Requested-With": "fetch" }, credentials: "same-origin" });
+    return fetch(url, { method: "POST", body, signal, headers: { "X-CSRFToken": csrf(), "X-Requested-With": "fetch" }, credentials: "same-origin" });
+  }
+
+  // A compose session's key (see Composer.save).
+  function newKey() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return Array.from({ length: 4 }, () => Math.random().toString(36).slice(2, 10)).join("-");
   }
 
   function snack(text, action, loud) {
@@ -84,7 +90,8 @@
       });
       $("[data-discard]", form).onclick = () => this.discard();
       if (form.elements.from) { form.elements.from.addEventListener("change", () => this.paintFrom()); this.paintFrom(); }
-      this.timer = setInterval(() => { if (this.dirty) this.save(); }, 4000);
+      this.key = newKey();
+      this.timer = setInterval(() => { if (this.dirty && !this.saving) this.save(); }, 4000);
     }
     touch() { this.dirty = true; $("[data-draft-state]", this.form).textContent = ""; }
     bindChips(field) {
@@ -182,6 +189,8 @@
       });
     }
     load(d) {
+      this.tried = false;
+      this.key = d.key || newKey();  // a new compose session: a save still on its way for the last one is ignored
       this.form.elements.draft_id.value = d.id || "";
       this.form.elements.in_reply_to.value = d.in_reply_to || "";
       this.form.elements.forward_of.value = d.forward_of || "";
@@ -210,6 +219,7 @@
     data(withFiles) {
       const fd = new FormData();
       for (const n of ["draft_id", "in_reply_to", "forward_of", "subject"]) fd.append(n, this.form.elements[n].value);
+      fd.append("draft_key", this.key);
       fd.append("body", this.rte.text());
       fd.append("html", this.rte.html());
       this.posted = this.rte.cids();  // what the draft will have once this is saved
@@ -220,12 +230,21 @@
       return fd;
     }
     empty() { return !this.keys.to.length && !this.keys.cc.length && !this.form.elements.subject.value.trim() && !this.rte.text() && !this.rte.hasImages(); }
+    // One save at a time: on a slow connection a save still on its way when the next one was
+    // due used to go without the draft's id and start another draft (Drafts filled with
+    // fragments of one message). The session key (this.key) makes a retry after a lost answer
+    // update the same draft; a save asked for meanwhile follows the one on its way.
     save() {
       if (CFG.readonly || this.sending || this.empty()) return this.saving || Promise.resolve();
+      if (this.saving) return this.saving.then(() => (this.dirty ? this.save() : undefined));
       this.dirty = false;
+      this.tried = true;
+      const key = this.key;
       this.saving = (async () => {
+        const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 20000);  // a stalled request: retried
         try {
-          const r = await post(`${BASE}/draft/`, this.data(false));
+          const r = await post(`${BASE}/draft/`, this.data(false), ctl.signal);
+          if (this.key !== key) return;  // the window was cleared or opened on another message meanwhile
           if (r.status === 410) return;  // sent or discarded meanwhile: no new draft
           if (!r.ok) { this.dirty = true; return; }  // signed out or offline: saved on a later try
           const j = await r.json();
@@ -233,7 +252,7 @@
           this.form.elements.draft_id.value = j.id;
           this.rte.saved(this.posted || []);
           $("[data-draft-state]", this.form).textContent = "Draft saved";
-        } catch (e) { this.dirty = true; } finally { this.saving = null; }
+        } catch (e) { if (this.key === key) this.dirty = true; } finally { clearTimeout(t); this.saving = null; }
       })();
       return this.saving;
     }
@@ -268,8 +287,10 @@
       location.reload();
     }
     async discard() {
-      const id = this.form.elements.draft_id.value;
-      if (id) await post(`${BASE}/action/`, new URLSearchParams([["action", "discard"], ["draft_ids", id]])).catch(() => {});
+      await this.saving;
+      const id = this.form.elements.draft_id.value, params = [["action", "discard"], ["draft_key", this.key]];
+      if (id) params.push(["draft_ids", id]);
+      if (id || this.tried) await post(`${BASE}/action/`, new URLSearchParams(params)).catch(() => {});
       this.load({});
       if (this.opts.onClose) this.opts.onClose(true);
       snack("Draft discarded");
