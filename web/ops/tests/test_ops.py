@@ -1414,3 +1414,17 @@ def test_duplicate_inject_for_one_team_splits_it(excon):
     excon.post(f"/injects/{solo.id}/duplicate/", {"team": tb.id, "remove_team": "1"})
     solo.refresh_from_db()
     assert solo.team_ids == [tb.id] and Inject.objects.get(mel_id="2-01-B").team_ids == [tb.id]
+
+
+def test_list_shows_replied_arrow(excon):
+    do_import(excon, SAMPLE)
+    arm()
+    deliver_now("1-15")
+    pa = participant("a", "Jane")
+    mail = Mail.objects.get(owner=None, team__code="a")
+    assert 'class="gm-replied"' not in pa.get("/inbox/").content.decode()
+    pa.post("/inbox/send/", {"to": "p:undac-a-tl", "subject": "Re: Update", "body": "First", "in_reply_to": mail.id})
+    assert 'class="gm-replied"' in pa.get("/inbox/").content.decode()
+    first = Response.objects.get()
+    excon.post(f"/replies/{first.id}/answer/", {"body": "Persona answer"})  # a new message: not replied to yet
+    assert 'class="gm-replied"' not in pa.get("/inbox/").content.decode()

@@ -64,6 +64,7 @@
       <span class="gm-from">{% if r.draft %}<span class="gm-draft-red">Draft</span>{% else %}{{ r.people }}{% endif %}{% if r.count > 1 %} <span class="gm-n">{{ r.count }}</span>{% endif %}</span>
       <span class="gm-subj">
         <span class="gm-line1">
+        {% if r.replied %}<span class="gm-replied" title="Replied" aria-label="Replied">{% icon "reply" 16 %}</span>{% endif %}
         {% if folder != 'inbox' and m.folder == 'inbox' and not m.archived %}<span class="gm-label">Inbox</span>{% endif %}
         {% for l in r.labels %}<span class="gm-label"{% if l.colour %} style="background: {{ l.colour }}; color: {{ l.fg }}"{% endif %}>{{ l.name }}</span>{% endfor %}
         {% if r.invite %}<span class="gm-label gm-invite">{% icon "event" 14 %}Invitation</span>{% endif %}

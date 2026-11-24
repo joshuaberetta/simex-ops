@@ -629,12 +629,16 @@ def conversations(v, folder, q=""):
         else:
             people = ", ".join(names[-3:])
         first = min(conv, key=lambda x: x.id)
+        # Replied (the list's return arrow): something was sent after the latest mail received.
+        got = max((m.id for m in conv if m.folder == "inbox"), default=None)
+        replied = got is not None and any(m.folder == "sent" and m.id > got for m in conv)
         rows.append({"thread": t, "latest": latest, "count": len(conv), "subject": first.subject,
                      "unread": any(m.folder == "inbox" and m.read_at is None for m in conv),
                      "starred": any(m.starred for m in conv), "people": people,
                      "has_files": any(m.files.all() for m in threads[t]), "draft": False,
                      "labels": sorted(on.get(t, []), key=lambda x: x["name"].lower()), "all_labels": ids_on.get(t, []),
                      "desk": desk_chips(conv, memo, team_names) if v.desk else None,
+                     "replied": replied and folder != "sent",
                      "invite": any(m.event_id for m in threads[t])})  # SIMEX Calendar
     if v.sees_ai:
         flags = ai_flags(v.team, {t: threads[t] for t in order})
