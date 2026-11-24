@@ -166,6 +166,8 @@ def on_response(r):
     this conversation answer this message too."""
     if not r.persona or not r.team_id or r.status == "ignored" or r.match == "leader" or not active():
         return None
+    if r.mail_id and r.mail.event_id:  # an invitation, or an answer to one: always the persona desk's
+        return None
     p = NpcProfile.objects.filter(sender__local_part=r.persona, enabled=True, sender__team_leader=False).first()
     if not p or not in_scope(r.team):
         return None

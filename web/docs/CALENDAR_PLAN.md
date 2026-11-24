@@ -365,12 +365,24 @@ Start afresh removes them.
    - The drawer, in SIMEX Mail and on the role players' pages.
    - Tests: teams never cross, read-only views can't write, members never get a real date.
      Manual.
-2. **Invitations.**
+2. **Invitations.** *Built.*
    - Guests from the address book, invitation and reply mails, and the card in the thread
      view.
    - Yes / Maybe / No; change and cancel; Create event from an email.
    - `MailAction`s. Tests: the address-book check on save, and a team inviting another team
      only with `team_to_team`.
+   - As built:
+     - Every Mail an invitation makes is tagged by `calendar.SENDING`, read in `Mail.save`, so
+       the existing send paths needed no new branches. The thread is `event.uid`, except
+       team-to-team copies, which keep `_peer_thread`.
+     - An invitation's `Response` is never guessed onto an inject, and never queues an
+       `NpcReply`.
+     - A team's answer to a persona's invitation marks the desk conversation done.
+     - The desk's answer goes through `delivery.answer` with the subject *Accepted: …*.
+     - A team leader's answer to a persona's invitation stays on the calendar, as leaders
+       can't write to personas.
+     - An event with guests can't be moved to another calendar.
+     - Clashes are listed from the events already loaded on the page.
 3. **Seed the calendar from the mail** (below). ExCon has SIMEX AI find the meetings already
    proposed or agreed in the mail, reviews them, and applies them quietly as guest events. This
    step comes after invitations because seeded events need guests.

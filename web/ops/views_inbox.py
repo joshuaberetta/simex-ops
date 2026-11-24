@@ -411,7 +411,7 @@ member_by_address = addresses.member_by_address
 # (MailAction). Reading and downloading are Events (inbound.record_read).
 TRACKED = {"star", "unstar", "read", "unread", "archive", "unarchive", "trash", "restore", "label_add", "label_remove",
            "move", "discard", "label_create", "label_delete", "search", "draft", "send",
-           "cal_create", "cal_update", "cal_cancel"}  # SIMEX Calendar (ops/calendar.py)
+           "cal_create", "cal_update", "cal_cancel", "cal_rsvp"}  # SIMEX Calendar (ops/calendar.py)
 
 
 def track(v, action, threads=(), **detail):
@@ -631,7 +631,8 @@ def conversations(v, folder, q=""):
                      "starred": any(m.starred for m in conv), "people": people,
                      "has_files": any(m.files.all() for m in threads[t]), "draft": False,
                      "labels": sorted(on.get(t, []), key=lambda x: x["name"].lower()), "all_labels": ids_on.get(t, []),
-                     "desk": desk_chips(conv, memo, team_names) if v.desk else None})
+                     "desk": desk_chips(conv, memo, team_names) if v.desk else None,
+                     "invite": any(m.event_id for m in threads[t])})  # SIMEX Calendar
     if v.sees_ai:
         flags = ai_flags(v.team, {t: threads[t] for t in order})
         for r in rows:
@@ -1089,6 +1090,10 @@ def thread_view(request, v, thread):
         can_reply = bool(reply_to)
         desk_js = _desk_thread(mails)
     subject = mails[0].subject
+    from . import calendar
+    cards = calendar.cards(v, mails)  # SIMEX Calendar: the invitation cards
+    for m in mails:
+        m.cal = cards.get(m.id)
     memo = {}
     thread_js = {"subject": subject, "thread": thread, "last": last.id,
                  "reply": [k for k in reply_to if k], "replyAll": [k for k in reply_all if k],
@@ -1103,6 +1108,7 @@ def thread_view(request, v, thread):
     return render(request, "ops/mail/thread.html", _ctx(
         v, folder=folder, mails=mails, subject=subject, thread=thread, prev_t=prev_t, next_t=next_t,
         pos=i + 1, total=len(keys), last=last, thread_js=thread_js, can_reply=can_reply,
+        cal_events=calendar.thread_events(v, mails), cal_create=not v.readonly and not v.peer,
         desk_chips=desk_chips(mails, {}, dict(Team.objects.values_list("id", "name"))) if v.desk else None,
         desk_state=desk.states([thread], v.user).get(thread) if v.desk else None,
         desk_conv=desk.conversation(thread) if v.desk else None, desk_ai=v.desk and desk_ai.enabled(),

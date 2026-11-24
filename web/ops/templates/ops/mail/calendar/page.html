@@ -44,7 +44,8 @@
 {% if not cal.readonly %}<dialog class="gm-dialog cal-dialog" data-cal-dialog>
   <form method="dialog" data-cal-form>
     <h3 data-cal-dtitle>New event</h3>
-    <input type="hidden" name="id" value="">
+    <input type="hidden" name="id" value=""><input type="hidden" name="source" value="">
+    <p class="cal-from" data-cal-from hidden></p>
     <label class="gm-dfield"><span>Title</span><input name="title" maxlength="200" placeholder="Add title" autocomplete="off"></label>
     <div class="cal-when">
       <label class="gm-dfield"><span>Starts</span><span class="cal-dt"><input type="date" name="start_date" required><input type="time" name="start_time" step="300"></span></label>
@@ -52,13 +53,17 @@
       <label class="cal-check"><input type="checkbox" name="all_day"> All day</label>
     </div>
     <p class="cal-simhint" data-cal-simhint hidden></p>
+    <p class="cal-conflict" data-cal-conflict hidden></p>
     <div class="cal-row2">
       <label class="gm-dfield"><span>How</span><select name="mode">{% for k, label in cal.modes %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></label>
       <label class="gm-dfield"><span>Where</span><input name="location" maxlength="200" placeholder="Place, phone number or VTC link" autocomplete="off"></label>
     </div>
     <label class="gm-dfield"><span>Description</span><textarea name="description" rows="4" maxlength="4000"></textarea></label>
     <label class="gm-dfield"><span>Calendar</span><select name="layer" data-cal-layer-select>{% for l in cal.layers %}{% if l.writable %}<option value="{{ l.key }}">{{ l.name }}</option>{% endif %}{% endfor %}</select></label>
-    <p class="cal-guests-note">Inviting people, teams and personas is coming next: for now an event is on this calendar only.</p>
+    <div class="gm-dfield"><span>Guests</span>
+      <div class="cal-guests" data-cal-guests><input data-cal-guest-input placeholder="Add a name or an exact address" autocomplete="off" aria-label="Add guests"><ul class="cal-gsugg" data-cal-gsugg hidden></ul></div>
+    </div>
+    <p class="cal-guests-note">Each guest gets an invitation by mail from this calendar's mailbox, with Yes, Maybe and No; changes and cancellations reach them too.</p>
     <div class="gm-derr" data-cal-ferr hidden></div>
     <div class="gm-dactions">
       <button type="button" class="gm-text-btn danger" data-cal-delete hidden>Delete</button>

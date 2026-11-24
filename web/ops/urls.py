@@ -37,6 +37,7 @@ mail_patterns = [
     path("calendar/events/", cal.events),
     path("calendar/save/", cal.save),
     path("calendar/delete/<int:eid>/", cal.delete),
+    path("calendar/respond/", cal.respond),
 ]
 # A team leader's read-only view of their team's inbox, of another team leader's mailbox
 # (/inbox/leaders/<team id>/) or of one of their members' own (/inbox/members/<person id>/):

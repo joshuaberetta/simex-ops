@@ -12,7 +12,7 @@
   const csrf = () => (document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/) || [])[1] || ($('[name="csrfmiddlewaretoken"]') || {}).value || "";
   const post = (url, data) => {
     const body = new URLSearchParams();
-    Object.entries(data).forEach(([k, v]) => body.append(k, v == null ? "" : v));
+    Object.entries(data).forEach(([k, v]) => [].concat(v == null ? "" : v).forEach(x => body.append(k, x)));
     return fetch(url, { method: "POST", body, headers: { "X-CSRFToken": csrf(), "X-Requested-With": "fetch" }, credentials: "same-origin" })
       .then(r => r.json().catch(() => ({ ok: false, error: "The server didn't answer." })).then(j => (r.ok ? j : Object.assign({ ok: false }, j))));
   };
@@ -89,7 +89,10 @@
       }).catch(() => showErr("Couldn't reach SIMEX Calendar. Retrying…"));
   }
 
-  const visible = () => events.filter(e => shownLayers.has(e.layer));
+  const visible = () => events.filter(e => (e.layers || [e.layer]).some(k => shownLayers.has(k)));
+  // How an event looks: cancelled (struck through), declined (faded), not answered yet (outlined).
+  const evClass = e => (e.status === "cancelled" ? " cancelled" : "") + (e.response === "declined" ? " declined" : "") +
+    (e.answerable && e.response === "needs_action" ? " pending" : "");
   const onDay = (e, d) => toM(e.start) < toM(d) + DAY_M && toM(e.end) > toM(d);
   const isAllDayish = e => e.allDay || toM(e.end) - toM(e.start) >= DAY_M;
 
@@ -121,6 +124,7 @@
   }
   const simWhen = e => e.sim ? when({ start: e.sim.start, end: e.sim.end, allDay: e.allDay }) : "";
   const modeName = m => (C.modes.find(x => x[0] === m) || [m, m])[1];
+  const ANSWER_NAME = { accepted: "Yes", tentative: "Maybe", declined: "No", needs_action: "No answer yet" };
 
   function lanes(list, d) {  // side-by-side columns for overlapping events in one day
     const d0 = toM(d), items = list.map(e => ({ e, a: Math.max(toM(e.start), d0), b: Math.min(toM(e.end), d0 + DAY_M) }))
@@ -143,7 +147,7 @@
   }
 
   function chip(e, cls) {
-    return `<button type="button" class="cal-chip ${cls || ""}${e.editable ? " editable" : ""}" data-id="${e.id}" style="--c:${esc(e.colour)};--fg:${esc(e.fg)}" title="${esc(e.title)}">` +
+    return `<button type="button" class="cal-chip ${cls || ""}${e.editable ? " editable" : ""}${evClass(e)}" data-id="${e.id}" style="--c:${esc(e.colour)};--fg:${esc(e.fg)}" title="${esc(e.title)}">` +
       (e.allDay || cls === "bar" ? "" : `<span class="cal-dot"></span><span class="cal-chip-t">${hm(e.start)}</span> `) + `${esc(e.title)}</button>`;
   }
 
@@ -156,7 +160,7 @@
       const evs = lanes(list.filter(e => !isAllDayish(e) && onDay(e, d)), d).map(it => {
         const e = it.e, top = (it.a - toM(d)) / 60 * HOUR, h = Math.max((it.b - it.a) / 60 * HOUR, 18);
         const short = h < 40;
-        return `<div class="cal-ev${e.editable ? " editable" : ""}${short ? " short" : ""}" data-id="${e.id}" tabindex="0" role="button"
+        return `<div class="cal-ev${e.editable ? " editable" : ""}${short ? " short" : ""}${evClass(e)}" data-id="${e.id}" tabindex="0" role="button"
           style="top:${top}px;height:${h - 2}px;left:calc(${100 * it.col / it.n}% + 1px);width:calc(${100 / it.n}% - 4px);--c:${esc(e.colour)};--fg:${esc(e.fg)}">
           <b>${esc(e.title)}</b><span class="cal-ev-t">${hm(e.start)} – ${hm(e.end)}${e.location ? ", " + esc(e.location) : ""}</span>
           ${e.sim && !short ? `<span class="cal-ev-sim" title="Scenario time">◷ ${hm(e.sim.start)} – ${hm(e.sim.end)}</span>` : ""}
@@ -198,7 +202,7 @@
       const d = addDays(date, i), evs = list.filter(e => onDay(e, d));
       if (!evs.length) continue;
       html += `<div class="cal-sday${d === today() ? " today" : ""}"><button type="button" class="cal-sdate" data-goto="${d}"><b>${dnum(d)}</b><span>${MON[mnum(d)]}, ${DAY[dow(d)]}</span></button><ul>` +
-        evs.map(e => `<li><button type="button" class="cal-srow" data-id="${e.id}" style="--c:${esc(e.colour)}">
+        evs.map(e => `<li><button type="button" class="cal-srow${evClass(e)}" data-id="${e.id}" style="--c:${esc(e.colour)}">
           <span class="cal-stime">${isAllDayish(e) ? "All day" : `${dayOf(e.start) < d ? "…" : hm(e.start)} – ${dayOf(e.end) > d && hm(e.end) !== "00:00" ? "…" : hm(e.end)}`}${e.sim ? `<small title="Scenario time">◷ ${e.allDay ? "" : hm(e.sim.start)}</small>` : ""}</span>
           <span class="cal-dot"></span><span class="cal-stitle"><b>${esc(e.title)}</b>${e.location ? `<small>${esc(e.location)}</small>` : ""}</span></button></li>`).join("") + "</ul></div>";
     }
@@ -268,8 +272,15 @@
       <p class="cal-pop-when">${esc(when(e))}</p>
       ${e.sim ? `<p class="cal-pop-sim" title="Scenario time">◷ Scenario: ${esc(simWhen(e))}</p>` : ""}
       ${e.location || e.mode !== "in_person" ? `<p class="cal-pop-where"><b>${esc(modeName(e.mode))}</b>${e.location ? " · " + esc(e.location) : ""}</p>` : ""}
+      ${e.status === "cancelled" ? `<p class="cal-pop-where"><b>Cancelled</b></p>` : ""}
       ${e.description ? `<div class="cal-pop-desc">${esc(e.description)}</div>` : ""}
-      <p class="cal-pop-cal">${esc(lay ? lay.name : e.calendar)}${e.organiser ? ` · organised by ${esc(e.organiser)}` : ""}${!e.editable ? " · read-only" : ""}</p>`;
+      ${e.guests && e.guests.length ? `<ul class="cal-pop-guests">${e.guests.map(g => `<li class="r-${esc(g.response)}" title="${esc(ANSWER_NAME[g.response] || "No answer yet")}">${esc(g.name)}</li>`).join("")}</ul>` : ""}
+      ${e.answerable ? `<div class="cal-pop-answer" data-pop-answer><b>Going?</b>${["accepted", "tentative", "declined"].map(a =>
+        `<button type="button" class="gm-pill-btn sm${e.response === a ? " on" : ""}" data-answer="${a}">${ANSWER_NAME[a]}</button>`).join("")}
+        <input data-answer-note maxlength="500" placeholder="Add a note (optional)" value="${esc(e.comment || "")}"></div>` : ""}
+      ${e.invite ? `<p class="cal-pop-cal"><a class="gm-link" href="${esc(e.invite)}">Open the invitation</a></p>` : ""}
+      ${e.source ? `<p class="cal-pop-cal">From the email <a class="gm-link" href="${esc(e.source.url)}">${esc(e.source.subject || "(no subject)")}</a></p>` : ""}
+      <p class="cal-pop-cal">${esc(lay ? lay.name : e.calendar)}${e.organiser ? ` · organised by ${esc(e.organiser)}` : ""}${!e.editable && !e.answerable ? " · read-only" : ""}</p>`;
     pop.hidden = false;
     pop.dataset.id = e.id;
     const r = anchor.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
@@ -286,11 +297,75 @@
     if (e.target.closest("[data-pop-close]")) closePop();
     else if (e.target.closest("[data-pop-edit]") && ev) { closePop(); openEditor(ev); }
     else if (e.target.closest("[data-pop-del]") && ev) { closePop(); remove(ev); }
+    else if (e.target.closest("[data-answer]") && ev) {
+      const note = $("[data-answer-note]", pop);
+      post(`${C.base}/calendar/respond/`, { event: ev.id, layer: ev.answerLayer || ev.layer, answer: e.target.closest("[data-answer]").dataset.answer,
+        note: note ? note.value : "" }).then(j => {
+        if (!j.ok) { showErr(j.error || "Couldn't send your answer."); return; }
+        showErr(j.warning || ""); closePop(); load(true);
+      });
+    }
   });
   document.addEventListener("pointerdown", (e) => { if (!pop.hidden && !pop.contains(e.target) && !e.target.closest("[data-id]")) closePop(); });
 
   /* ---------- the editor ---------- */
   const writable = C.layers.filter(l => l.writable);
+  let guests = [], sugg = [], suggAt = -1;
+  const gBox = $("[data-cal-guests]"), gInput = $("[data-cal-guest-input]"), gList = $("[data-cal-gsugg]");
+  function renderGuests() {
+    if (!gBox) return;
+    $$(".cal-gchip", gBox).forEach(x => x.remove());
+    guests.forEach((g, i) => gInput.insertAdjacentHTML("beforebegin",
+      `<span class="cal-gchip" title="${esc(g.addr || "")}">${esc(g.name)}<button type="button" data-gdel="${i}" aria-label="Remove ${esc(g.name)}">×</button></span>`));
+  }
+  function addGuest(g) {
+    if (g && !guests.some(x => x.key === g.key)) guests.push({ key: g.key, name: g.name, addr: g.addr || "" });
+    gInput.value = ""; gList.hidden = true; renderGuests(); conflicts();
+  }
+  function suggest() {
+    const q = gInput.value.trim().toLowerCase();
+    sugg = q ? (C.book || []).filter(b => !guests.some(g => g.key === b.key) &&
+      (b.name.toLowerCase().includes(q) || (b.addr || "").toLowerCase().includes(q))).slice(0, 8) : [];
+    suggAt = sugg.length ? 0 : -1;
+    gList.innerHTML = sugg.map((b, i) => `<li data-sugg="${i}" class="${i === suggAt ? "on" : ""}">${esc(b.name)}<small>${esc(b.addr || "")}</small></li>`).join("");
+    gList.hidden = !sugg.length;
+  }
+  function lookupGuest() {  // an exact address typed: anyone this mailbox may write to (as in Compose)
+    const q = gInput.value.trim();
+    if (!q) return;
+    fetch(`${C.base}/lookup/?q=${encodeURIComponent(q)}`, { credentials: "same-origin" }).then(r => r.json().then(j => [r.ok, j]))
+      .then(([ok, j]) => { if (ok) addGuest(j); else { const err = $("[data-cal-ferr]"); err.textContent = j.error || "Not found."; err.hidden = false; } });
+  }
+  if (gBox) {
+    gInput.addEventListener("input", suggest);
+    gInput.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown" && sugg.length) { e.preventDefault(); suggAt = (suggAt + 1) % sugg.length; }
+      else if (e.key === "ArrowUp" && sugg.length) { e.preventDefault(); suggAt = (suggAt - 1 + sugg.length) % sugg.length; }
+      else if (e.key === "Enter" || e.key === "," || e.key === ";") {
+        e.preventDefault();
+        if (suggAt >= 0 && sugg[suggAt]) addGuest(sugg[suggAt]); else lookupGuest();
+        return;
+      } else if (e.key === "Backspace" && !gInput.value && guests.length) { guests.pop(); renderGuests(); return; }
+      else if (e.key === "Escape" && !gList.hidden) { e.preventDefault(); e.stopPropagation(); gList.hidden = true; return; }
+      else return;
+      $$("li", gList).forEach((li, i) => li.classList.toggle("on", i === suggAt));
+    });
+    gInput.addEventListener("blur", () => setTimeout(() => { gList.hidden = true; }, 150));
+    gList.addEventListener("mousedown", (e) => { const li = e.target.closest("[data-sugg]"); if (li) { e.preventDefault(); addGuest(sugg[+li.dataset.sugg]); } });
+    gBox.addEventListener("click", (e) => {
+      const d = e.target.closest("[data-gdel]");
+      if (d) { guests.splice(+d.dataset.gdel, 1); renderGuests(); conflicts(); } else gInput.focus();
+    });
+  }
+  function conflicts() {  // other events at that time, on the calendars this page shows
+    const el = $("[data-cal-conflict]");
+    if (!el || F("all_day").checked) { if (el) el.hidden = true; return; }
+    const t = formTimes(), a = toM(t.start), b = toM(t.end), id = String(F("id").value);
+    const hits = events.filter(e => String(e.id) !== id && e.status === "confirmed" && e.response !== "declined" && !e.allDay &&
+      toM(e.start) < b && toM(e.end) > a);
+    el.textContent = hits.length ? "At the same time: " + hits.slice(0, 4).map(e => `${e.title} (${hm(e.start)} – ${hm(e.end)}, ${(layerOf(e.layer) || {}).name || e.calendar})`).join("; ") : "";
+    el.hidden = !hits.length;
+  }
   function openEditor(ev) {
     if (!dlg) return;
     const e = ev || {};
@@ -311,7 +386,14 @@
     $("[data-cal-dtitle]").textContent = isNew ? "New event" : "Edit event";
     $("[data-cal-delete]").hidden = isNew;
     $("[data-cal-ferr]").hidden = true;
+    guests = (e.guests || []).map(g => ({ key: g.key, name: g.name, addr: g.addr || "" }));
+    renderGuests();
+    F("source").value = e.source && e.source.id ? e.source.id : "";
+    const from = $("[data-cal-from]");
+    from.textContent = e.source && e.source.id ? `From the email “${e.source.subject || "(no subject)"}”` : "";
+    from.hidden = !from.textContent;
     timesShown();
+    conflicts();
     dlg.showModal();
     setTimeout(() => F("title").focus(), 0);
   }
@@ -339,16 +421,19 @@
         lastStart = formTimes().start;
       }
       timesShown();
+      conflicts();
     });
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const t = formTimes();
       const err = $("[data-cal-ferr]");
       post(`${C.base}/calendar/save/`, { id: F("id").value, title: F("title").value, start: t.start, end: t.end, all_day: t.allDay ? "1" : "",
-        mode: F("mode").value, location: F("location").value, description: F("description").value, layer: F("layer").value })
+        mode: F("mode").value, location: F("location").value, description: F("description").value, layer: F("layer").value,
+        guests: guests.map(g => g.key), guests_given: "1", source: F("source").value })
         .then(j => {
           if (!j.ok) { err.textContent = j.error || "Couldn't save it."; err.hidden = false; return; }
           dlg.close();
+          showErr(j.warning ? "Saved, but: " + j.warning : "");
           if (!shownLayers.has(j.event.layer)) { shownLayers.add(j.event.layer); const cb = $(`[data-cal-layer][value="${CSS.escape(j.event.layer)}"]`); if (cb) cb.checked = true; }
           load(true);
         });
@@ -497,6 +582,17 @@
   });
 
   // Others' changes and the "now" line: every 30 s while the page is in view.
+  if (C.prefill && dlg) {  // Create event, from a conversation
+    const p = C.prefill;
+    openEditor(null);
+    F("title").value = p.title || "";
+    if (p.layer) F("layer").value = p.layer;
+    guests = (p.guests || []).slice(); renderGuests();
+    F("source").value = p.source || "";
+    const from = $("[data-cal-from]");
+    from.textContent = `From the email “${p.subject || "(no subject)"}”`; from.hidden = false;
+  }
+
   setInterval(() => { if (!document.hidden && !dragging && !busy && !(dlg && dlg.open) && pop.hidden) load(true); }, 30000);
   load(true);
 })();

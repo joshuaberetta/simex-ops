@@ -372,12 +372,22 @@ class Mail(models.Model):
     # The persona desk's copies: the team on the other side, and for what a team wrote, its Response.
     desk_team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
     desk_response = models.ForeignKey("Response", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    # SIMEX Calendar (ops/calendar.py): a mail about an event, every copy of it (the invitation
+    # card): request | update | cancel | reply (a guest's answer).
+    event = models.ForeignKey("CalendarEvent", null=True, blank=True, on_delete=models.SET_NULL, related_name="mails")
+    invite = models.CharField(max_length=8, blank=True, default="")
 
     class Meta:
         ordering = ["-created_at", "-id"]
         indexes = [models.Index(fields=["team", "folder", "thread"])]
 
     def save(self, *args, **kwargs):
+        if self._state.adding and not self.event_id:
+            from . import calendar
+            sending = calendar.SENDING.get()  # every Mail an invitation makes, in any mailbox
+            if sending:
+                self.event_id, self.invite = sending[0], sending[1]
+                self.thread = self.thread or sending[2]
         if not self.thread:
             self.thread = uuid.uuid4().hex
         if self._state.adding and self.sim_at is None:

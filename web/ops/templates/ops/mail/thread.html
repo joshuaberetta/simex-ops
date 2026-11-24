@@ -20,6 +20,7 @@
     {% endif %}
   </form>
   {% endif %}
+  {% if cal_create %}<a class="gm-icon-btn" href="{{ base }}/calendar/?from={{ thread }}" title="Create event from this conversation" aria-label="Create event" data-cal-from>{% icon "event" %}</a>{% endif %}
   <span class="gm-tb-right">
     {% if total %}<span class="gm-range">{{ pos }} of {{ total }}</span>{% endif %}
     <a class="gm-icon-btn{% if not prev_t %} disabled{% endif %}" href="{% if prev_t %}{{ base }}/t/{{ prev_t }}/?folder={{ folder }}{% else %}#{% endif %}" aria-label="Newer" data-key-k>{% icon "prev" %}</a>
@@ -32,6 +33,7 @@
     {% for l in thread_labels %}<span class="gm-label"{% if l.colour %} style="background: {{ l.colour }}; color: {{ l.fg }}"{% endif %}>{{ l.name }}{% if not readonly %}<button type="button" class="gm-label-x" data-unlabel="{{ l.id }}" title="Remove this label" aria-label="Remove label {{ l.name }}">×</button>{% endif %}</span>{% endfor %}
     {% if desk_chips %}{% for p in desk_chips.personas %}<span class="gm-label gm-persona" style="background: {{ p.colour }}; color: {{ p.fg }}" title="{{ p.addr }}">{{ p.name }}</span>{% endfor %}{% for t in desk_chips.teams %}<span class="gm-label gm-teamchip">{{ t }}</span>{% endfor %}{% endif %}
     {% if mails.0.is_test %}<span class="gm-label test">Test</span>{% endif %}</h2>
+  {% for e in cal_events %}<a class="gm-cal-made{% if e.cancelled %} cancelled{% endif %}" href="{{ e.url }}">{% icon "event" 18 %} On the calendar: <b>{{ e.title }}</b> · {{ e.when }}{% if e.cancelled %} · cancelled{% endif %}</a>{% endfor %}
   {% if v.desk %}<div class="gm-presence" data-presence hidden></div>
   {% if desk_state %}{% include "ops/mail/_desk_bar.html" with st=desk_state c=desk_conv %}{% endif %}
   {% if desk_state.last_in %}{% include "ops/suggest/_panel.html" with url="/inbox/desk/suggest/" mode="desk" thread=thread %}{% endif %}{% endif %}
@@ -85,6 +87,7 @@
             <details><summary>SIMEX AI's reading of the document</summary><p>{{ x.d.summary }}</p>{% if x.band and x.d.ai_signals %}<p><b>Why it may be AI-written:</b> {{ x.d.ai_signals }}</p>{% endif %}</details></div>{% endfor %}
           </div>{% endwith %}{% endif %}
         {% if m.banner %}<div class="gm-banner">{{ m.banner }}</div>{% endif %}
+        {% if m.cal %}{% include "ops/mail/_invite_card.html" with c=m.cal %}{% endif %}
         <div class="gm-text">{{ m.body|mailbody }}</div>
         {% if m.footer %}<div class="gm-footer">{{ m.footer|mailbody }}</div>{% endif %}
         {% if m.files.all %}

@@ -100,7 +100,8 @@ ACTION_TEXT = {"star": "Starred", "unstar": "Unstarred", "read": "Marked read", 
                "label_add": "Labelled", "label_remove": "Removed a label from", "move": "Moved",
                "discard": "Discarded a draft", "label_create": "Created a label", "label_delete": "Deleted a label",
                "search": "Searched", "draft": "Saved a draft", "send": "Sent",
-               "cal_create": "Added an event", "cal_update": "Changed an event", "cal_cancel": "Deleted an event"}
+               "cal_create": "Added an event", "cal_update": "Changed an event", "cal_cancel": "Deleted an event",
+               "cal_rsvp": "Answered an invitation"}
 GROUPS = {"signin": "Sign-ins", "mail": "In SIMEX Mail", "read": "Reading", "sent": "Sent"}
 
 
