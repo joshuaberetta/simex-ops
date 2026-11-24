@@ -411,7 +411,14 @@ Viewing a team from ExCon, the drawer also has that mailbox's mail and calendar,
 - **From a conversation.** **Create event** (the calendar icon on a conversation's toolbar) opens a new event with the subject as its title and the people in the conversation as guests. The event links to the email, and the conversation shows *On the calendar: …*.
 - **Clashes.** While you choose a time, the editor lists what else is at that time on the calendars you see. There is no free/busy across teams.
 - **Withdrawing** a delivery (5.3) that was an invitation takes those teams off the event; an event left without guests is cancelled.
-- Reminders, the persona desk's who-plays-it and finding meetings already arranged in the mail come next (`docs/CALENDAR_PLAN.md`).
+- **Meetings in the mail** (ExCon: **Team inboxes → Meetings in the mail**, `/meetings/`). The calendar came part way through the exercise, so the meetings the teams already arranged by email are only in the mail. Choose teams (none: all) and optionally dates, and click **Find meetings**. SIMEX AI reads the teams' mail only: the team inboxes, leaders' and members' own mailboxes, the persona desk's. It never reads role plays, injects not yet sent, the Library or your notes. It needs AI analysis on, and you get a notification when it is done. It lists each meeting it finds:
+  - its time (real, with the scenario time under it; "tomorrow at 10" is read against the date of the message it is in);
+  - place, how, organiser and guests (only those in that conversation, so it can never put a team's meeting on another team's calendar);
+  - proposed, confirmed, declined or cancelled, and each guest's answer;
+  - how sure it is, the quoted lines it rests on (linked to the conversation, read-only), and a warning when it looks like an event already on a calendar (same conversation, or the same people within 30 minutes).
+
+  Correct anything, tick the ones to keep (the sure ones with a time are ticked already) and **Apply the ticked ones**. Each becomes an event on its organiser's and guests' calendars, with the answers the mail shows (a confirmed meeting: everyone accepted). **No mail and no notification goes to anyone.** These events show *From the mail* with a link to the conversation, and the conversation shows *On the calendar (from the mail)*. Running it again skips the conversations already read, unless you tick **Also read conversations earlier runs read**. **Clear mailboxes** removes a team's unapplied meetings; **Start afresh** removes every run; backups keep them.
+- Reminders and the persona desk's who-plays-it come next (`docs/CALENDAR_PLAN.md`).
 - What members do on their calendars (adding, changing, deleting events) shows in each person's activity (People & logins). It isn't counted as inbox management in the reports or on the Dashboard. **Clear mailboxes** also clears those mailboxes' calendars, **Start afresh** clears every calendar, and backups keep them.
 
 ## 6. After the exercise

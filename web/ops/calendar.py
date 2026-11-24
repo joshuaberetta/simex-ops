@@ -316,7 +316,7 @@ def as_json(ev, layer, clk, both, row=None, lays=None):
            "guests": _guests(ev), "guestKeys": [a.key for a in ev.attendees.all() if a.role != "organiser"],
            "response": row.response if guest_row else "", "comment": row.comment if guest_row else "",
            "answerable": bool(layer["writable"] and guest_row and ev.status == "confirmed"),
-           "invite": _thread_url(ev, layer)}
+           "invite": _thread_url(ev, layer), "seeded": bool(ev.seeded_id)}
     if both:
         out["sim"] = {"start": shown(ev.starts_at, "sim"), "end": shown(ev.ends_at, "sim")}
     if ev.source_mail_id and lays is not None:
@@ -464,6 +464,7 @@ def thread_events(v, mails):
         if any(_layer_of(a, lays) for a in ev.attendees.all()):
             day = shown(ev.starts_at, clock(v))[:10]
             out.append({"title": ev.title, "when": when_text(ev, clock(v)), "cancelled": ev.status == "cancelled",
+                        "seeded": bool(ev.seeded_id),
                         "url": f"{v.base}/calendar/?view=day&date={day}"})
     return out
 

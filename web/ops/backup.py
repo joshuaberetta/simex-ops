@@ -19,7 +19,7 @@ MODELS = [Group, get_user_model(), m.Setting, m.Team, m.TeamRole, m.Person, m.Se
           m.ExerciseReport, m.Report, m.MailAction, m.NpcProfile, m.NpcReply, m.NpcSandbox,
           m.RolePlay, m.RolePlaySlot, m.RolePlayFile, m.RolePlaySeen, m.LoginEvent, m.DocumentAnalysis, m.DeskConversation,
           m.KbDocument, m.ReplySuggestion, m.DeskWatch, m.DeskDefault,
-          m.CalendarEvent, m.CalendarAttendee]
+          m.CalendarSeed, m.CalendarEvent, m.CalendarAttendee, m.CalendarSeedItem]
 
 
 # Rows serialized at a time: few for tables holding files, so a large exercise's backup (hundreds

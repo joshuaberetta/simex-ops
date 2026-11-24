@@ -1,6 +1,7 @@
 from django.urls import include, path
 
 from . import views_ai as a
+from . import views_cal_seed as cs
 from . import views_calendar as cal
 from . import views_excon as x
 from . import views_desk_board as dbx
@@ -156,6 +157,8 @@ urlpatterns = [
     path("team-roles/<int:rid>/delete/", x.team_role_delete),
     path("inboxes/", x.inboxes),
     path("inboxes/clear/", x.inbox_clear),
+    path("meetings/", cs.meetings),
+    path("meetings/<int:sid>/", cs.run),
     path("compose/", x.compose),
     path("excon/poll/", x.excon_poll),
     path("excon/notices/<int:nid>/", x.notice_open),

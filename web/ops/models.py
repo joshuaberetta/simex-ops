@@ -1163,6 +1163,8 @@ class CalendarEvent(models.Model):
     status = models.CharField(max_length=12, default="confirmed")  # confirmed | cancelled
     sequence = models.IntegerField(default=0)  # bumped on changes that matter to the guests
     source_mail = models.ForeignKey(Mail, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    # Found in the mail by SIMEX AI and applied by ExCon (ops/cal_seed.py): "From the mail".
+    seeded = models.ForeignKey("CalendarSeed", null=True, blank=True, on_delete=models.SET_NULL, related_name="events")
     created_by = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     is_test = models.BooleanField(default=False)
     created_at = models.DateTimeField(default=timezone.now)
@@ -1200,3 +1202,58 @@ class CalendarAttendee(models.Model):
     class Meta:
         ordering = ["id"]
         indexes = [models.Index(fields=["team", "owner"]), models.Index(fields=["persona"])]
+
+
+class CalendarSeed(models.Model):
+    """A run of "Find meetings in the mail" (ops/cal_seed.py, ExCon only): SIMEX AI reads the teams'
+    mail (participant-facing only) for meetings already proposed or agreed, as CalendarSeedItems
+    for ExCon to check and apply."""
+    status = models.CharField(max_length=10, default="running")  # running | done | failed
+    teams = models.JSONField(default=list, blank=True)  # team ids; [] = every active team
+    since = models.DateTimeField(null=True, blank=True)
+    until = models.DateTimeField(null=True, blank=True)
+    include_seeded = models.BooleanField(default=False)  # read threads earlier runs read too
+    scanned = models.JSONField(default=list, blank=True)  # "team id:thread" read by this run
+    total = models.IntegerField(default=0)  # chunks
+    done = models.IntegerField(default=0)
+    threads = models.IntegerField(default=0)
+    error = models.TextField(blank=True, default="")
+    model = models.CharField(max_length=120, blank=True, default="")
+    user = models.CharField(max_length=150, blank=True, default="")
+    created_at = models.DateTimeField(default=timezone.now)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    applied_at = models.DateTimeField(null=True, blank=True)
+    applied_by = models.CharField(max_length=150, blank=True, default="")
+
+    class Meta:
+        ordering = ["-id"]
+
+
+class CalendarSeedItem(models.Model):
+    """A meeting SIMEX AI found in the mail: for ExCon to edit, tick and apply (an event and its
+    attendee rows, quietly: no mail). allowed: the address-book keys its evidence mails belong to
+    or are addressed to, the only calendars it may go on (teams never cross)."""
+    seed = models.ForeignKey(CalendarSeed, on_delete=models.CASCADE, related_name="items")
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    thread = models.CharField(max_length=40, blank=True, default="")
+    title = models.CharField(max_length=200, default="")
+    starts_at = models.DateTimeField(null=True, blank=True)
+    ends_at = models.DateTimeField(null=True, blank=True)
+    all_day = models.BooleanField(default=False)
+    location = models.CharField(max_length=200, blank=True, default="")
+    mode = models.CharField(max_length=12, default="in_person")
+    organiser_key = models.CharField(max_length=140, blank=True, default="")
+    guests = models.JSONField(default=list, blank=True)  # [{"key", "response"}]
+    status = models.CharField(max_length=10, default="proposed")  # proposed | confirmed | declined | cancelled
+    confidence = models.IntegerField(default=0)  # 0-100
+    sources = models.JSONField(default=list, blank=True)  # [{"mail": id, "quote": "..."}]
+    allowed = models.JSONField(default=list, blank=True)
+    note = models.TextField(blank=True, default="")  # SIMEX AI's
+    problems = models.JSONField(default=list, blank=True)  # what the checks dropped or doubt
+    duplicate = models.ForeignKey(CalendarEvent, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    duplicate_why = models.CharField(max_length=200, blank=True, default="")
+    ticked = models.BooleanField(default=False)
+    event = models.ForeignKey(CalendarEvent, null=True, blank=True, on_delete=models.SET_NULL, related_name="seed_items")
+
+    class Meta:
+        ordering = ["starts_at", "id"]

@@ -279,6 +279,7 @@
         `<button type="button" class="gm-pill-btn sm${e.response === a ? " on" : ""}" data-answer="${a}">${ANSWER_NAME[a]}</button>`).join("")}
         <input data-answer-note maxlength="500" placeholder="Add a note (optional)" value="${esc(e.comment || "")}"></div>` : ""}
       ${e.invite ? `<p class="cal-pop-cal"><a class="gm-link" href="${esc(e.invite)}">Open the invitation</a></p>` : ""}
+      ${e.seeded ? `<p class="cal-pop-cal"><b>From the mail</b>: arranged by email before the calendar</p>` : ""}
       ${e.source ? `<p class="cal-pop-cal">From the email <a class="gm-link" href="${esc(e.source.url)}">${esc(e.source.subject || "(no subject)")}</a></p>` : ""}
       <p class="cal-pop-cal">${esc(lay ? lay.name : e.calendar)}${e.organiser ? ` · organised by ${esc(e.organiser)}` : ""}${!e.editable && !e.answerable ? " · read-only" : ""}</p>`;
     pop.hidden = false;

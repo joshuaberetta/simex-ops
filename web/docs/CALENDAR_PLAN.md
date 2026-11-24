@@ -383,7 +383,7 @@ Start afresh removes them.
        can't write to personas.
      - An event with guests can't be moved to another calendar.
      - Clashes are listed from the events already loaded on the page.
-3. **Seed the calendar from the mail** (below). ExCon has SIMEX AI find the meetings already
+3. **Seed the calendar from the mail** (below). *Built:* Team inboxes → **Meetings in the mail** (`/meetings/`, `ops/cal_seed.py`, `views_cal_seed.py`); items checked against their evidence mails' keys on creation and on every edit. ExCon has SIMEX AI find the meetings already
    proposed or agreed in the mail, reviews them, and applies them quietly as guest events. This
    step comes after invitations because seeded events need guests.
 4. **Personas and the desk.**

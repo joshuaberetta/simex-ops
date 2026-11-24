@@ -250,7 +250,8 @@ def test_suggestions_stay_out_of_participant_facing_code():
     import re
     here = pathlib.Path(suggest.__file__).parent
     for name in ("views_inbox.py", "views_leader.py", "ai.py", "npc.py", "report.py", "views_ai.py", "views_report.py",
-                 "render.py", "delivery.py", "desk.py", "inbound.py", "desk_ai.py", "calendar.py", "views_calendar.py"):
+                 "render.py", "delivery.py", "desk.py", "inbound.py", "desk_ai.py", "calendar.py", "views_calendar.py",
+                 "cal_seed.py", "views_cal_seed.py"):
         src = (here / name).read_text()
         assert not re.search(r"\bimport suggest\b|\bsuggest\.|ReplySuggestion|views_suggest", src), name
 

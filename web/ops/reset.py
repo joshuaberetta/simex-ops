@@ -52,6 +52,8 @@ def clear_team(team, scope="all", deliveries=False):
             MailAction.objects.filter(team=team).delete()
             from . import calendar
             calendar.clear(team)  # its calendars: the team's, the leader's and the members' own
+            from . import cal_seed
+            cal_seed.clear(team)  # the meetings found in its mail, not applied
             n["grades"] = Grade.objects.filter(team=team).delete()[0] + AiGrade.objects.filter(team=team).delete()[0]
             DocumentAnalysis.objects.filter(team=team).delete()  # the readings of the files it sent
             from . import desk
@@ -85,6 +87,8 @@ def start_afresh(reschedule=True):
         MailAction.objects.all().delete()
         from . import calendar
         calendar.clear()  # every calendar's events (SIMEX Calendar)
+        from . import cal_seed
+        cal_seed.clear()  # and the runs of Meetings in the mail
         DeskConversation.objects.all().delete()  # the persona desk's to-answer state
         DeskWatch.objects.all().delete()  # who on the desk follows what
         DeskNotice.objects.all().delete()  # and their notices
