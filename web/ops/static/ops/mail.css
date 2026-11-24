@@ -828,6 +828,7 @@ body:has(.cal) .gm-fab { display: none; }
 .cal-pop-title h3 { margin: 0; font-size: 20px; font-weight: 400; line-height: 26px; word-break: break-word; }
 .cal-pop p { margin: 6px 0 0 28px; color: var(--ink2); }
 .cal-pop-sim { font-size: 13px; color: var(--muted) !important; }
+.cal-ev-sim .ic, .cal-pop-sim .ic, [data-cal-simhint] .ic { display: inline-block; vertical-align: -1px; }
 .cal-pop-desc { margin: 10px 0 0 28px; white-space: pre-wrap; word-break: break-word; max-height: 240px; overflow-y: auto; }
 .cal-pop-cal { font-size: 12px; color: var(--muted) !important; }
 .cal-dialog { width: 520px; }

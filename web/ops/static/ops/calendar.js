@@ -17,6 +17,14 @@
       .then(r => r.json().catch(() => ({ ok: false, error: "The server didn't answer." })).then(j => (r.ok ? j : Object.assign({ ok: false }, j))));
   };
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  // The same icons as the {% icon %} tag (templatetags/ops.py): emoji like the wastebasket don't render everywhere.
+  const ICON = {
+    edit: "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z",
+    trash: "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z",
+    clock: "M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z",
+    close: "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+  };
+  const icon = (name, size = 18) => `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICON[name]}"/></svg>`;
   const json = id => { const el = document.getElementById(id); return el ? JSON.parse(el.textContent) : null; };
 
   const C = json("simex-cal");
@@ -171,7 +179,7 @@
         return `<div class="cal-ev${e.editable ? " editable" : ""}${short ? " short" : ""}${evClass(e)}" data-id="${e.id}" tabindex="0" role="button"
           style="top:${top}px;height:${h - 2}px;left:calc(${100 * it.col / it.n}% + 1px);width:calc(${100 / it.n}% - 4px);--c:${esc(e.colour)};--fg:${esc(e.fg)}">
           <b>${esc(e.title)}</b><span class="cal-ev-t">${hm(e.start)} – ${hm(e.end)}${e.location ? ", " + esc(e.location) : ""}</span>
-          ${e.sim && !short ? `<span class="cal-ev-sim" title="Scenario time">◷ ${hm(e.sim.start)} – ${hm(e.sim.end)}</span>` : ""}
+          ${e.sim && !short ? `<span class="cal-ev-sim" title="Scenario time">${icon("clock", 12)} ${hm(e.sim.start)} – ${hm(e.sim.end)}</span>` : ""}
           ${e.editable ? '<i class="cal-resize" data-resize aria-hidden="true"></i>' : ""}</div>`;
       }).join("");
       const nl = d === t ? `<div class="cal-now" style="top:${(now() - toM(d)) / 60 * HOUR}px"></div>` : "";
@@ -211,7 +219,7 @@
       if (!evs.length) continue;
       html += `<div class="cal-sday${d === today() ? " today" : ""}"><button type="button" class="cal-sdate" data-goto="${d}"><b>${dnum(d)}</b><span>${MON[mnum(d)]}, ${DAY[dow(d)]}</span></button><ul>` +
         evs.map(e => `<li><button type="button" class="cal-srow${evClass(e)}" data-id="${e.id}" style="--c:${esc(e.colour)}">
-          <span class="cal-stime">${isAllDayish(e) ? "All day" : `${dayOf(e.start) < d ? "…" : hm(e.start)} – ${dayOf(e.end) > d && hm(e.end) !== "00:00" ? "…" : hm(e.end)}`}${e.sim ? `<small title="Scenario time">◷ ${e.allDay ? "" : hm(e.sim.start)}</small>` : ""}</span>
+          <span class="cal-stime">${isAllDayish(e) ? "All day" : `${dayOf(e.start) < d ? "…" : hm(e.start)} – ${dayOf(e.end) > d && hm(e.end) !== "00:00" ? "…" : hm(e.end)}`}${e.sim ? `<small title="Scenario time">${icon("clock", 12)} ${e.allDay ? "" : hm(e.sim.start)}</small>` : ""}</span>
           <span class="cal-dot"></span><span class="cal-stitle"><b>${esc(e.title)}</b>${e.location ? `<small>${esc(e.location)}</small>` : ""}</span></button></li>`).join("") + "</ul></div>";
     }
     bodyEl.innerHTML = `<div class="cal-schedule">${html || `<p class="cal-empty">Nothing planned in the 30 days from ${longDate(date)}.${C.readonly ? "" : " Create an event with the Create button."}</p>`}</div>`;
@@ -274,11 +282,11 @@
     if (!e) return;
     const lay = layerOf(e.layer);
     pop.innerHTML = `<div class="cal-pop-bar">
-        ${e.editable ? `<button type="button" class="gm-icon-btn sm" data-pop-edit title="Edit" aria-label="Edit">✎</button><button type="button" class="gm-icon-btn sm" data-pop-del title="Delete" aria-label="Delete">🗑</button>` : ""}
-        <button type="button" class="gm-icon-btn sm" data-pop-close title="Close" aria-label="Close">✕</button></div>
+        ${e.editable ? `<button type="button" class="gm-icon-btn sm" data-pop-edit title="Edit" aria-label="Edit">${icon("edit")}</button><button type="button" class="gm-icon-btn sm" data-pop-del title="Delete" aria-label="Delete">${icon("trash")}</button>` : ""}
+        <button type="button" class="gm-icon-btn sm" data-pop-close title="Close" aria-label="Close">${icon("close")}</button></div>
       <div class="cal-pop-title"><span class="cal-sq" style="background:${esc(e.colour)}"></span><h3>${esc(e.title)}</h3></div>
       <p class="cal-pop-when">${esc(when(e))}</p>
-      ${e.sim ? `<p class="cal-pop-sim" title="Scenario time">◷ Scenario: ${esc(simWhen(e))}</p>` : ""}
+      ${e.sim ? `<p class="cal-pop-sim" title="Scenario time">${icon("clock", 12)} Scenario: ${esc(simWhen(e))}</p>` : ""}
       ${e.location || e.mode !== "in_person" ? `<p class="cal-pop-where"><b>${esc(modeName(e.mode))}</b>${e.location ? " · " + esc(e.location) : ""}</p>` : ""}
       ${e.status === "cancelled" ? `<p class="cal-pop-where"><b>Cancelled</b></p>` : ""}
       ${e.description ? `<div class="cal-pop-desc">${esc(e.description)}</div>` : ""}
@@ -439,7 +447,7 @@
     const hint = $("[data-cal-simhint]");
     if (!C.simNow || F("all_day").checked || !F("start_date").value) { hint.hidden = true; return; }
     const t = formTimes();
-    hint.textContent = `◷ In the scenario: ${shortDate(dayOf(simOf(t.start)))} ${hm(simOf(t.start))} – ${hm(simOf(t.end))}`;
+    hint.innerHTML = `${icon("clock", 12)} In the scenario: ${esc(shortDate(dayOf(simOf(t.start))))} ${esc(hm(simOf(t.start)))} – ${esc(hm(simOf(t.end)))}`;
     hint.hidden = false;
   }
   if (form) {
