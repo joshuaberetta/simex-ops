@@ -236,7 +236,7 @@ class _Text(HTMLParser):
                 self.out.append(f" ({href})")
 
     def handle_data(self, data):
-        self.out.append(re.sub(r"[ \t\r\n]+", " ", data))
+        self.out.append(re.sub(r"[ \t\r\n\xa0]+", " ", data))
 
 
 def to_text(cleaned):

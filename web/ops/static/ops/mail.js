@@ -68,6 +68,14 @@
       for (const field of ["to", "cc", "bcc"]) this.bindChips(field);
       $$("[data-show]", form).forEach((b) => b.onclick = () => { $(`[data-field="${b.dataset.show}"]`, form).hidden = false; b.hidden = true; $(`[data-chip-input="${b.dataset.show}"]`, form).focus(); });
       $("[data-files]", form).onchange = (e) => { this.files.push(...e.target.files); e.target.value = ""; this.renderFiles(); };
+      // The message itself: formatting and pictures in the text (rte.js).
+      const bar = $("[data-rte-bar]", form);
+      this.rte = new window.SimexEditor($("[data-rte]", form), bar, { files: (fs) => { this.files.push(...fs); this.renderFiles(); this.touch(); } });
+      $("[data-rte-image-pick]", form).onchange = (e) => { this.rte.pick(Array.from(e.target.files)); e.target.value = ""; };
+      const fmt = $("[data-rte-toggle]", form);
+      const showBar = (on) => { bar.hidden = !on; fmt.setAttribute("aria-pressed", on ? "true" : "false"); fmt.classList.toggle("on", on); };
+      showBar(localStorage.getItem("simex-rte-bar") !== "0");
+      fmt.onclick = () => { const on = bar.hidden; showBar(on); localStorage.setItem("simex-rte-bar", on ? "1" : "0"); };
       form.addEventListener("input", (e) => { if (!e.target.matches("[data-chip-input]")) this.touch(); });
       form.addEventListener("submit", (e) => { e.preventDefault(); this.send(); });
       // Enter in a one-line field (subject, an address being typed) doesn't send the message.
@@ -179,7 +187,7 @@
       this.form.elements.forward_of.value = d.forward_of || "";
       for (const f of ["to", "cc", "bcc"]) { this.keys[f] = []; (d[f] || []).forEach((k) => this.add(f, k)); this.renderChips(f); }
       this.form.elements.subject.value = d.subject || "";
-      this.form.elements.body.value = d.body || "";
+      this.rte.set(d.html || "", d.body || "");
       if (this.form.elements.from) {
         const sel = this.form.elements.from;
         // The persona desk has no default: "" until a persona is chosen (a reply: the one written to).
@@ -201,13 +209,17 @@
     }
     data(withFiles) {
       const fd = new FormData();
-      for (const n of ["draft_id", "in_reply_to", "forward_of", "subject", "body"]) fd.append(n, this.form.elements[n].value);
+      for (const n of ["draft_id", "in_reply_to", "forward_of", "subject"]) fd.append(n, this.form.elements[n].value);
+      fd.append("body", this.rte.text());
+      fd.append("html", this.rte.html());
+      this.posted = this.rte.cids();  // what the draft will have once this is saved
+      for (const { cid, file } of this.rte.pending()) { fd.append("inline", file, file.name || "image"); fd.append("inline_cid", cid); }
       if (this.form.elements.from) fd.append("from", this.form.elements.from.value);
       for (const f of ["to", "cc", "bcc"]) fd.append(f, this.keys[f].join(","));
       if (withFiles) this.files.forEach((f) => fd.append("files", f));
       return fd;
     }
-    empty() { return !this.keys.to.length && !this.keys.cc.length && !this.form.elements.subject.value.trim() && !this.form.elements.body.value.trim(); }
+    empty() { return !this.keys.to.length && !this.keys.cc.length && !this.form.elements.subject.value.trim() && !this.rte.text() && !this.rte.hasImages(); }
     save() {
       if (CFG.readonly || this.sending || this.empty()) return this.saving || Promise.resolve();
       this.dirty = false;
@@ -217,7 +229,9 @@
           if (r.status === 410) return;  // sent or discarded meanwhile: no new draft
           if (!r.ok) { this.dirty = true; return; }  // signed out or offline: saved on a later try
           const j = await r.json();
+          if (this.form.elements.draft_id.value !== String(j.id)) this.rte.saved([]);
           this.form.elements.draft_id.value = j.id;
+          this.rte.saved(this.posted || []);
           $("[data-draft-state]", this.form).textContent = "Draft saved";
         } catch (e) { this.dirty = true; } finally { this.saving = null; }
       })();
@@ -226,8 +240,8 @@
     async send() {
       if (this.sending) return;  // a second press (or Ctrl+Enter) while the first is on its way
       const btn = $(".gm-send", this.form);
-      const mb = this.files.reduce((s, f) => s + f.size, 0) / 1048576;
-      if (mb > CFG.maxMb) { snack(`Attachments are over ${CFG.maxMb} MB.`); return; }
+      const mb = (this.files.reduce((s, f) => s + f.size, 0) + this.rte.size()) / 1048576;
+      if (mb > CFG.maxMb) { snack(`Attachments and pictures are over ${CFG.maxMb} MB.`); return; }
       await this.commitAll();  // an address still being typed
       if ($$(".gm-chip-input.bad", this.form).length) { snack("Check the addresses: one of them isn't in SIMEX Mail."); return; }
       if (!this.keys.to.length && !this.keys.cc.length && !this.keys.bcc.length) { snack("Please specify at least one recipient."); return; }
@@ -540,8 +554,11 @@
         const m = tdata.msgs[id] || tdata.msgs[tdata.last];
         let d;
         if (mode === "forward") {
+          const head = `---------- Forwarded message ---------\nFrom: ${m.from} <${m.addr}>\nDate: ${m.date}\nSubject: ${m.subject}\nTo: ${m.to}`;
           d = { to: [], subject: fw(m.subject), forward_of: id, from: m.as || tdata.from,
-            body: `\n\n---------- Forwarded message ---------\nFrom: ${m.from} <${m.addr}>\nDate: ${m.date}\nSubject: ${m.subject}\nTo: ${m.to}\n\n${m.body}` };
+            body: `\n\n${head}\n\n${m.body}`,
+            // a formatted message is forwarded as it is, its pictures with it
+            html: m.html ? `<div><br></div><div><br></div><div>${esc(head).replace(/\n/g, "<br>")}</div><div><br></div>${m.html}` : "" };
         } else {
           // The conversation above is the context, so (as in webmail) the quote is not pasted in.
           d = { to: mode === "all" ? tdata.replyAll : (m.reply && m.reply.length ? m.reply : tdata.reply), subject: re(m.subject), in_reply_to: id, body: "",
@@ -551,7 +568,7 @@
         $(".gm-inline-form", box).dataset.mode = mode;
         box.hidden = false; box.classList.remove("min"); $("[data-reply-actions]").hidden = true;
         title();
-        const ta = $("[name=body]", box); ta.focus(); ta.setSelectionRange(0, 0); ta.scrollTop = 0;
+        inline.rte.focus(true);
         if (!box.classList.contains("popped")) box.scrollIntoView({ block: "nearest", behavior: "smooth" });
         if (mode === "forward") $('[data-chip-input="to"]', box).focus();
       };
@@ -562,7 +579,7 @@
       const pop = (on) => {
         box.classList.toggle("popped", on); box.classList.remove("min");
         document.body.classList.toggle("reply-popped", on);
-        const ta = $("[name=body]", box); ta.focus();
+        inline.rte.focus();
         if (!on) box.scrollIntoView({ block: "nearest", behavior: "smooth" });
       };
       const shut = () => { box.hidden = true; box.classList.remove("popped", "min"); document.body.classList.remove("reply-popped"); $("[data-reply-actions]").hidden = false; };
@@ -580,8 +597,8 @@
       // Suggest a reply (suggest.js): answer that message with the suggested text.
       window.simexReplyWith = (id, body) => {
         openInline("reply", tdata.msgs[id] ? id : String(tdata.last));
-        const ta = $("[name=body]", box); ta.value = body; ta.dispatchEvent(new Event("input", { bubbles: true }));
-        ta.focus(); ta.setSelectionRange(0, 0); ta.scrollTop = 0;
+        inline.rte.setText(body);
+        inline.rte.focus(true);
       };
     }
     // The persona desk: who else on the desk has this conversation open, or is answering it.
@@ -613,7 +630,7 @@
     if (e.key === "Escape") {
       if (win && !win.hidden) { $("[data-compose-close]", win).click(); }
       else if (window.simexReplyPopped && window.simexReplyPopped()) { $("[data-reply-close]").click(); }
-      if (t.matches && t.matches("input, textarea")) t.blur();
+      if (t.matches && t.matches("input, textarea, [contenteditable]")) t.blur();
       return;
     }
     if (e.metaKey || e.ctrlKey || e.altKey) {
@@ -913,7 +930,7 @@
         }
         if (!m.other && CFG.folder === "inbox" && bulk && !$$('input[name="threads"]:checked').length && (!win || win.hidden)) {
           setTimeout(() => {  // show the new row; the alert comes back after the reload
-            if ($$('input[name="threads"]:checked').length || (win && !win.hidden) || $("[data-composer] textarea:focus")) return;
+            if ($$('input[name="threads"]:checked').length || (win && !win.hidden) || $("[data-composer] [data-rte]:focus")) return;
             sessionStorage.setItem("simex-snack-new", JSON.stringify({ text: `New message from ${m.from}: ${m.subject}${more}`, url }));
             location.reload();
           }, 4000);

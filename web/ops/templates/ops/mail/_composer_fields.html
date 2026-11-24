@@ -29,11 +29,28 @@
       <div class="gm-suggest" hidden></div>
     </div>
     <div class="gm-field gm-subject-field"><input name="subject" placeholder="Subject" autocomplete="off" aria-label="Subject"></div>
-    <textarea name="body" class="gm-body-input" aria-label="Message body"></textarea>
+    <div class="gm-body-input gm-rte" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Message body" data-rte></div>
     <div class="gm-att-chips" data-att-chips></div>
+    <div class="gm-rte-bar" data-rte-bar role="toolbar" aria-label="Formatting">
+      <button type="button" data-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold">{% icon "f_bold" 18 %}</button>
+      <button type="button" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic">{% icon "f_italic" 18 %}</button>
+      <button type="button" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline">{% icon "f_underline" 18 %}</button>
+      <button type="button" data-cmd="strikeThrough" title="Strikethrough (Ctrl+Shift+X)" aria-label="Strikethrough">{% icon "f_strike" 18 %}</button>
+      <span class="gm-rte-wrap"><button type="button" data-rte-colours title="Text colour" aria-label="Text colour">{% icon "f_colour" 18 %}</button>
+        <span class="gm-rte-palette" data-rte-palette hidden></span></span>
+      <span class="gm-rte-sep"></span>
+      <button type="button" data-cmd="insertUnorderedList" title="Bulleted list (Ctrl+Shift+8)" aria-label="Bulleted list">{% icon "f_bullets" 18 %}</button>
+      <button type="button" data-cmd="insertOrderedList" title="Numbered list (Ctrl+Shift+7)" aria-label="Numbered list">{% icon "f_numbers" 18 %}</button>
+      <button type="button" data-rte-quote title="Quote" aria-label="Quote">{% icon "f_quote" 18 %}</button>
+      <span class="gm-rte-sep"></span>
+      <button type="button" data-rte-link title="Insert link (Ctrl+K)" aria-label="Insert link">{% icon "f_link" 18 %}</button>
+      <button type="button" data-rte-clear title="Remove formatting" aria-label="Remove formatting">{% icon "f_clear" 18 %}</button>
+    </div>
     <div class="gm-compose-foot">
       <button type="submit" class="gm-send">Send</button>
+      <button type="button" class="gm-icon-btn" data-rte-toggle title="Formatting options" aria-label="Formatting options" aria-pressed="true">{% icon "f_text" 20 %}</button>
       <label class="gm-icon-btn" title="Attach files" aria-label="Attach files">{% icon "attach" 20 %}<input type="file" name="files" multiple hidden data-files></label>
+      <label class="gm-icon-btn" title="Insert a picture in the text (or paste or drop one)" aria-label="Insert a picture">{% icon "f_image" 20 %}<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden data-rte-image-pick></label>
       <span class="gm-draft-state" data-draft-state></span>
       <button type="button" class="gm-icon-btn right" data-discard title="Discard draft" aria-label="Discard draft">{% icon "trash" 20 %}</button>
     </div>
