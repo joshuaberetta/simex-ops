@@ -107,6 +107,8 @@ def test_desk_sees_both_ways_and_answers_as_the_persona(excon, django_capture_on
         row = next(r for r in page.context["rows"] if r["thread"] == got.thread)
         assert row["unread"] and row["desk"]["teams"] == ["Team A"] and row["desk"]["personas"][0]["local"] == "donotreply"
         assert page.context["desk_side"]["teams"][0]["unread"] == 1
+        # Each row opens in a new tab too, so the desk works several conversations beside the list.
+        assert f'href="/inbox/desk/t/{got.thread}/?folder=inbox" target="_blank" rel="noopener"' in page.content.decode()
         assert page.context["from_choices"] and not any("tl" in f["key"] for f in page.context["from_choices"])
         # Opening it marks it read on the desk, never as the team reading.
         events = Event.objects.count()
@@ -189,6 +191,8 @@ def test_desk_reads_every_team_read_only(excon):
     mail = Mail.objects.get(team=ta, owner=None)
     r = d.get(f"/inbox/as/{ta.id}/")
     assert r.status_code == 200 and r.context["desk_tabs"] and r.context["back_url"] == "/inbox/desk/teams/"
+    assert f'href="/inbox/as/{ta.id}/t/{mail.thread}/?folder=inbox" target="_blank"' in r.content.decode()  # read-only: still a new tab
+    assert 'data-row-action' not in r.content.decode()
     d.get(f"/inbox/as/{ta.id}/t/{mail.thread}/")
     assert Mail.objects.get(pk=mail.pk).read_at is None
     assert d.get(f"/inbox/as/{ta.id}/leader/").status_code == 200

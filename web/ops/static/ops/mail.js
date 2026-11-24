@@ -313,8 +313,17 @@
       av.addEventListener("click", (e) => { e.stopPropagation(); toggleRow(av.closest(".gm-row")); });
       av.addEventListener("keydown", (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleRow(av.closest(".gm-row")); } });
     });
+    // Ctrl/Cmd-click or middle-click opens the conversation in a new tab, as a link would:
+    // the persona desk keeps its list in one tab and works conversations in others.
+    const newTab = (r) => { if (r.dataset.href) window.open(r.dataset.href, "_blank", "noopener"); };
+    rows.forEach((r) => r.addEventListener("auxclick", (e) => {
+      if (e.button !== 1 || e.target.closest("button, a, label")) return;
+      e.preventDefault(); newTab(r);
+    }));
+    rows.forEach((r) => r.addEventListener("mousedown", (e) => { if (e.button === 1 && r.dataset.href && !e.target.closest("a")) e.preventDefault(); }));  // no autoscroll
     rows.forEach((r) => r.addEventListener("click", (e) => {
       if (e.target.closest("button, a, label")) return;
+      if ((e.metaKey || e.ctrlKey) && r.dataset.href) { newTab(r); return; }
       if (document.body.classList.contains("selecting") && getComputedStyle($("[data-select-row]", r) || r).display === "flex") {
         toggleRow(r); return;
       }
@@ -358,6 +367,14 @@
       rows[focus].classList.add("focus"); rows[focus].scrollIntoView({ block: "nearest" });
     };
     window.simexListOpen = () => { if (focus >= 0) rows[focus].click(); };
+    window.simexListOpenTab = () => { if (focus >= 0) newTab(rows[focus]); };
+    // Back to the list's tab after working conversations in others: reload it so what was answered
+    // there has moved on (not while anything is selected or being written).
+    let hiddenAt = 0;
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) { hiddenAt = Date.now(); return; }
+      if (hiddenAt && Date.now() - hiddenAt > 5000 && !boxes().some((b) => b.checked) && (!win || win.hidden)) location.reload();
+    });
     window.simexListAct = (act) => { if (focus >= 0) { const b = $(`[data-row-action="${act}"]`, rows[focus]); if (b) b.click(); } };
     window.simexListToggle = () => { if (focus >= 0) { const c = $('input[name="threads"]', rows[focus]); c.checked = !c.checked; sync(); } };
   }
@@ -623,6 +640,7 @@
     } else if (bulk) {
       if (k === "j") window.simexListMove(1);
       else if (k === "k") window.simexListMove(-1);
+      else if (k === "O") window.simexListOpenTab();
       else if (k === "Enter" || k === "o") window.simexListOpen();
       else if (k === "e") window.simexListAct("archive");
       else if (k === "#") window.simexListAct("trash");

@@ -78,9 +78,10 @@
       {% if v.sees_ai %}<span class="gm-aicol">{% if r.ai %}{% include "ops/mail/_ai_meter.html" with ai=r.ai %}{% endif %}</span>{% endif %}
       <span class="gm-att">{% if r.has_files %}{% icon "attach" 18 %}{% endif %}</span>
       <span class="gm-date">{% listdate m %}</span>
-      {% if not readonly %}
+      {% if not readonly or not r.draft %}
       <span class="gm-hover" onclick="event.stopPropagation()">
-        {% if folder == 'trash' %}<button type="button" class="gm-icon-btn" data-row-action="restore" title="Move to Inbox">{% icon "restore" %}</button>
+        {% if not r.draft %}<a class="gm-icon-btn gm-newtab" href="{{ base }}/t/{{ r.thread }}/?folder={{ folder }}" target="_blank" rel="noopener" title="Open in a new tab" aria-label="Open in a new tab">{% icon "pop_out" %}</a>{% endif %}
+        {% if readonly %}{% elif folder == 'trash' %}<button type="button" class="gm-icon-btn" data-row-action="restore" title="Move to Inbox">{% icon "restore" %}</button>
         {% elif r.draft %}<button type="button" class="gm-icon-btn" data-row-action="discard" title="Discard">{% icon "trash" %}</button>
         {% else %}
         {% if st.section == 'attention' or st.section == 'quiet' %}<button type="button" class="gm-icon-btn" data-desk-act="done" title="No reply needed">{% icon "done" %}</button>{% endif %}
