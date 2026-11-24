@@ -10,6 +10,12 @@
   const target = panel.dataset.thread ? { thread: panel.dataset.thread } : { response: panel.dataset.response };
   const csrf = () => (document.querySelector("[name=csrfmiddlewaretoken]") || {}).value || "";
   let timer = null;
+  // Dismissed (or used) suggestions stay hidden in this browser until asked for again.
+  const KEY = `simex-sg-hidden:${panel.dataset.mode}`;
+  const hidden = () => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) { return []; } };
+  const hide = (id) => { try { localStorage.setItem(KEY, JSON.stringify([id, ...hidden().filter((x) => x !== id)].slice(0, 200))); } catch (e) { /* private mode */ } };
+  const unhide = (id) => { try { localStorage.setItem(KEY, JSON.stringify(hidden().filter((x) => x !== id))); } catch (e) { /* private mode */ } };
+  const dismiss = (s) => { hide(s.id); render(s); };
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const list = (title, items, fmt) => {
@@ -21,6 +27,7 @@
 
   const useIt = (s) => {
     const body = s.body.body || "";
+    dismiss(s);  // it is in the reply now: out of the way
     if (panel.dataset.mode !== "excon" && window.simexReplyWith) { window.simexReplyWith(String(s.mail || ""), body); return; }
     const ta = document.querySelector("#answer textarea[name=body]");
     if (ta) {
@@ -32,12 +39,21 @@
     out.replaceChildren();
     go.disabled = false;
     if (!s) return;
+    if (s.status !== "running" && hidden().includes(s.id)) {
+      const again = el("button", "sg-link", "Show the last suggestion"); again.type = "button";
+      again.onclick = () => { unhide(s.id); render(s); };
+      out.append(again);
+      return;
+    }
     if (s.status === "running") {
       go.disabled = true;
       out.append(el("p", "sg-wait", "SIMEX AI is looking things up and writing a suggestion… (usually under a minute)"));
       clearTimeout(timer); timer = setTimeout(load, 3000, s.id);
       return;
     }
+    const x = el("button", "sg-x", "×"); x.type = "button"; x.title = "Dismiss this suggestion"; x.setAttribute("aria-label", "Dismiss this suggestion");
+    x.onclick = () => dismiss(s);
+    out.append(x);
     if (s.status === "failed") { out.append(el("p", "sg-err", `The suggestion failed: ${s.error}`)); return; }
     const b = s.body || {};
     out.append(el("p", "sg-meta", `Suggested ${s.at}${s.user ? ` for ${s.user}` : ""}${s.prompt ? ` · asked: “${s.prompt}”` : ""}. Read it before you send it.`));

@@ -1,6 +1,11 @@
 /* Suggest a reply (suggest.js): the desk's conversation page and ExCon's reply page. */
 .sg { border: 1px solid #d6cdf3; background: #faf8ff; border-radius: 10px; padding: 10px 14px; margin: 10px 0; font-size: 14px; }
 .sg-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+[data-sg-out] { position: relative; }
+.sg-x { position: absolute; top: 0; right: -4px; border: 0; background: none; color: #777; font-size: 20px; line-height: 1; padding: 2px 6px; cursor: pointer; border-radius: 6px; }
+.sg-x:hover { background: #ece8fb; color: #3b2d94; }
+.sg-link { border: 0; background: none; color: #5b4bc4; padding: 6px 0 0; font: inherit; font-size: 13px; cursor: pointer; text-decoration: underline; }
+.sg-meta { padding-right: 28px; }
 .sg-head b { color: #4a3aa8; }
 .sg-head input { flex: 1; min-width: 180px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; font: inherit; }
 .sg-btn { border: 1px solid #8f80d8; background: #fff; color: #3b2d94; border-radius: 16px; padding: 5px 12px; font: inherit; cursor: pointer; }
