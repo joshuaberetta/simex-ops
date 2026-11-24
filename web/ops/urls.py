@@ -3,6 +3,7 @@ from django.urls import include, path
 from . import views_ai as a
 from . import views_excon as x
 from . import views_desk_board as dbx
+from . import views_desk_chat as chat
 from . import views_inbox as p
 from . import views_leader as lead
 from . import views_network as net
@@ -73,6 +74,11 @@ urlpatterns = [
     path("inbox/desk/notices/mark/", p.desk_notices_mark),
     path("inbox/desk/suggest/", sg.suggestion),
     path("inbox/desk/suggest/<int:sid>/", sg.suggestion_get),
+    path("inbox/desk/chat/", chat.chats),
+    path("inbox/desk/chat/<int:cid>/", chat.chat),
+    path("inbox/desk/chat/<int:cid>/ask/", chat.ask),
+    path("inbox/desk/chat/<int:cid>/delete/", chat.delete),
+    path("inbox/desk/chat/turn/<int:tid>/", chat.turn),
     path("inbox/desk/dashboard/", p.desk_dashboard),
     path("inbox/desk/assign/", dbx.board),
     path("inbox/desk/assign/board/", dbx.board_json),

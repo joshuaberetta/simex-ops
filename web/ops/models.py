@@ -1128,6 +1128,44 @@ class LeaderSuggestion(models.Model):
         ordering = ["-id"]
 
 
+class DeskChat(models.Model):
+    """A chat with SIMEX AI on the persona desk ("ChatSIMEX", ops/desk_chat.py), private to the
+    login that started it (a desk member, or ExCon staff on the desk). Its answers can quote
+    role-play scripts, planned injects, Sender.notes and teams' internal mail: served by
+    views_desk_chat only, to its owner. Never sends anything. Scope (optional): a team, a
+    persona (username), a pinned desk conversation (thread)."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="desk_chats")
+    title = models.CharField(max_length=200, blank=True, default="")  # from the first question
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    persona = models.CharField(max_length=120, blank=True, default="")
+    thread = models.CharField(max_length=40, blank=True, default="")
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+
+
+class DeskChatTurn(models.Model):
+    """One question in a DeskChat and SIMEX AI's answer, written in a thread of the web process.
+    body: sources, draft (with its check), brief, hold_back, not_available, questions. trace:
+    the tool calls so far, for the panel while it runs."""
+    chat = models.ForeignKey(DeskChat, on_delete=models.CASCADE, related_name="turns")
+    question = models.TextField()
+    scope = models.JSONField(default=dict)  # {team, persona, thread} as asked
+    status = models.CharField(max_length=10, default="running")  # running | done | failed
+    answer = models.TextField(blank=True, default="")
+    body = models.JSONField(default=dict)
+    trace = models.JSONField(default=list)
+    model = models.CharField(max_length=120, default="")
+    steps = models.IntegerField(default=0)
+    error = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["id"]
+
+
 class ReplySuggestion(models.Model):
     """Claude's suggested answer to a team's message to a persona, for the persona desk or ExCon:
     an answer the team may see and notes for the desk (sources, what the team has and hasn't

@@ -6,6 +6,15 @@ You are on the **persona desk**: part of ExCon, playing the exercise's personas 
 - **Persona desk**: the shared mailbox. Its **Inbox** has every message a team writes to a persona (in SIMEX Mail or by email); its **Sent**, everything the personas sent the teams (the injects, ExCon's follow-ups and answers, the AI personas' answers and what the desk writes). The red number is unread conversations.
 - **Teams & team leaders** (read-only): each team's inbox, its team leader's mailbox and (when members have their own) each member's, exactly as they see them. Opening mail there does **not** mark it read for them. The side bar switches between teams.
 - **Dashboard** and **Assign**: how the desk is keeping up, and who has which conversations (below).
+- **ChatSIMEX** (on the right): ask SIMEX AI (below).
+
+## ChatSIMEX: ask before you answer
+Click **ChatSIMEX** at the right of the tabs to open a chat beside the mail, on any desk page. Ask in your own words, for example:
+- *Who is Salma?* A team is writing to a persona, or about someone, you haven't played. You get a briefing: who they are, how to play them, what they know, what they have told each team so far, what is still to come (don't give it away), and which conversations with them are open now.
+- *What has been said about the bridge?* What the personas and the teams wrote about it, team by team, and what the teams said among themselves.
+- *How do I answer this?* On a conversation, what the team asks, what the persona can say now, what the persona told the other teams, what to hold back, and a draft. **Use in reply** opens your reply with it. Read the **Check before sending** warnings.
+
+SIMEX AI searches the desk's mailbox, the teams' mailboxes, the injects, the role plays and the Library, and says where each team stands on each (*has it*, *NOT YET*). It takes about a minute. Two rules it follows, and so should you: **teams never cross** (use what another team was told to keep a persona consistent, never to pass it on), and **a persona can't know what a team said among itself**. Your chats are yours only: nobody else on the desk, or in ExCon, sees them. The answers can quote scripts and planned injects: never paste them to a team. **New chat** starts afresh, **History** opens earlier ones.
 
 **Simulation time.** When ExCon runs the simulation clock, the calendar and clock at the top show the scenario's date and time, with the real time beside it. Messages show the real time, with their simulation time under it (marked with a small clock): the teams see only the simulation time, so use that one when a persona mentions a time.
 

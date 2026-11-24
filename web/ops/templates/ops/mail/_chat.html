@@ -1,0 +1,29 @@
+{% load static %}{% comment %}ChatSIMEX (views_desk_chat, desk_chat.js): the persona desk's chat with SIMEX AI, a drawer on every desk page. Scope from the page: the desk conversation open (thread) or the team whose mailbox is open.{% endcomment %}
+<link rel="stylesheet" href="{% static 'ops/desk_chat.css' %}">
+<aside class="cx" data-chat hidden aria-label="ChatSIMEX"
+       data-thread="{% if v.desk and thread %}{{ thread }}{% endif %}"
+       data-team="{% if v and not v.desk and team.id %}{{ team.id }}{% endif %}">
+  <header class="cx-head">
+    <b>ChatSIMEX</b><small>SIMEX AI · your chats only</small>
+    <span class="cx-head-acts">
+      <button type="button" class="cx-btn" data-cx-history title="Your earlier chats">History</button>
+      <button type="button" class="cx-btn" data-cx-new title="Start a new chat">New chat</button>
+      <button type="button" class="gm-icon-btn sm" data-cx-close aria-label="Close ChatSIMEX">✕</button>
+    </span>
+  </header>
+  <div class="cx-scope" data-cx-scope>
+    <label>Team <select data-cx-team><option value="">All teams</option></select></label>
+    <span class="cx-chip" data-cx-pin hidden><span data-cx-pin-label>This conversation</span>
+      <button type="button" data-cx-unpin aria-label="Don't pin this conversation">✕</button></span>
+    <span class="cx-chip" data-cx-persona hidden><span data-cx-persona-label></span>
+      <button type="button" data-cx-unpersona aria-label="Any persona">✕</button></span>
+  </div>
+  <div class="cx-list" data-cx-list hidden></div>
+  <div class="cx-log" data-cx-log aria-live="polite"></div>
+  <form class="cx-ask" data-cx-form>{% csrf_token %}
+    <textarea data-cx-q rows="2" maxlength="4000" placeholder="Ask SIMEX AI… e.g. Who is Salma? What has been said about the bridge?" aria-label="Your question"></textarea>
+    <button class="cx-btn primary" data-cx-go>Ask</button>
+  </form>
+  <p class="cx-foot">Answers can quote scripts, planned injects and teams' internal mail: for the desk only. Check them before you use them; nothing is sent.</p>
+</aside>
+<script src="{% static 'ops/desk_chat.js' %}" defer></script>

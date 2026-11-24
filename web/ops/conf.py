@@ -37,6 +37,7 @@ DEFAULTS = {
     "ai_documents": "1",  # read the files teams send (ops/ai_docs.py): what they are, AI-written estimate
     "ai_documents_deep": "0",  # with the deep model (else the fast one)
     "tl_suggest": "1",  # team leaders' Suggest a reply in their own mailbox (ops/suggest_leader.py)
+    "desk_chat": "1",  # ChatSIMEX: the persona desk's chat with SIMEX AI (ops/desk_chat.py)
     "desk_triage": "1",  # read the persona desk's waiting conversations: needs an answer? (ops/desk_ai.py)
     "ai_daily_usd": "5",  # spend cap per day (Nairobi), estimated
     # AI personas (ops/npc.py): personas whose answers Claude writes. Off, and for the Test team

@@ -364,7 +364,7 @@ def grade_analyse(request, iid, tid):
 @require_POST
 def settings_ai(request):
     P = request.POST
-    for k in ("ai_enabled", "ai_auto", "ai_tests", "ai_injects", "ai_documents", "ai_documents_deep", "desk_triage", "tl_suggest"):
+    for k in ("ai_enabled", "ai_auto", "ai_tests", "ai_injects", "ai_documents", "ai_documents_deep", "desk_triage", "desk_chat", "tl_suggest"):
         conf.put(k, "1" if P.get(k) == "1" else "0")
     try:
         conf.put("ai_daily_usd", f"{max(0.0, float(P.get('ai_daily_usd') or 0)):g}")

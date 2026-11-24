@@ -6,7 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from . import conf
-from .models import (AiGrade, LeaderSuggestion, AiReport, DeskConversation, DeskNotice, DeskWatch, DocumentAnalysis, ExerciseReport, Grade, Inject, Mail, MailAction, MailLabel, Message, Notice,
+from .models import (AiGrade, DeskChat, LeaderSuggestion, AiReport, DeskConversation, DeskNotice, DeskWatch, DocumentAnalysis, ExerciseReport, Grade, Inject, Mail, MailAction, MailLabel, Message, Notice,
                      Person, Response, TestRun)
 
 SCOPES = {"all": "Every mailbox: the team inbox, the leader's and each member's own",
@@ -82,6 +82,7 @@ def start_afresh(reschedule=True):
         MailLabel.objects.all().delete()
         MailAction.objects.all().delete()
         DeskConversation.objects.all().delete()  # the persona desk's to-answer state
+        DeskChat.objects.all().delete()  # ChatSIMEX: the desk's chats with SIMEX AI
         DeskWatch.objects.all().delete()  # who on the desk follows what
         DeskNotice.objects.all().delete()  # and their notices
         Message.objects.exclude(kind="login").delete()  # with their Events

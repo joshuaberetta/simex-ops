@@ -78,6 +78,7 @@
   <a href="/inbox/desk/teams/" class="{% if dt.current == 'teams' %}on{% endif %}">{% icon "eye" 20 %} Teams &amp; team leaders <span class="gm-tab-ro">read-only</span></a>
   <a href="/inbox/desk/dashboard/" class="{% if dt.current == 'dashboard' %}on{% endif %}">{% icon "all" 20 %} Dashboard</a>
   <a href="/inbox/desk/assign/" class="{% if dt.current == 'assign' %}on{% endif %}">{% icon "person" 20 %} Assign</a>
+  {% if dt.chat %}<button type="button" class="gm-chat-tab" data-chat-toggle aria-expanded="false" title="Ask SIMEX AI what has been said already, who a persona is, how to answer a team">{% icon "edit" 20 %} ChatSIMEX</button>{% endif %}
 </nav>
 {% endwith %}{% elif member_tabs %}{% with mt=member_tabs %}
 <nav class="gm-tabs" aria-label="Mailboxes">
@@ -203,6 +204,7 @@
       <button class="gm-text-btn primary" data-dialog-ok>Create</button></div>
   </form>
 </dialog>{% endif %}
+{% if desk_tabs.chat %}{% include "ops/mail/_chat.html" %}{% endif %}
 {{ simex_js|json_script:"simex-config" }}
 <script src="{% static 'ops/notify.js' %}"></script>
 <script src="{% static 'ops/mail.js' %}"></script>

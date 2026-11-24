@@ -736,7 +736,8 @@ def desk_tabs(person, current, user=None):
     for t in teams:
         t.lead = leads.get(t.id)
     return {"current": current, "teams": teams, "unread": _unread(None, None),
-            "bell": desk.notice_counts(user) if user else None}
+            "bell": desk.notice_counts(user) if user else None,
+            "chat": conf.flag("desk_chat")}  # ChatSIMEX, on every desk page
 
 
 def _label_dict(label, unread=0):
