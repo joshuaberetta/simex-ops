@@ -186,6 +186,35 @@ def on_response(r):
         return NpcReply.objects.create(npc=p, team_id=r.team_id, response=r, thread_key=key, due_at=due)
 
 
+def take_over(profiles, now=None):
+    """Switching personas on mid-exercise: the desk conversations already waiting for one of
+    them (a team's latest message unanswered, nothing queued) get an answer queued, due within
+    minutes (the team has waited already). Returns how many."""
+    from . import desk
+    from .models import Mail
+    now = now or timezone.now()
+    locals_ = {p.sender.local_part for p in profiles}
+    if not locals_ or not active():
+        return 0
+    latest = {}
+    for t, rid in (Mail.objects.filter(team=None, owner=None, folder="inbox", trashed_at__isnull=True,
+                                       desk_response__persona__in=locals_)
+                   .order_by("id").values_list("thread", "desk_response_id")):
+        latest[t] = rid
+    st, n = desk.states(list(latest), now=now), 0
+    for t, rid in latest.items():
+        s = st.get(t) or {}
+        if not s.get("waiting") or s.get("npc"):
+            continue
+        job = on_response(Response.objects.select_related("team", "mail").get(pk=rid))
+        if job and job.status == "queued":
+            soon = now + timedelta(minutes=RNG.uniform(*QUICK))
+            if job.due_at > soon:
+                NpcReply.objects.filter(pk=job.pk).update(due_at=soon)
+            n += 1
+    return n
+
+
 # --- the worker ------------------------------------------------------------------------------------
 
 def tick(limit=LIMIT):

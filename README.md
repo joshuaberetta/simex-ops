@@ -8,7 +8,7 @@ Web app for UNDAC SIMEX exercise control at **https://ops.simex.kobolabs.dev**: 
 
 Each team has **team members** (the participants, sharing one team mailbox) and **one team leader** from ExCon, who plays the team leader persona in SIMEX Mail: their own mailbox (what is sent as that persona is in their Sent, the team's mail to it in their Inbox, plus injects marked "also to team leaders"), a read-only view of the team's inbox with SIMEX AI's reading of each reply, and the team's Dashboard. Teams never see or write to each other. With personal mailboxes on, each member also has their own mailbox with a copy of the team's mail. The **persona desk** (ExCon role-players, SIMEX Mail only) shares one mailbox where the teams' messages to the personas arrive, answers or writes as any persona but the team leader one, and reads every team's mailbox read-only.
 
-Also in the Django app: SIMEX AI's reading of the replies and a Dashboard, a review of each unsent inject, Draft with AI, AI personas that answer the teams in character (off by default), end-of-exercise reports per team and for ExCon, ExCon's Notifications panel, push notifications and QR-code sign-in for SIMEX Mail.
+Also in the Django app: SIMEX AI's reading of the replies and a Dashboard, a review of each unsent inject, Draft with AI, AI personas that answer the teams in character (off by default; their profiles, imported from a spreadsheet or written by SIMEX AI, also shape Suggest a reply and ChatSIMEX, and ticked personas can be switched to answer on their own), end-of-exercise reports per team and for ExCon, ExCon's Notifications panel, push notifications and QR-code sign-in for SIMEX Mail.
 
 | Where | What |
 |---|---|
