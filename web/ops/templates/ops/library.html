@@ -4,13 +4,26 @@
 <h1><a href="/injects/" class="muted">Injects</a> / Library</h1>
 <div class="card">
   <p>The documents the participants have or may be given (baseline documents, inject documents, maps), as text. When the persona desk or ExCon asks for a <b>suggested reply</b>, SIMEX AI searches them, with the injects and role plays, and is told for each one whether <b>this team has it yet</b>: it uses only what the team has, and tells the desk what not to get ahead of.</p>
-  <p class="small muted">{{ counts.total }} document{{ counts.total|pluralize }}: {{ counts.all }} the participants have, {{ counts.with }} released with an inject or role play, {{ counts.no }} not given.</p>
+  <p class="small muted">{{ counts.total }} document{{ counts.total|pluralize }}: {{ counts.all }} the participants have, {{ counts.with }} released with an inject or role play, {{ counts.no }} not given, {{ counts.ref }} background guidance.</p>
   <form method="post" enctype="multipart/form-data" class="rowform">{% csrf_token %}
     <input type="file" name="file" accept=".json,.gz" required>
     <label class="chk"><input type="checkbox" name="delete" value="1"> remove documents no longer in the file</label>
     <button class="btn primary">Upload the library</button>
   </form>
   <p class="small muted">The file comes from the knowledge base: <code>python3 -I scripts/export_ops.py</code> in <code>undac-simex</code> writes <code>work/ops-library.json.gz</code>. It holds only participant-facing documents, never the MEL, expected outcomes or role-player scripts (those are on the Role play tab). Re-uploading keeps the release you set here.</p>
+</div>
+<div class="card">
+  <h2>Add background or supporting documents</h2>
+  <p>Guidance notes, handbooks, standards (the EMT handbook, the UNDAC field handbook...) or any document the export lacks: PDF, Word, PowerPoint, Excel, OpenDocument, text or Markdown. The text is read from the file (a scanned PDF without text can't be searched). As <b>Background guidance</b>, SIMEX AI uses it for how things are done (procedures, standards, roles, terms), never as a source of scenario facts, and any team may be assumed to know it; choose another setting for an exercise document.</p>
+  <form method="post" enctype="multipart/form-data" class="rowform">{% csrf_token %}
+    <input type="file" name="files" accept="{{ FILE_TYPES }}" multiple required>
+    <select name="release">{% for k, v in RELEASES.items %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+    <input name="serial" size="7" placeholder="serial" title="Released with: the inject or role play it comes with (e.g. 3-14)">
+    <input name="category" size="12" placeholder="guidance" title="A category shown under its title (default: guidance)">
+    <input name="title" size="24" placeholder="Title (one file only)" title="Default: the file name">
+    <button class="btn primary">Add to the library</button>
+  </form>
+  <p class="small muted">Uploading a file with the same name again replaces its text. Uploading the knowledge base's export never removes these; remove one on its page.</p>
 </div>
 <form method="get" class="rowform">
   <input name="q" value="{{ q }}" placeholder="Title, folder or serial">
@@ -20,7 +33,7 @@
 <table class="list">
   <thead><tr><th>Document</th><th>Size</th><th>Do the participants have it?</th></tr></thead>
   {% for d in page %}
-  <tr><td><a href="/library/{{ d.id }}/text/">{{ d.title }}</a><div class="small muted">{{ d.category }} · {{ d.path|truncatechars:110 }}</div></td>
+  <tr><td><a href="/library/{{ d.id }}/text/">{{ d.title }}</a><div class="small muted">{{ d.category }} · {{ d.path|truncatechars:110 }}{% if d.key|slice:":3" == UPLOAD %} · uploaded here{% endif %}</div></td>
     <td class="small nowrap">{{ d.chars|filesizeformat }}</td>
     <td><form method="post" action="/library/{{ d.id }}/" class="rowform">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
       <select name="release">{% for k, v in RELEASES.items %}<option value="{{ k }}"{% if d.release == k %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>

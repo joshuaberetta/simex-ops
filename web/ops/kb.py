@@ -7,14 +7,24 @@ exports only what participants are given or may be given: never the MEL, expecte
 role-player scripts or ExCon's management files. ExCon uploads the export on the Library page
 (views_suggest.library) and can correct, per document, whether the participants have it.
 
-Whether a team has a document (status): release "all" from the start; "with" once the inject
+ExCon can also add files of its own there (add_file: PDF, Word, PowerPoint, Excel, OpenDocument,
+text, Markdown, HTML): background and supporting documents such as guidance notes and handbooks
+(release "ref": published guidance the persona and the team may draw on for how things are done,
+never a source of scenario facts), or an exercise document the export lacks. Their key is
+"up-" and a hash of the file name, so uploading the same file again replaces its text, and the
+export's import never removes them.
+
+Whether a team has a document (status): release "ref" always (background guidance); "all" from the start; "with" once the inject
 or role play `serial` reached that team (a live delivery of the inject to the team, or a sitting
 of the role play for it that has started); "no" never, until ExCon changes it.
 """
 
 import gzip
+import hashlib
+import io
 import json
 import re
+import zipfile
 from dataclasses import dataclass, field
 
 from django.db import transaction
@@ -25,6 +35,11 @@ from .models import KB_RELEASES, Attachment, Inject, KbDocument, Message, audit
 
 FORMAT = "simex-kb-1"
 MAX_BYTES = 200 * 1024 * 1024
+MAX_FILE = 60 * 1024 * 1024  # one uploaded file
+MAX_PAGES = 2000
+MAX_TEXT = 4_000_000  # characters kept of one uploaded file
+UPLOAD = "up-"  # key prefix of the files ExCon uploaded
+FILE_TYPES = ".pdf,.docx,.pptx,.xlsx,.odt,.ods,.odp,.txt,.md,.markdown,.csv,.html,.htm"
 SERIAL = re.compile(r"^\d{1,2}-\d{1,3}[a-z]?$")
 
 
@@ -92,10 +107,109 @@ def apply(docs, delete_missing=False, user=""):
         row.save()
         n["updated"] += changed
     if delete_missing:
+        existing = {k: v for k, v in existing.items() if not k.startswith(UPLOAD)}  # ExCon's own files stay
         n["deleted"] = len(existing)
         KbDocument.objects.filter(pk__in=[d.pk for d in existing.values()]).delete()
     audit("library_import", json.dumps(n), user)
     return n
+
+
+# --- ExCon's own files -------------------------------------------------------------------------------
+
+def read_file(filename, data):
+    """The text of an uploaded file (PDF pages marked [Page n]). Raises LibraryError."""
+    from . import docscan
+    if not data:
+        raise LibraryError("The file is empty.")
+    if len(data) > MAX_FILE:
+        raise LibraryError(f"The file is over {MAX_FILE // (1024 * 1024)} MB.")
+    e = docscan.ext(filename)
+    try:
+        if data.startswith(b"%PDF") or e == ".pdf":
+            text = _pdf_text(data)
+        elif zipfile.is_zipfile(io.BytesIO(data)):
+            with zipfile.ZipFile(io.BytesIO(data)) as zf:
+                names = set(zf.namelist())
+                if "word/document.xml" in names:
+                    text = docscan._docx(zf)[0]
+                elif "ppt/presentation.xml" in names:
+                    text = docscan._pptx(zf)[0]
+                elif "xl/workbook.xml" in names:
+                    text = docscan._xlsx(data, zf)[0]
+                elif "content.xml" in names and "meta.xml" in names:
+                    text = docscan._odf(zf)[0]
+                else:
+                    raise LibraryError("A zip archive or an unknown format: upload the documents themselves.")
+        elif e in docscan.TEXT or e in (".md", ".markdown"):
+            text = data.decode("utf-8", errors="replace")
+            if e in (".html", ".htm"):
+                text = re.sub(r"<[^>]+>", " ", re.sub(r"(?is)<(script|style).*?</\1>", " ", text))
+        else:
+            raise LibraryError("Not a format read here (PDF, Word, PowerPoint, Excel, OpenDocument or text).")
+    except LibraryError:
+        raise
+    except Exception as ex:  # a damaged file: reported, never raised further
+        raise LibraryError(f"The file could not be read ({type(ex).__name__}).") from ex
+    text = re.sub(r"[ \t]+\n", "\n", re.sub(r"\n{3,}", "\n\n", text.replace("\x00", ""))).strip()
+    if not text:
+        raise LibraryError("No text in the file (a scanned PDF?): nothing to search.")
+    return text[:MAX_TEXT]
+
+
+def _pdf_text(data):
+    from pypdf import PdfReader
+    reader = PdfReader(io.BytesIO(data))
+    if reader.is_encrypted:
+        try:
+            reader.decrypt("")
+        except Exception as ex:
+            raise LibraryError("A password-protected PDF: not read.") from ex
+    if len(reader.pages) > MAX_PAGES:
+        raise LibraryError(f"A PDF of {len(reader.pages)} pages (over {MAX_PAGES}): not read.")
+    parts, size = [], 0
+    for i, page in enumerate(reader.pages, 1):
+        t = (page.extract_text() or "").strip()
+        if t:
+            parts.append(f"[Page {i}]\n{t}")
+            size += len(t)
+        if size > MAX_TEXT:
+            break
+    return "\n\n".join(parts)
+
+
+def file_key(filename):
+    return UPLOAD + hashlib.sha256(filename.strip().lower().encode()).hexdigest()[:24]
+
+
+def file_title(filename):
+    stem = filename.rsplit("/", 1)[-1]
+    stem = stem.rsplit(".", 1)[0] if "." in stem else stem
+    return re.sub(r"\s+", " ", stem.replace("_", " ")).strip() or filename
+
+
+@transaction.atomic
+def add_file(filename, data, release="ref", serial="", category="", title="", user=""):
+    """Adds (or, for a file name already uploaded, replaces the text of) one of ExCon's files.
+    Returns (document, created). Raises LibraryError."""
+    filename = (filename or "file").rsplit("/", 1)[-1].rsplit("\\", 1)[-1][:200]
+    text = read_file(filename, data)
+    release = release if release in KB_RELEASES else "ref"
+    serial = (serial or "").strip()[:40]
+    if release == "with" and not serial:
+        raise LibraryError("Say which inject or role play (serial) it comes with.")
+    key = file_key(filename)
+    row = KbDocument.objects.filter(key=key).first()
+    created = row is None
+    if created:
+        row = KbDocument(key=key, path=f"Uploaded/{filename}")
+    row.title = (title or "").strip()[:300] or (row.title if not created else file_title(filename))
+    row.category = (category or "").strip()[:40] or (row.category if not created else ("guidance" if release == "ref" else "uploaded"))
+    row.release, row.serial = release, serial if release == "with" else ""
+    row.text, row.chars = text, len(text)
+    row.imported_release = f"{row.release}|{row.serial}"
+    row.save()
+    audit("library_file", f"{key} {filename} {release} {len(text)} chars {'new' if created else 'replaced'}", user)
+    return row, created
 
 
 # --- what a team has ---------------------------------------------------------------------------------
@@ -141,6 +255,9 @@ def for_team(team, roleplays=None, rp_planned=None):
 
 def doc_status(doc, view):
     """(state, label) of a document for a team: state known | upcoming | not_given."""
+    if doc.release == "ref":
+        return "known", ("background guidance (a published handbook or guidance note, not an exercise document): "
+                         "how things are done (procedures, standards, roles); never a source of scenario facts")
     if doc.release == "all":
         return "known", "the participants have it (baseline / from the start)"
     if doc.release == "no":

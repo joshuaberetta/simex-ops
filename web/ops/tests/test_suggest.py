@@ -275,3 +275,57 @@ def test_an_answer_before_looking_in_the_documents_is_sent_back_once(excon):
     assert s.status == "done" and s.steps == 2 and s.body["body"] == "In Plaida." and s.body["hold_back"] == []
     back = c.calls[1]["messages"][-1]["content"][0]
     assert back["is_error"] and "search the participants' documents" in back["content"]
+
+
+def _docx(text):
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("word/document.xml", '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+                   f'<w:body><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:body></w:document>')
+    return buf.getvalue()
+
+
+def _pdf(text):
+    from pypdf import PdfWriter
+    from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+    import io
+    w = PdfWriter()
+    page = w.add_blank_page(612, 792)
+    font = DictionaryObject({NameObject("/Type"): NameObject("/Font"), NameObject("/Subtype"): NameObject("/Type1"),
+                             NameObject("/BaseFont"): NameObject("/Helvetica")})
+    page[NameObject("/Resources")] = DictionaryObject({NameObject("/Font"): DictionaryObject({NameObject("/F1"): w._add_object(font)})})
+    stream = DecodedStreamObject()
+    stream.set_data(f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET".encode())
+    page[NameObject("/Contents")] = w._add_object(stream)
+    buf = io.BytesIO()
+    w.write(buf)
+    return buf.getvalue()
+
+
+def test_excon_adds_guidance_files_that_count_as_background(excon):
+    excon.post("/library/", {"file": _file(bundle(DOCS), "lib.json.gz")})
+    r = excon.post("/library/", {"files": [_file(_pdf("EMTCC coordinates non classified teams"), "EMT Handbook (2023).pdf"),
+                                           _file(_docx("Triage standards for EMT type 1"), "EMT_notes.docx"),
+                                           _file(b"\x00\x01junk", "scan.bin")], "release": "ref"})
+    assert r.status_code == 302
+    hb = KbDocument.objects.get(title="EMT Handbook (2023)")
+    assert hb.key.startswith(kb.UPLOAD) and hb.release == "ref" and hb.category == "guidance"
+    assert "EMTCC coordinates" in hb.text and "[Page 1]" in hb.text
+    assert "Triage standards" in KbDocument.objects.get(title="EMT notes").text
+    assert KbDocument.objects.count() == 5  # the junk file was refused
+    # the same file name again replaces the text; the export's import never removes them
+    excon.post("/library/", {"files": [_file(_pdf("Second edition"), "EMT Handbook (2023).pdf")], "release": "ref"})
+    hb.refresh_from_db()
+    assert "Second edition" in hb.text and KbDocument.objects.count() == 5
+    kb.apply(kb.read_bundle(bundle(DOCS[:1])), delete_missing=True)
+    assert KbDocument.objects.filter(key__startswith=kb.UPLOAD).count() == 2 and KbDocument.objects.count() == 3
+    # a team always "has" background guidance, labelled as such
+    state, label = suggest.Timeline(Team.objects.get(code="a")).doc(hb)
+    assert state == "known" and "background guidance" in label
+    assert "background guidance" in suggest.library_line()
+    excon.post(f"/library/{hb.id}/", {"title": "WHO EMT Handbook", "release": "ref"})
+    hb.refresh_from_db()
+    assert hb.title == "WHO EMT Handbook"
+    assert excon.get("/library/").status_code == 200

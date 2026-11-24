@@ -10,3 +10,4 @@ markdown
 anthropic[bedrock]
 pywebpush
 segno
+pypdf

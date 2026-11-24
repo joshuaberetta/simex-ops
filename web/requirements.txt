@@ -109,6 +109,8 @@ pydantic==2.14.3
     # via anthropic
 pydantic-core==2.50.4
     # via pydantic
+pypdf==7.1.1
+    # via -r web/requirements.in
 python-dateutil==2.9.0.post0
     # via botocore
 pywebpush==2.5.0

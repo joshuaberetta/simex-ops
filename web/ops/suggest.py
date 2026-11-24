@@ -57,6 +57,10 @@ already played with the team, or the conversation itself. The persona may use th
 anything from these in the answer, not even a hint: the team must not learn it early. Name them in \
 hold_back with when they come, so the desk doesn't get ahead of the script.
 - "not given": material the participants don't get. Don't use it in the answer.
+- "background guidance": published handbooks and guidance notes (EMT, coordination, UNDAC methods...). \
+Use them for how things are done, so the persona's answer is right on procedures, standards, roles and \
+terms, and say so in facts with its doc: ref; never take scenario facts (places, figures, names, events) \
+from them.
 A persona knows what their own role plays and injects say, but tells the team only what fits the \
 timeline: a role play's script is what the character says in that sitting, so before it has been \
 played with this team its content is NOT YET. ExCon's notes and expected outcomes are for the desk only.
@@ -114,7 +118,7 @@ TOOLS = [
     {"name": "search",
      "description": "Search the exercise material for words (places, names, organisations, figures). Returns the "
                     "best matches with a ref, where this team stands on each (has it / NOT YET / not given) and "
-                    "passages. where: documents (the participants' library), injects, role_plays, or all.",
+                    "passages. where: documents (the participants' library and background guidance), injects, role_plays, or all.",
      "input_schema": {"type": "object", "properties": {
          "query": {"type": "string"},
          "where": {"type": "string", "enum": ["all", "documents", "injects", "role_plays"]}},
@@ -276,10 +280,18 @@ def request_block(s):
              ai.team_block(r.team, None, limit=8),
              "This persona's own injects:\n" + own_injects(r, tl),
              "The role plays (rp:<key>), with where this team stands on each:\n" + roleplay_index(r, tl),
-             f"The library holds {KbDocument.objects.count()} participant-facing documents: search them."]
+             library_line()]
     if s.prompt.strip():
         parts.append("The desk asks: " + s.prompt.strip())
     return "\n\n".join(parts), tl
+
+
+def library_line():
+    n = KbDocument.objects.count()
+    ref = KbDocument.objects.filter(release="ref").count()
+    return (f"The library holds {n - ref} participant-facing documents"
+            + (f" and {ref} background guidance document{'s' if ref != 1 else ''} (handbooks, guidance notes)" if ref else "")
+            + ": search them.")
 
 
 # --- tools ---------------------------------------------------------------------------------------------

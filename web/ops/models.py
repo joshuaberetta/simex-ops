@@ -1075,7 +1075,7 @@ class RolePlaySeen(models.Model):
 
 # --- the knowledge library and suggested answers (ops/kb.py, ops/suggest.py) -------------------
 
-KB_RELEASES = {"all": "Participants have it", "with": "Released with an inject or role play", "no": "Not given to participants"}
+KB_RELEASES = {"ref": "Background guidance", "all": "Participants have it", "with": "Released with an inject or role play", "no": "Not given to participants"}
 
 
 class KbDocument(models.Model):
@@ -1084,7 +1084,9 @@ class KbDocument(models.Model):
     scripts/export_ops.py) and uploaded on ExCon's Library page. Searched when Claude suggests a
     persona's answer (ops/suggest.py), with whether the team has it yet: release "all" (the
     participants have it from the start), "with" (it comes with the inject or role play
-    `serial`, so a team has it once that reached them) or "no" (not given, until ExCon says)."""
+    `serial`, so a team has it once that reached them) or "no" (not given, until ExCon says); or
+    "ref", background guidance ExCon uploaded itself (handbooks, guidance notes: key "up-...",
+    ops/kb.py add_file), used for how things are done, never for scenario facts."""
     key = models.CharField(max_length=40, unique=True)  # the knowledge base's document id
     path = models.CharField(max_length=500)
     title = models.CharField(max_length=300)

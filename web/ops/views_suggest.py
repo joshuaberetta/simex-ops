@@ -96,6 +96,8 @@ def suggestion_get(request, sid):
 def library(request):
     """The participant-facing documents Claude looks things up in: upload the knowledge base's
     export, see and correct whether the participants have each one."""
+    if request.method == "POST" and request.FILES.getlist("files"):
+        return _library_files(request)
     if request.method == "POST" and request.FILES.get("file"):
         up = request.FILES["file"]
         try:
@@ -117,7 +119,30 @@ def library(request):
         docs = docs.filter(release=rel)
     page = Paginator(docs.order_by("category", "path"), 100).get_page(request.GET.get("page"))
     return render(request, "ops/library.html", {"tab": "injects", "page": page, "q": q, "release": rel,
-                                                "RELEASES": KB_RELEASES, "counts": kb.counts()})
+                                                "RELEASES": KB_RELEASES, "counts": kb.counts(),
+                                                "FILE_TYPES": kb.FILE_TYPES, "UPLOAD": kb.UPLOAD})
+
+
+def _library_files(request):
+    """ExCon's own files (guidance, handbooks, a missing exercise document) added to the library."""
+    P, files = request.POST, request.FILES.getlist("files")
+    added, replaced, failed = [], [], []
+    for up in files[:50]:
+        try:
+            d, created = kb.add_file(up.name, up.read(), release=P.get("release") or "ref", serial=P.get("serial"),
+                                     category=P.get("category"), title=P.get("title") if len(files) == 1 else "",
+                                     user=request.user.get_username())
+        except kb.LibraryError as e:
+            failed.append(f"{up.name}: {e}")
+            continue
+        (added if created else replaced).append(f"{d.title} ({d.chars:,} characters)")
+    if added:
+        messages.success(request, "Added to the library: " + "; ".join(added) + ".")
+    if replaced:
+        messages.success(request, "Text replaced (the same file name was uploaded before): " + "; ".join(replaced) + ".")
+    for f in failed:
+        messages.error(request, f)
+    return redirect("/library/")
 
 
 @excon_required
@@ -129,6 +154,10 @@ def library_doc(request, did):
         d.delete()
         messages.success(request, f"{d.title} removed from the library.")
     else:
+        title = (P.get("title") or "").strip()[:300]
+        if title and title != d.title:
+            d.title = title
+            d.save(update_fields=["title", "updated_at"])
         rel, serial = P.get("release"), (P.get("serial") or "").strip()[:40]
         if rel in KB_RELEASES:
             if rel == "with" and not serial:

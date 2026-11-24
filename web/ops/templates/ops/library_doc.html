@@ -5,6 +5,7 @@
 <div class="card">
   <p class="small muted">{{ d.path }} · {{ d.category }}</p>
   <form method="post" action="/library/{{ d.id }}/" class="rowform">{% csrf_token %}<input type="hidden" name="next" value="/library/">
+    <input name="title" value="{{ d.title }}" size="40" title="Title">
     <select name="release">{% for k, v in RELEASES.items %}<option value="{{ k }}"{% if d.release == k %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
     <input name="serial" value="{{ d.serial }}" size="7" placeholder="serial">
     <button class="btn small">Save</button>
