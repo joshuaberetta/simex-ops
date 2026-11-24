@@ -391,7 +391,7 @@ Start afresh removes them.
      `desk.send`, and AI personas' invitations always left to the desk.
    - Who plays it, through `DeskConversation`, with desk notices.
    - ExCon Compose's "Invite to a meeting".
-5. **Reminders.** `calendar.tick`, push, the toast from `/poll/`, drawer badges, Upcoming in the
+5. **Reminders.** *Built* (Settings → Calendar, `cal_lead`; the desk's who-plays-it is still step 4). `calendar.tick`, push, the toast from `/poll/`, drawer badges, Upcoming in the
    side bar, and the `cal-unstaffed` Notice.
 6. **ExCon and extras.** The Meetings view and export, "Make a role play", reports, and
    (optional, desk only) SIMEX AI's "this email proposes a meeting" suggestion, run in the AI

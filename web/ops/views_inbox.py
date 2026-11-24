@@ -18,6 +18,7 @@ read-only views of every team.
 """
 
 import copy
+import logging
 import json
 import re
 import uuid
@@ -44,6 +45,7 @@ from .access import desk_of, is_excon, leader_of, login_required_any, participan
 from .models import (CalendarEvent, Mail, MailAction, MailAttachment, MailLabel, MessageAttachment, Person, PushSubscription, Response,
                      Sender, Team, ThreadLabel, audit)
 
+log = logging.getLogger(__name__)
 PAGE = 50
 FOLDERS = [("inbox", "Inbox"), ("starred", "Starred"), ("sent", "Sent"), ("drafts", "Drafts"), ("all", "All mail"),
            ("trash", "Trash")]
@@ -802,6 +804,12 @@ def apps(v, request):
             continue
         if path.startswith(t["url"]) and (best is None or len(t["url"]) > len(best["url"])):
             best = t
+    if v is not None and not v.readonly:  # the Calendar tile: invitations to answer, events about to start
+        from . import calendar
+        info = calendar.poll_info(v)
+        for t in tiles:
+            if t["key"] == "calendar" and info:
+                t["n"] = info["badge"]
     if cal and best is None:
         best = next((t for t in tiles if t["icon"] == "calendar"), None)
     for t in tiles:
@@ -916,6 +924,8 @@ def _ctx(v, **extra):
          "from_default": "" if v.desk else "me" if v.member_box else "team"}
     c.update(extra)
     c["box"] = box_theme(v)
+    from . import calendar
+    c["upcoming"] = calendar.upcoming(v)  # SIMEX Calendar: the side bar's next events
     c["labels"] = [] if v.leader_mode else labels(v)
     folder = c.get("folder", "")
     c["folder_name"] = dict(v.folders).get(folder) or next((lab["name"] for lab in c["labels"] if lab["key"] == folder), "")
@@ -1781,6 +1791,11 @@ def poll(request, as_team=None, box="", pid=None):
     if v.desk or v.desk_person:  # the bell: their own desk notices
         out["dn"] = desk.notice_counts(request.user)
     out["clock"] = simclock.js()  # the simulation clock widget follows ExCon's changes
+    try:  # SIMEX Calendar: events about to start (a toast), invitations to answer (the drawer's badge)
+        from . import calendar
+        out["cal"] = calendar.poll_info(v)
+    except Exception:
+        log.exception("calendar poll failed")
     return JsonResponse(out)
 
 

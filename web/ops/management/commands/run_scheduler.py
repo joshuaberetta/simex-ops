@@ -15,7 +15,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import close_old_connections, connection
 
-from ops import ai, delivery, desk, inbound, npc, roleplay
+from ops import ai, calendar, delivery, desk, inbound, npc, roleplay
 
 log = logging.getLogger("simex.scheduler")
 AI_IDLE_SECONDS = 15
@@ -68,6 +68,7 @@ class Command(BaseCommand):
             delivery.tick()
             roleplay.tick()
             desk.tick()
+            calendar.tick()
             if not opts["no_ai"]:
                 npc.tick()
                 ai.tick()
@@ -90,4 +91,8 @@ class Command(BaseCommand):
                 desk.tick()  # teams waiting too long on the persona desk: a notice
             except Exception:
                 log.exception("desk tick failed")
+            try:
+                calendar.tick()  # SIMEX Calendar's reminders, persona meetings nobody has
+            except Exception:
+                log.exception("calendar tick failed")
             time.sleep(settings.TICK_SECONDS)

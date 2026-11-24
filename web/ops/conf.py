@@ -12,7 +12,8 @@ DEFAULTS = {
     "login_reply_to": "",  # login emails (People & logins): where answers to them go
     "test_redirect": "delivered+{key}@resend.dev",
     "grace_minutes": "10",
-    "desk_wait_minutes": "20",  # a Notice when a team waits this long for a persona's answer on the desk (0: never)
+    "desk_wait_minutes": "20",
+    "cal_lead": "10",  # SIMEX Calendar: remind the people of a calendar this many minutes before an event (0: never)  # a Notice when a team waits this long for a persona's answer on the desk (0: never)
     "live_armed": "0",
     "paused": "0",
     "team_to_team": "0",  # participants may write to other teams' inboxes

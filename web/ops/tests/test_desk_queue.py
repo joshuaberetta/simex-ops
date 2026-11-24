@@ -1,6 +1,7 @@
 """The persona desk's queue (desk.states, desk.mark, ops/desk_ai.py): what still needs an
 answer first, whoever on the desk read it, with follow-ups, who took what and Claude's reading."""
 
+import re
 from datetime import timedelta
 
 from django.utils import timezone
@@ -235,7 +236,8 @@ def test_desk_dashboard_requests_to_the_personas(excon):
     d = desk_client()
     page = d.get("/inbox/desk/dashboard/").content.decode()
     assert "3 trucks" in page and "Deploy at 14:00" in page and "200 families" in page
-    assert "stressed" not in page and "95" not in page and "No action" not in page  # never tone, quality, AI-written
+    # Never tone, quality, AI-written. (95 standing alone: thread ids and times hold "95" by chance.)
+    assert "stressed" not in page and not re.search(r"\b95\b", page) and "No action" not in page
     answer(d, Mail.objects.get(team=None, folder="inbox"), ta)
     assert desk_stats.compute("live")["requests"][0]["open"] == 0
 

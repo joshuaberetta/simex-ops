@@ -794,3 +794,197 @@ def clear(team=None, owners=None):
         return
     CalendarEvent.objects.filter(team=team).delete()
     CalendarAttendee.objects.filter(team=team).delete()
+
+
+# --- reminders (scheduler main loop), what's next (poll, the side bar) ---------------------------
+
+LATE = timedelta(minutes=5)  # a reminder found later than this after it was due is dropped (no bursts)
+HORIZON = timedelta(days=1)  # the longest lead a row may have
+
+
+def lead():
+    """Minutes before an event its reminder goes (Settings → Calendar, conf cal_lead; 0: none)."""
+    try:
+        return max(0, min(1440, int(float(conf.get("cal_lead") or 10))))
+    except ValueError:
+        return 10
+
+
+def _lead_of(row, default):
+    return row.remind_minutes if row.remind_minutes is not None else default
+
+
+def desk_thread(ev):
+    """The persona desk's conversation of an event (its invitation), or ""."""
+    return (Mail.objects.filter(team=None, owner=None, event=ev).order_by("-id").values_list("thread", flat=True).first()
+            or "")
+
+
+def _desk_users(thread):
+    """Who on the desk hears of a persona's meeting: those involved in its conversation (its owner
+    and followers), else every desk login."""
+    from django.contrib.auth import get_user_model
+    users = desk.audience(thread) if thread else []
+    if not users:
+        users = list(get_user_model().objects.filter(is_active=True, person__role="desk", person__active=True))
+    return users
+
+
+def _row_box(row):
+    """(kind, base, clock) of the calendar a row is on: team (members: scenario time when the clock
+    is on), member, leader (real), desk (real)."""
+    sim = "sim" if simclock.enabled() else "real"
+    if row.team_id is None:
+        return "desk", "/inbox/desk", "real"
+    if row.owner_id is None:
+        return "team", "/inbox", sim
+    if row.owner.is_leader:
+        return "leader", "/inbox", "real"
+    return "member", "/inbox/me" if conf.flag("personal_mailboxes") else "/inbox", sim
+
+
+def reminder_text(ev, now, clk):
+    """(title, body) of a reminder: "In 10 min: Coordination meeting", "11:00 · OSOCC tent". On the
+    scenario's clock for members (a time, never a real date), else the real time with the
+    scenario's beside it."""
+    mins = max(0, round((ev.starts_at - now).total_seconds() / 60))
+    title = f"In {mins} min: {ev.title}" if mins else f"Starting now: {ev.title}"
+    at = shown(ev.starts_at, clk)[11:16]
+    if clk == "real" and simclock.enabled():
+        at += f" (scenario {shown(ev.starts_at, 'sim')[11:16]})"
+    where = ev.location or ("" if ev.mode == "in_person" else dict(MODES).get(ev.mode, ""))
+    return title[:120], " · ".join(x for x in (at, where) if x)[:160]
+
+
+def _remind(row, now):
+    from . import push
+    ev = row.event
+    kind, base, clk = _row_box(row)
+    title, body = reminder_text(ev, now, clk)
+    url = f"{base}/calendar/?view=day&date={shown(ev.starts_at, clk)[:10]}"
+    if kind == "desk":
+        thread = desk_thread(ev)
+        desk.notify(_desk_users(thread), f"cal-remind:{row.id}:{ev.sequence}", "calendar", title, body, thread=thread,
+                    url=f"/inbox/desk/t/{thread}/" if thread else url, test=ev.is_test, push_=True)
+        return
+    if kind == "team":
+        people = list(Person.objects.participants().filter(team_id=row.team_id, active=True).values_list("id", flat=True))
+    else:
+        people = [row.owner_id]
+    push.notify_people(people, {"title": title, "body": body, "url": url, "tag": f"cal-{ev.id}-{ev.sequence}"})
+
+
+def tick(now=None):
+    """The scheduler's main loop: one reminder per calendar row (not declined, event not
+    cancelled) when its event is remind_minutes (Settings: cal_lead) away, pushed to the people of
+    that calendar; reminders found more than LATE after they were due are dropped. Then ExCon's
+    notice for a persona's meeting about to start with nobody on the desk having it. Returns the
+    number of reminders sent."""
+    now = now or timezone.now()
+    default = lead()
+    sent = 0
+    rows = (CalendarAttendee.objects.filter(reminded_at__isnull=True, hidden=False, event__status="confirmed",
+                                            event__starts_at__gt=now - HORIZON, event__starts_at__lte=now + HORIZON)
+            .exclude(response="declined").select_related("event", "owner"))
+    for row in rows:
+        minutes = _lead_of(row, default)
+        if minutes <= 0:
+            continue
+        due = row.event.starts_at - timedelta(minutes=minutes)
+        if now < due:
+            continue
+        # Once per row, whoever ticks first.
+        if not CalendarAttendee.objects.filter(pk=row.pk, reminded_at__isnull=True).update(reminded_at=now):
+            continue
+        if now > due + LATE:
+            continue  # the scheduler was down: no burst of stale reminders
+        try:
+            _remind(row, now)
+            sent += 1
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("calendar reminder %s failed", row.pk)
+    if default:
+        unstaffed(now, default)
+    return sent
+
+
+def unstaffed(now, minutes):
+    """A Notice (once per event) when a persona's accepted meeting starts within minutes and
+    nobody on the persona desk has its conversation: ExCon's cue to send someone to play it."""
+    from . import notices
+    rows = (CalendarAttendee.objects.filter(team__isnull=True, hidden=False, event__status="confirmed",
+                                            event__starts_at__gt=now, event__starts_at__lte=now + timedelta(minutes=minutes))
+            .filter(Q(response="accepted") | Q(role="organiser")).select_related("event"))
+    for row in rows:
+        ev = row.event
+        thread = desk_thread(ev)
+        c = desk.conversation(thread) if thread else None
+        if c and c.owner_id:
+            continue
+        when = timezone.localtime(ev.starts_at).strftime("%H:%M")
+        persona = row.name or row.persona
+        notices.add(f"cal-unstaffed:{ev.id}", "system", f"Nobody on the desk has {persona}'s meeting",
+                    f"{ev.title} at {when} ({ev.organiser_name}): give it to someone to play {persona}.",
+                    url=f"/inbox/desk/t/{thread}/" if thread else "/inbox/desk/calendar/")
+
+
+def _next_rows(v, now, until=None):
+    lays = layers(v)
+    qs = (_rows(lays).filter(event__status="confirmed", event__ends_at__gt=now).exclude(response="declined")
+          .select_related("event").order_by("event__starts_at", "id"))
+    if until is not None:
+        qs = qs.filter(event__starts_at__lte=until)
+    return qs, lays
+
+
+def poll_info(v, now=None):
+    """For SIMEX Mail's poll: the viewer's events starting within the reminder lead (soon, each
+    once by key, for a toast), the invitations awaiting their answer, and the Calendar tile's
+    badge (both). On the viewer's clock (members: the scenario's)."""
+    if v.peer:
+        return None
+    now = now or timezone.now()
+    clk, minutes = clock(v), lead()
+    soon, seen = [], set()
+    if minutes:
+        qs, _ = _next_rows(v, now, now + timedelta(minutes=minutes))
+        for row in qs.filter(event__starts_at__gte=now)[:20]:
+            ev = row.event
+            if ev.id in seen:
+                continue
+            seen.add(ev.id)
+            title, body = reminder_text(ev, now, clk)
+            soon.append({"key": f"{ev.id}:{ev.sequence}", "title": title, "body": body,
+                         "url": f"{v.base}/calendar/?view=day&date={shown(ev.starts_at, clk)[:10]}"})
+    writable = [lay for lay in layers(v) if lay["writable"]]
+    invites = (_rows(writable).filter(response="needs_action", event__status="confirmed", event__ends_at__gt=now)
+               .exclude(role="organiser").values("event").distinct().count()) if writable else 0
+    return {"soon": soon, "invites": invites, "badge": invites + len(soon)}
+
+
+def upcoming(v, n=3, now=None):
+    """The viewer's next n events (the mail side bar's Upcoming): on their clock (members: the
+    scenario's, never a real date)."""
+    if v.peer:
+        return []
+    now = now or timezone.now()
+    clk = clock(v)
+    today = shown(now, clk)[:10]
+    tomorrow = (datetime.strptime(today, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+    qs, _ = _next_rows(v, now)
+    out, seen = [], set()
+    for row in qs[:30]:
+        ev = row.event
+        if ev.id in seen:
+            continue
+        seen.add(ev.id)
+        s = shown(ev.starts_at, clk)
+        d = datetime.strptime(s, FMT)
+        day = "Today" if s[:10] == today else "Tomorrow" if s[:10] == tomorrow else f"{d:%a} {d.day} {d:%b}"
+        out.append({"title": ev.title, "when": day if ev.all_day else f"{day} {s[11:16]}",
+                    "now": ev.starts_at <= now, "pending": row.role != "organiser" and row.response == "needs_action",
+                    "url": f"{v.base}/calendar/?view=day&date={s[:10]}"})
+        if len(out) >= n:
+            break
+    return out

@@ -123,6 +123,7 @@ When you import the MEL, the check page offers to give senders without a domain 
 - **Max attachments per message:** what participants may attach (default 10 MB).
 - **Email channel:** reply-to (leave empty), ExCon Bcc, test addresses. Only matters for injects on the email channel.
 - **Grace period:** 10 minutes by default (see 7.3).
+- **Calendar → Remind before an event:** 10 minutes by default: SIMEX Calendar's reminders and ExCon's notice for a persona's meeting nobody on the desk has (5.14); 0 turns them off.
 - **Persona desk → Notify ExCon after:** 20 minutes by default: a notification when a team has waited that long for a persona's answer on the persona desk (5.10), once per message waiting; 0 turns it off.
 - **Simulation clock:** off by default. On, SIMEX Mail dates every message in the scenario's timeline and shows a calendar and clock of the simulation date and time at the top. **Team members see only the simulation time; team leaders, the persona desk and ExCon see both** (the real time, with the simulation time under it, marked with a small clock; the top shows both clocks). The ops status bar shows it too, next to the real time: a calendar tile with the simulation time and date (and its speed when it isn't 1×), ticking and kept in step when the clock follows an inject, or *Simulation clock off*; click either to come here.
   - **The simulation time now:** set it to start the clock (the link under it fills in the injects' earliest Scenario time); change it at any time to jump the clock. Saving the card without touching it leaves the clock running as it is.
@@ -437,7 +438,15 @@ Viewing a team from ExCon, the drawer also has that mailbox's mail and calendar,
   - how sure it is, the quoted lines it rests on (linked to the conversation, read-only), and a warning when it looks like an event already on a calendar (same conversation, or the same people within 30 minutes).
 
   Correct anything, tick the ones to keep (the sure ones with a time are ticked already) and **Apply the ticked ones**. Each becomes an event on its organiser's and guests' calendars, with the answers the mail shows (a confirmed meeting: everyone accepted). **No mail and no notification goes to anyone.** These events show *From the mail* with a link to the conversation, and the conversation shows *On the calendar (from the mail)*. Running it again skips the conversations already read, unless you tick **Also read conversations earlier runs read**. **Clear mailboxes** removes a team's unapplied meetings; **Start afresh** removes every run; backups keep them.
-- Reminders and the persona desk's who-plays-it come next (`docs/CALENDAR_PLAN.md`).
+- **Reminders** (Settings → Calendar → **Remind before an event**, 10 minutes by default, in real minutes; 0 turns them off). When an event is that close, everyone whose calendar it is on gets one notification on their devices with alerts on, e.g. *In 10 min: Coordination meeting · 11:00 · OSOCC tent*:
+  - a team's calendar: every member of the team;
+  - a member's own: that member;
+  - a team leader's own: the leader only;
+  - a persona's: on the persona desk, whoever has the conversation or follows it (everyone on the desk while nobody has it), as a desk notification (the bell), pushed.
+
+  Members are given the scenario's time, the others the real time with the scenario's beside it. A guest who declined, and a cancelled event, get none. Each calendar gets one reminder per event, again if the event is moved. One found more than 5 minutes late (the scheduler was down) is dropped, so a restart never sends a burst. With SIMEX Mail open, the reminder also shows at the bottom of the page with the alert sound, once per device, and the app drawer's Calendar tile counts invitations to answer plus events about to start.
+- **Upcoming:** the next three events of your calendars, at the bottom of SIMEX Mail's side bar (dashed: not answered yet). Fold it with its arrow; each browser keeps the choice.
+- **A persona's meeting with nobody on the desk.** When a persona's accepted meeting starts within the reminder time and nobody on the persona desk has its conversation, ExCon's Notifications panel says so, once per meeting. That is the cue to give it to someone (Assign) to play the persona at that time.
 - What members do on their calendars (adding, changing, deleting events) shows in each person's activity (People & logins). It isn't counted as inbox management in the reports or on the Dashboard. **Clear mailboxes** also clears those mailboxes' calendars, **Start afresh** clears every calendar, and backups keep them.
 
 ## 6. After the exercise

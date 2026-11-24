@@ -164,6 +164,12 @@
         <span class="gm-licon">{% icon "label" %}</span><span class="gm-flabel">{{ t.name }}</span>
         <span class="gm-count">{% if t.unread %}{{ t.unread }}{% endif %}</span></a></li>{% endfor %}
     </ul>{% endif %}
+    {% if upcoming %}<div class="gm-upcoming" data-upcoming>
+      <div class="gm-labels-head"><span class="gm-flabel">Upcoming</span><button type="button" class="gm-icon-btn sm" data-upcoming-toggle title="Show or hide the next events" aria-label="Show or hide the next events" aria-expanded="true">{% icon "drop" 20 %}</button></div>
+      <ul class="gm-folders gm-up-list" data-upcoming-list>
+        {% for e in upcoming %}<li><a href="{{ e.url }}" class="gm-up{% if e.pending %} pending{% endif %}" title="{{ e.title }}{% if e.pending %} (not answered yet){% endif %}">{% icon "event" 18 %}<span class="gm-flabel"><b>{{ e.when }}</b> {{ e.title }}</span></a></li>{% endfor %}
+      </ul>
+    </div>{% endif %}
     <div class="gm-side-foot">
       <div class="gm-side-team">{% icon "label" 18 %} {% if v.desk %}Persona desk · {% if me %}{{ me.name }}{% else %}ExCon{% endif %}{% elif v.leader_box %}{{ team.name }} · team leader{% elif v.member_box %}{{ v.owner.name }} · {{ team.name }}{% else %}{{ team.name }}{% endif %}</div>
       <p>Exercise mail for the UNDAC SIMEX. Not a real emergency. <a href="{{ base }}/help/" class="gm-link">How to use SIMEX Mail</a></p>

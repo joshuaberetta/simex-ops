@@ -17,6 +17,9 @@
   <h3>Persona desk</h3>
   <label>Notify ExCon after (minutes) <input type="number" name="desk_wait_minutes" value="{{ cfg.desk_wait_minutes }}" min="0" class="narrow">
     <span class="hint">A notification when a team has waited this long for a persona's answer on the persona desk (once per message waiting; 0: never).</span></label>
+  <h3>Calendar</h3>
+  <label>Remind before an event (minutes) <input type="number" name="cal_lead" value="{{ cfg.cal_lead }}" min="0" max="1440" class="narrow">
+    <span class="hint">SIMEX Calendar pushes a reminder to the people of each calendar an event is on (and shows it in SIMEX Mail) this long before it starts, in real minutes; the persona desk hears of its personas' meetings, and ExCon is told when a persona's meeting is about to start with nobody on the desk having it (0: no reminders).</span></label>
   <h3>Email channel</h3>
   <label>Default reply-to <input name="default_reply_to" value="{{ cfg.default_reply_to }}" placeholder="leave empty">
     <span class="hint">Leave empty: replies go to the persona's own address and appear on the Replies tab. An address here diverts them and they are not tracked.</span></label>

@@ -803,6 +803,36 @@
   }
   if (simEl) { simTick(); setInterval(simTick, 1000); }
 
+  // SIMEX Calendar (ops/calendar.py poll_info): the drawer's Calendar badge, and a toast with the alert
+  // sound for an event about to start, once per event (and change) on this device.
+  const CAL_SEEN = "simex-cal-reminded";
+  function calSync(c) {
+    $$('[data-app="calendar"] .sx-app-ic, [data-app="viewed_cal"] .sx-app-ic').forEach((ic) => {
+      let b = $(".sx-app-n", ic);
+      if (!b) { b = document.createElement("span"); b.className = "sx-app-n"; ic.appendChild(b); }
+      b.hidden = !c.badge;
+      b.textContent = c.badge || "";
+      b.setAttribute("aria-label", `${c.invites} invitation${c.invites === 1 ? "" : "s"} to answer, ${c.badge - c.invites} event${c.badge - c.invites === 1 ? "" : "s"} starting soon`);
+    });
+    let seen = [];
+    try { seen = JSON.parse(localStorage.getItem(CAL_SEEN) || "[]"); } catch (e) { seen = []; }
+    const fresh = (c.soon || []).filter((s) => !seen.includes(s.key));
+    if (!fresh.length) return;
+    localStorage.setItem(CAL_SEEN, JSON.stringify(seen.concat(fresh.map((s) => s.key)).slice(-200)));
+    const s = fresh[0];
+    snack(`${s.title}${s.body ? " · " + s.body : ""}`, { label: "Open", run: () => { location.href = s.url; } }, true);
+    if (!CFG.readonly) N.alert({ title: s.title, body: s.body, url: `${location.origin}${s.url}`, tag: `cal-${s.key}`,
+                                 flashText: s.title, desktop: !pushing() });
+  }
+  // The side bar's Upcoming: shown or folded, this browser's choice.
+  const up = $("[data-upcoming]");
+  if (up) {
+    const UP = "simex-upcoming-off", list = $("[data-upcoming-list]", up), btn = $("[data-upcoming-toggle]", up);
+    const paint = () => { const off = localStorage.getItem(UP) === "1"; list.hidden = off; btn.setAttribute("aria-expanded", off ? "false" : "true"); up.classList.toggle("off", off); };
+    btn.addEventListener("click", () => { localStorage.setItem(UP, localStorage.getItem(UP) === "1" ? "0" : "1"); paint(); });
+    paint();
+  }
+
   const seenKey = `simex-latest:${BASE}`;
   let latest = localStorage.getItem(seenKey) === null ? null : Number(localStorage.getItem(seenKey));
   let pollSignedOut = false;
@@ -822,6 +852,7 @@
         $$("[data-tab-teambox]").forEach((el) => el.textContent = j.team_unread && BASE.endsWith("/me") ? j.team_unread : "");
       }
       if (j.dn) dn.update(j.dn);  // the persona desk's bell
+      if (j.cal) calSync(j.cal);  // SIMEX Calendar: events about to start, invitations to answer
       if (j.desk_unread !== undefined) {  // the persona desk's tab bar
         $$("[data-tab-desk]").forEach((el) => el.textContent = j.desk_unread && !BASE.startsWith("/inbox/desk") ? j.desk_unread : "");
       }

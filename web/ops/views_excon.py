@@ -1926,7 +1926,7 @@ def message_withdraw(request, mid):
 
 
 EDITABLE = ["footer", "subject_prefix", "default_reply_to", "excon_bcc", "test_address", "test_redirect",
-            "grace_minutes", "max_upload_mb", "desk_wait_minutes"]
+            "grace_minutes", "max_upload_mb", "desk_wait_minutes", "cal_lead"]
 
 
 @excon_required
@@ -1943,7 +1943,7 @@ def settings_page(request):
                 if bad:
                     messages.error(request, f"ExCon Bcc: not email addresses: {', '.join(bad)}; not saved.")
                     continue
-            if k in ("grace_minutes", "max_upload_mb", "desk_wait_minutes"):
+            if k in ("grace_minutes", "max_upload_mb", "desk_wait_minutes", "cal_lead"):
                 try:
                     v = str(max(0, int(float(v or (10)))))
                 except ValueError:
