@@ -17,6 +17,11 @@ EVERYONE = {PARTICIPANT, LEADER, DESK, RP, EXCON}
 SHOWN = 8  # notes listed in the drawer (the newest)
 
 ENTRIES = [
+    {"key": "2026-11-picture-size", "date": date(2026, 11, 24), "who": MAIL | {EXCON},
+     "title": "Make a picture in your message smaller or bigger",
+     "body": "**Click a picture** in the message you are writing to change its size: choose **Small**, "
+             "**Medium**, **Large** or **Original size** in the bar over it, or drag its blue corner. "
+             "**Remove** takes it out. New pictures now go in at a size that fits the message."},
     {"key": "2026-11-desk-copy-personas", "date": date(2026, 11, 24), "who": {DESK, EXCON},
      "title": "Copy other personas on a message",
      "body": "When you write as a persona to a team, you can now put **other personas in To or Cc** too "

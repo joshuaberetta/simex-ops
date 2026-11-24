@@ -14,6 +14,8 @@
     "text-align", "margin-left", "padding-left"];
   const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
   const MAX_SIDE = 1600, BIG = 1.5 * 1048576;
+  const FIT = 600;  // a new picture is shown at most this wide; its size bar changes that
+  const SIZES = [["Small", 200], ["Medium", 400], ["Large", 600], ["Original size", 0]];
   const COLOURS = ["#202124", "#5f6368", "#d93025", "#e37400", "#f9ab00", "#188038", "#1a73e8", "#9334e6", "#c5221f", "#0b57d0"];
   let seq = 0;
   const newCid = () => `img-${Date.now().toString(36)}${(seq++).toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -34,6 +36,8 @@
         img.setAttribute("src", src);
         if (n.dataset.cid) img.dataset.cid = n.dataset.cid;
         if (n.getAttribute("alt")) img.setAttribute("alt", n.getAttribute("alt"));
+        const w = n.getAttribute("width");  // the size its writer chose (in pixels)
+        if (/^\d{1,4}$/.test(w || "")) img.setAttribute("width", w);
         out.appendChild(img);
         continue;
       }
@@ -96,7 +100,16 @@
       this.el = el; this.bar = bar; this.opts = opts;
       this.blobs = new Map();  // cid -> {file, url}: images added here, not on the server yet
       this.sent = new Set();   // ... and those the current draft has already
-      el.addEventListener("input", () => { this.tidy(); this.state(); });
+      el.addEventListener("input", () => { this.tidy(); this.state(); this.place(); });
+      // A picture in the text is clicked to resize it: a bar of sizes and a corner to drag.
+      el.addEventListener("click", (e) => { if (e.target.tagName === "IMG") this.choose(e.target); else this.choose(null); });
+      el.addEventListener("keydown", (e) => { if (this.img && !["Shift", "Control", "Meta", "Alt"].includes(e.key)) this.choose(null); });
+      el.addEventListener("scroll", () => this.place());
+      window.addEventListener("resize", () => this.place());
+      document.addEventListener("scroll", () => this.place(), true);
+      document.addEventListener("mousedown", (e) => {
+        if (this.img && !el.contains(e.target) && !(this.sizer && this.sizer.contains(e.target))) this.choose(null);
+      });
       el.addEventListener("paste", (e) => this.paste(e));
       el.addEventListener("drop", (e) => this.drop(e));
       el.addEventListener("dragover", (e) => { if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files")) e.preventDefault(); });
@@ -178,6 +191,73 @@
         b.classList.toggle("on", !!on);
       }
     }
+    // The size bar of the picture chosen (img) or none (null). It lives outside the text, so
+    // it is never part of the message; the size is the picture's width attribute (pixels).
+    choose(img) {
+      if (this.img) this.img.classList.remove("gm-rte-chosen");
+      this.img = img;
+      if (!img) { if (this.sizer) this.sizer.hidden = true; return; }
+      img.classList.add("gm-rte-chosen");
+      try { document.execCommand("enableObjectResizing", false, false); } catch (e) { /* Firefox's own handles: ours instead */ }
+      const r = document.createRange(), s = document.getSelection();
+      r.selectNode(img); s.removeAllRanges(); s.addRange(r);  // Delete removes it, typing replaces it
+      if (!this.sizer) this.sizer = this.makeSizer();
+      this.sizer.hidden = false;
+      this.mark();
+      this.place();
+    }
+    makeSizer() {
+      const box = document.createElement("div");
+      box.className = "gm-rte-sizer";
+      box.innerHTML = `<div class="gm-rte-sizes" role="toolbar" aria-label="Picture size">${
+        SIZES.map(([l, w]) => `<button type="button" data-w="${w}">${l}</button>`).join("")
+      }<button type="button" data-remove>Remove</button></div><span class="gm-rte-grip" title="Drag to resize" aria-hidden="true"></span>`;
+      box.addEventListener("mousedown", (e) => e.preventDefault());  // the text keeps the focus
+      box.addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b || !this.img) return;
+        if (b.dataset.remove !== undefined) { const i = this.img; this.choose(null); i.remove(); this.changed(); return; }
+        this.resize(+b.dataset.w || 0);
+      });
+      const grip = box.querySelector(".gm-rte-grip");
+      grip.addEventListener("pointerdown", (e) => {
+        if (!this.img) return;
+        e.preventDefault();
+        grip.setPointerCapture(e.pointerId);
+        const x0 = e.clientX, w0 = this.img.getBoundingClientRect().width;
+        const move = (ev) => this.resize(Math.round(w0 + ev.clientX - x0), true);
+        const up = () => { grip.removeEventListener("pointermove", move); grip.removeEventListener("pointerup", up); this.changed(); };
+        grip.addEventListener("pointermove", move);
+        grip.addEventListener("pointerup", up);
+      });
+      document.body.appendChild(box);
+      return box;
+    }
+    resize(w, dragging) {  // w: pixels, 0 the picture's own size (never made bigger than that)
+      const img = this.img, natural = img.naturalWidth || 0;
+      img.removeAttribute("height");
+      if (!w || (natural && w >= natural)) img.removeAttribute("width");
+      else img.setAttribute("width", String(Math.max(40, Math.min(w, 9999))));
+      this.mark(); this.place();
+      if (!dragging) this.changed();
+    }
+    mark() {  // which size is the picture's now
+      if (!this.sizer || !this.img) return;
+      const w = +(this.img.getAttribute("width") || 0);
+      for (const b of this.sizer.querySelectorAll("[data-w]")) b.classList.toggle("on", +b.dataset.w === w);
+    }
+    place() {  // the bar over the picture's top left corner, the grip on its bottom right
+      if (!this.sizer || this.sizer.hidden) return;
+      if (!this.img || !this.el.contains(this.img)) { this.choose(null); return; }
+      const r = this.img.getBoundingClientRect(), box = this.el.getBoundingClientRect();
+      const bar = this.sizer.querySelector(".gm-rte-sizes"), grip = this.sizer.querySelector(".gm-rte-grip");
+      bar.hidden = r.bottom < box.top + 30 || r.top > box.bottom - 30;
+      bar.style.left = `${r.left + 4}px`;
+      bar.style.top = `${Math.max(r.top, box.top) + 4}px`;
+      grip.hidden = r.bottom > box.bottom || r.bottom < box.top;
+      grip.style.left = `${r.right - 7}px`;
+      grip.style.top = `${r.bottom - 7}px`;
+    }
     pick(files) { this.restore(); return this.images(files); }  // the toolbar's Insert a picture
     changed() { this.el.dispatchEvent(new Event("input", { bubbles: true })); }
     // Images: inserted where the text is, each a new cid.
@@ -189,7 +269,9 @@
         const cid = newCid(), url = URL.createObjectURL(f);
         this.blobs.set(cid, { file: f, url });
         if (document.activeElement !== this.el) this.restore();
-        document.execCommand("insertHTML", false, `<img src="${url}" data-cid="${cid}" alt="${esc(f0.name || "image")}">`);
+        let w = 0;  // a big picture goes in at a size that fits; clicked, it can be made any size
+        try { const b = await createImageBitmap(f); w = b.width > FIT ? FIT : 0; b.close && b.close(); } catch (e) { /* its own size */ }
+        document.execCommand("insertHTML", false, `<img src="${url}" data-cid="${cid}" alt="${esc(f0.name || "image")}"${w ? ` width="${w}"` : ""}>`);
       }
       if (others.length && this.opts.files) this.opts.files(others);  // anything else: an attachment
       this.changed();
@@ -230,6 +312,7 @@
       }
     }
     set(html, text) {
+      this.choose(null);
       for (const b of this.blobs.values()) URL.revokeObjectURL(b.url);
       this.blobs.clear(); this.sent.clear();
       this.el.innerHTML = html ? cleanHTML(html) : textToHTML(text);
@@ -248,6 +331,7 @@
         const cid = img.dataset.cid;
         if (!cid) { img.remove(); continue; }
         img.setAttribute("src", `cid:${cid}`);
+        img.removeAttribute("class");
       }
       return box.innerHTML;
     }

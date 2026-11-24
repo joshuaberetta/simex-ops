@@ -31,10 +31,10 @@ def test_each_login_gets_its_own_notes(excon):
 def test_the_drawer_opens_once_then_the_notes_are_seen(excon):
     pa = participant("a")
     page = pa.get("/inbox/").content.decode()
-    assert 'data-wn-bell' in page and 'data-wn-new="2"' in page and "Formatting and pictures in your messages" in page
-    r = pa.post("/inbox/whatsnew/seen/", {"key": ["2026-11-rich-mail", "2026-11-whats-new", "nonsense"]}, headers=FETCH)
+    assert 'data-wn-bell' in page and 'data-wn-new="3"' in page and "Formatting and pictures in your messages" in page
+    r = pa.post("/inbox/whatsnew/seen/", {"key": ["2026-11-picture-size", "2026-11-rich-mail", "2026-11-whats-new", "nonsense"]}, headers=FETCH)
     assert r.json()["ok"]
-    assert set(WhatsNewSeen.objects.values_list("key", flat=True)) == {"2026-11-rich-mail", "2026-11-whats-new"}
+    assert set(WhatsNewSeen.objects.values_list("key", flat=True)) == {"2026-11-picture-size", "2026-11-rich-mail", "2026-11-whats-new"}
     page = pa.get("/inbox/").content.decode()
     assert 'data-wn-new="0"' in page and "Formatting and pictures" in page  # still listed, no longer new
     # The desk's bell has it too, ExCon's panel, and only signed-in logins may mark.

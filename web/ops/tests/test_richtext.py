@@ -51,3 +51,11 @@ def test_rich_or_plain_and_text():
                             '<ol><li>first</li></ol><img src="cid:a" alt="map"><a href="https://x.org">site</a>')
     assert text == "Dear team,\n\nSee this:\nline two\n\n- one\n- two\n1. first\n[image: map]site (https://x.org)"
     assert richtext.to_text("<div>a</div><div>b</div>") == "a\nb"
+
+
+def test_a_pictures_size_is_kept():
+    out = richtext.clean('<img src="cid:img-1" width="240"><img src="cid:img-2" width="240px" height="x">')
+    assert '<img src="cid:img-1" width="240">' in out
+    assert '<img src="cid:img-2">' in out
+    shown = richtext.render(out, [type("F", (), {"cid": "img-1", "id": 1})()], lambda f: f"/f/{f.id}/")
+    assert 'width="240"' in shown
