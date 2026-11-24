@@ -1,4 +1,4 @@
-{% load static %}<div class="net{% if screen %} dark{% endif %}" data-net>
+{% load static %}<div class="net" data-net data-net-theme="{% if screen %}dark{% else %}light{% endif %}">
   <div class="net-controls" role="group" aria-label="What the map shows">
     <div class="seg small" role="group" aria-label="Detail">
       <button type="button" data-net-view="teams" class="on" title="Members folded into their team; click a team to open it up">Teams</button><button type="button" data-net-view="people" title="Every member on their own">People</button>
@@ -13,6 +13,26 @@
       <button type="button" class="btn small" data-net-fit title="Fit the whole map in view">Fit</button>
       <button type="button" class="btn small" data-net-unpin title="Let every dot you dragged move again">Unpin all</button>
       <button type="button" class="btn small" data-net-reset title="Forget the saved positions and lay the map out afresh">New layout</button>
+      <details class="net-style" data-net-style>
+        <summary class="btn small" title="The map's look: theme, dots, lines, labels, motion">Style</summary>
+        <div class="net-style-panel" role="group" aria-label="Style">
+          <label><span>Theme</span><select data-net-s="theme">
+            <option value="auto">Auto ({% if screen %}dark{% else %}light{% endif %})</option><option value="light">Light</option><option value="paper">Paper</option>
+            <option value="dark">Dark</option><option value="midnight">Midnight</option><option value="contrast">High contrast</option>
+          </select></label>
+          <label><span>Dots</span><input type="range" min="0.5" max="2" step="0.1" data-net-s="dot"></label>
+          <label><span>Lines</span><input type="range" min="0.3" max="2.5" step="0.1" data-net-s="line"></label>
+          <label><span>Line strength</span><input type="range" min="0.2" max="1.5" step="0.05" data-net-s="lineAlpha"></label>
+          <label><span>Curves</span><input type="range" min="0" max="2" step="0.1" data-net-s="curve"></label>
+          <label><span>Labels</span><select data-net-s="labels">
+            <option value="auto">As there's room</option><option value="all">Every dot</option><option value="main">Teams and leaders</option><option value="none">None</option>
+          </select></label>
+          <label><span>Label size</span><input type="range" min="0.7" max="2" step="0.1" data-net-s="labelSize"></label>
+          <label class="check"><input type="checkbox" data-net-s="motion"> Moving messages and glows</label>
+          <label class="check"><input type="checkbox" data-net-s="legend"> Legend</label>
+          <div class="row"><span class="muted">Kept in this browser</span><button type="button" class="btn small" data-net-style-reset>Default style</button></div>
+        </div>
+      </details>
     </span>
   </div>
   <div class="net-main">

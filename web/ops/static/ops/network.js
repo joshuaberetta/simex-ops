@@ -22,6 +22,8 @@
   let clock = null, clockAt = 0;
   const saved = load();
   const opts = Object.assign({view: "teams", win: "all", injects: true, minLine: 1, minPersona: 1}, saved.opts || {});
+  const STYLE = {theme: "auto", dot: 1, line: 1, lineAlpha: 1, curve: 1, labels: "auto", labelSize: 1, motion: true, legend: true};
+  const style = Object.assign({}, STYLE, saved.style || {});
   const expanded = new Set(saved.expanded || []);
   const pos = saved.pos || {};             // id -> [x, y, pinned]
   let view = saved.viewT || null;          // {k, x, y}: screen = world * k + (x, y)
@@ -43,7 +45,7 @@
     sim.forEach((n) => { p[n.id] = [Math.round(n.x), Math.round(n.y), n.fx != null ? 1 : 0]; });
     Object.assign(pos, p);
     try {
-      localStorage.setItem(STORE, JSON.stringify({opts, expanded: [...expanded], pos, viewT: follow ? null : view, selected}));
+      localStorage.setItem(STORE, JSON.stringify({opts, style, expanded: [...expanded], pos, viewT: follow ? null : view, selected}));
     } catch (e) { /* full or private: the layout just isn't kept */ }
   }
 
@@ -55,6 +57,17 @@
     C = {surface: v("--net-surface"), ink: v("--net-ink"), ink2: v("--net-ink-2"), muted: v("--net-muted"),
          persona: v("--net-persona"), excon: v("--net-excon"), halo: v("--net-halo"), glow: v("--net-glow"),
          slots: [1, 2, 3, 4, 5, 6, 7, 8].map((i) => v("--s" + i))};
+  }
+  function applyStyle() {
+    // The theme's colours are CSS variables (network.css): set it, then read them again.
+    const t = style.theme === "auto" ? (cfg.screen ? "dark" : "light") : style.theme;
+    root.dataset.netTheme = t;
+    if (cfg.screen) document.body.dataset.netTheme = t;
+    root.classList.toggle("panelled", !cfg.screen && t !== "light");
+    root.classList.toggle("no-legend", !style.legend);
+    if (!style.motion) particles.length = 0;
+    readColours();
+    dirty = true;
   }
   function colourOf(id) {
     const m = meta.get(id);
@@ -135,7 +148,7 @@
       }
       const m = meta.get(id), s = stats[id], total = s ? s.out + s.in + s.self * 0.5 : 0;
       const base = {team: 11, leader: 7, member: 5, persona: 5, excon: 6}[m.type] || 5;
-      n.r = Math.min(52, base + 2.3 * Math.sqrt(total));
+      n.r = Math.min(52, base + 2.3 * Math.sqrt(total)) * style.dot;
     }
     $("[data-net-empty]").hidden = sends.length > 0;
     alpha = Math.max(alpha, 0.35);
@@ -231,7 +244,7 @@
   function control(a, b, l) {
     // A line bows a little to its left, so the two directions of a pair are two curves.
     const dx = b.x - a.x, dy = b.y - a.y, len = Math.sqrt(dx * dx + dy * dy) || 1;
-    const c = (l.both ? 0.22 : 0.1) * len;
+    const c = Math.max(l.both ? 0.04 : 0, (l.both ? 0.22 : 0.1) * style.curve) * len;  // a pair never quite overlaps
     return {x: (a.x + b.x) / 2 + dy / len * c, y: (a.y + b.y) / 2 - dx / len * c};
   }
   function curve(na, nb, l) {
@@ -268,11 +281,12 @@
     for (const l of links) {
       const na = sim.get(l.a), nb = sim.get(l.b);
       if (!na || !nb) continue;
-      const {a, c, b} = curve(na, nb, l), age = now - l.last, glow = age < GLOW_MS;
+      const {a, c, b} = curve(na, nb, l), age = now - l.last, glow = style.motion && age < GLOW_MS;
       let al = fades ? 0.3 + 0.7 * Math.exp(-age / FADE_MS) : 0.85;
       if (focus) al = l.a === fid || l.b === fid ? 1 : 0.07;
       if (glow) al = Math.max(al, focus && !(l.a === fid || l.b === fid) ? 0.3 : 1);
-      const w = Math.min(14, 1 + 1.7 * Math.sqrt(l.n) * (maxN > 40 ? 0.7 : 1)) / Math.max(0.6, Math.sqrt(k));
+      al = Math.min(1, al * style.lineAlpha);
+      const w = Math.min(14, 1 + 1.7 * Math.sqrt(l.n) * (maxN > 40 ? 0.7 : 1)) * style.line / Math.max(0.6, Math.sqrt(k));
       const col = colourOf(l.a);
       const grad = g.createLinearGradient(a.x, a.y, b.x, b.y);
       grad.addColorStop(0, rgba(col, al));
@@ -306,7 +320,7 @@
       const dim = focus && !focus.has(n.id);
       g.globalAlpha = dim ? 0.18 : 1;
       const fl = flash.get(n.id), fage = fl ? now - fl : Infinity;
-      if (fage < GLOW_MS / 2) {  // just wrote or just got mail: a ring that widens and fades
+      if (style.motion && fage < GLOW_MS / 2) {  // just wrote or just got mail: a ring that widens and fades
         const t = fage / (GLOW_MS / 2);
         g.beginPath(); g.arc(n.x, n.y, n.r + 4 + t * 18, 0, Math.PI * 2);
         g.strokeStyle = rgba(col, 0.6 * (1 - t)); g.lineWidth = 2.5 / k; g.stroke();
@@ -343,10 +357,12 @@
     g.textAlign = "center"; g.textBaseline = "top"; g.lineJoin = "round";
     for (const n of sim.values()) {
       const m = meta.get(n.id);
+      if (style.labels === "none" && !(focus && n.id === (hover || selected))) continue;
       const always = m.type === "team" || m.type === "leader" || m.type === "excon";
-      const show = always || (focus && focus.has(n.id)) || (m.type === "persona" && (n.r >= 9 || k > 1.1)) || (m.type === "member" && k > 1.3);
+      const show = style.labels === "all" || always || (style.labels === "auto" && ((focus && focus.has(n.id)) ||
+        (m.type === "persona" && (n.r >= 9 * style.dot || k > 1.1)) || (m.type === "member" && k > 1.3)));
       if (!show || (focus && !focus.has(n.id) && !always)) continue;
-      const fs = (m.type === "team" ? 13 : 11.5) / k;
+      const fs = (m.type === "team" ? 13 : 11.5) * style.labelSize / k;
       g.font = `${m.type === "team" ? 700 : 500} ${fs}px system-ui, -apple-system, "Segoe UI", sans-serif`;
       const text = label(n.id), y = n.y + n.r * (m.type === "leader" ? 1.2 : 1) + 4 / k;
       g.globalAlpha = focus && !focus.has(n.id) ? 0.35 : 1;
@@ -540,7 +556,7 @@
       for (const t of new Set(e.to.map(shownId))) {
         if (t === f) continue;
         const key = f + ">" + t;
-        if (linkBy.has(key)) particles.push({key, start});
+        if (linkBy.has(key) && style.motion) particles.push({key, start});
         setTimeout(() => { flash.set(t, Date.now()); dirty = true; }, start - now + TRAVEL_MS);
       }
     }
@@ -672,8 +688,29 @@
   });
   showView();
 
+  // Style: the look of the map, kept in this browser.
+  const styleEls = root.querySelectorAll("[data-net-s]");
+  const showStyle = () => styleEls.forEach((e) => {
+    const v = style[e.dataset.netS];
+    if (e.type === "checkbox") e.checked = !!v; else e.value = v;
+  });
+  styleEls.forEach((e) => e.addEventListener(e.type === "range" ? "input" : "change", () => {
+    const k = e.dataset.netS;
+    style[k] = e.type === "checkbox" ? e.checked : e.type === "range" ? parseFloat(e.value) : e.value;
+    applyStyle();
+    if (k === "dot") rebuild();  // dot sizes feed the layout
+    save();
+  }));
+  $("[data-net-style-reset]").addEventListener("click", () => {
+    Object.assign(style, STYLE); showStyle(); applyStyle(); rebuild(); save();
+  });
+  const stylePanel = $("[data-net-style]");
+  document.addEventListener("pointerdown", (ev) => { if (stylePanel.open && !stylePanel.contains(ev.target)) stylePanel.open = false; });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") stylePanel.open = false; });
+  showStyle();
+
   // --- start -----------------------------------------------------------------------------------------
-  readColours();
+  applyStyle();
   new ResizeObserver(resize).observe(stage);
   resize();
   setInterval(clocks, 1000); clocks();

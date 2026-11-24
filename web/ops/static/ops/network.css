@@ -1,15 +1,45 @@
 /* Dashboard → Network (network.js). Light on the ExCon page, dark on the wall screen. */
-.net {
-  --net-surface: #fcfcfb; --net-ink: #0b0b0b; --net-ink-2: #52514e; --net-muted: #6b7280; --net-line: #e5e7eb;
+/* Themes: data-net-theme on .net (and on the wall screen's body), chosen under Style; "auto" is
+   light on the ExCon page and dark on the wall screen. network.js reads these on every change. */
+.net, [data-net-theme=light] {
+  --net-page: transparent; --net-surface: #fcfcfb; --net-ink: #0b0b0b; --net-ink-2: #52514e; --net-muted: #6b7280; --net-line: #e5e7eb;
   --net-persona: #8b8a85; --net-excon: #2a2b2e; --net-halo: rgba(252,252,251,.92); --net-glow: #0b0b0b;
+  --net-ctl: #fff; --net-ctl-on: #fff; --net-ctl-line: #d1d5db; --net-seg: #f3f4f6;
   --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
 }
-.net.dark {
+[data-net-theme=paper] {
+  color-scheme: light;
+  --net-page: #f4f1ea; --net-surface: #fbf8f1; --net-ink: #2b2620; --net-ink-2: #5c5348; --net-muted: #8a7f70; --net-line: #e3dccd;
+  --net-persona: #9a8f7e; --net-excon: #3a332a; --net-halo: rgba(251,248,241,.92); --net-glow: #2b2620;
+  --net-ctl: #fffdf8; --net-ctl-on: #fffdf8; --net-ctl-line: #d8cfbd; --net-seg: #ebe5d8;
+  --s1: #2f6db3; --s2: #c8582a; --s3: #2a8a64; --s4: #b8860b; --s5: #c2577f; --s6: #4f7d2a; --s7: #6a55b8; --s8: #b83c3c;
+}
+[data-net-theme=dark] {
   color-scheme: dark;
-  --net-surface: #1a1a19; --net-ink: #f0efec; --net-ink-2: #c3c2b7; --net-muted: #9b9a92; --net-line: #34332f;
+  --net-page: #121211; --net-surface: #1a1a19; --net-ink: #f0efec; --net-ink-2: #c3c2b7; --net-muted: #9b9a92; --net-line: #34332f;
   --net-persona: #8f8e87; --net-excon: #d6d5cf; --net-halo: rgba(26,26,25,.9); --net-glow: #ffffff;
+  --net-ctl: #1a1a19; --net-ctl-on: #3a3a37; --net-ctl-line: #3a3a37; --net-seg: #262624;
   --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
 }
+[data-net-theme=midnight] {
+  color-scheme: dark;
+  --net-page: #0a1020; --net-surface: #0f172a; --net-ink: #e8eefc; --net-ink-2: #b4c0da; --net-muted: #7d8bab; --net-line: #22304d;
+  --net-persona: #7f8cab; --net-excon: #d3dbef; --net-halo: rgba(15,23,42,.9); --net-glow: #ffffff;
+  --net-ctl: #0f172a; --net-ctl-on: #24324f; --net-ctl-line: #2a3a5c; --net-seg: #17213a;
+  --s1: #4f9bff; --s2: #ff7a45; --s3: #2fd39a; --s4: #ffc23d; --s5: #ff7eb3; --s6: #5bc236; --s7: #a594ff; --s8: #ff6b6b;
+}
+[data-net-theme=contrast] {
+  color-scheme: dark;
+  --net-page: #000; --net-surface: #000; --net-ink: #fff; --net-ink-2: #fff; --net-muted: #d0d0d0; --net-line: #8a8a8a;
+  --net-persona: #c8c8c8; --net-excon: #fff; --net-halo: rgba(0,0,0,.95); --net-glow: #ffffff;
+  --net-ctl: #000; --net-ctl-on: #fff; --net-ctl-line: #fff; --net-seg: #000;
+  --s1: #4da3ff; --s2: #ff8c42; --s3: #3ee6a8; --s4: #ffd400; --s5: #ff85c0; --s6: #7fe035; --s7: #b9a8ff; --s8: #ff5c5c;
+}
+/* On the ExCon page a theme other than light also frames the side panel, so its text stays readable. */
+.net.panelled .net-side { background: var(--net-page); border-radius: 10px; padding: 10px; box-sizing: border-box; }
+.net.panelled .net-side .muted { color: var(--net-muted); }
+.net.panelled .net-controls { color: #52514e; }  /* the controls stay on the page's own background */
+
 .net-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 10px; font-size: 13px; color: var(--net-ink-2); }
 .net-controls label { display: inline-flex; align-items: center; gap: 6px; }
 .net-controls select, .net-controls input[type=number] { font: inherit; padding: 3px 6px; border: 1px solid var(--line-strong); border-radius: 6px; background: #fff; color: var(--ink); }
@@ -70,20 +100,37 @@
 @keyframes net-fresh { from { background: rgba(42,120,214,.25); } to { background: transparent; } }
 @media (max-width: 960px) { .net-main { grid-template-columns: 1fr; } .net-side { height: auto; } }
 
-/* The wall screen: dark, nothing but the map. */
-body.net-screen { background: #121211; color: #f0efec; margin: 0; }
+/* The wall screen: nothing but the map, in its theme (dark unless another is chosen). */
+body.net-screen { background: var(--net-page); color: var(--net-ink); margin: 0; }
 body.net-screen .net { padding: 0 18px; }
 .net-head { display: flex; align-items: center; gap: 18px; padding: 12px 18px 8px; font-size: 15px; }
-.net-head b span { font-weight: 500; color: #9b9a92; }
-.net-clocks { display: inline-flex; gap: 18px; font-variant-numeric: tabular-nums; color: #c3c2b7; }
-.net-clocks [data-net-sim] { color: #f0efec; font-weight: 600; }
-.net-back { margin-left: auto; color: #9b9a92; font-size: 12px; }
-body.net-screen .net-controls { color: #c3c2b7; }
-body.net-screen .net-controls select, body.net-screen .net-controls input[type=number] { background: #1a1a19; color: #f0efec; border-color: #34332f; }
-body.net-screen .seg { background: #262624; }
-body.net-screen .seg button { color: #c3c2b7; }
-body.net-screen .seg button.on { background: #3a3a37; color: #fff; }
-body.net-screen .btn { background: #262624; color: #f0efec; border-color: #3a3a37; }
+.net-head b span { font-weight: 500; color: var(--net-muted); }
+.net-clocks { display: inline-flex; gap: 18px; font-variant-numeric: tabular-nums; color: var(--net-ink-2); }
+.net-clocks [data-net-sim] { color: var(--net-ink); font-weight: 600; }
+.net-back { margin-left: auto; color: var(--net-muted); font-size: 12px; }
+body.net-screen .net-controls { color: var(--net-ink-2); }
+body.net-screen .net-controls select, body.net-screen .net-controls input[type=number] { background: var(--net-ctl); color: var(--net-ink); border-color: var(--net-ctl-line); }
+body.net-screen .seg { background: var(--net-seg); }
+body.net-screen .seg button { color: var(--net-ink-2); }
+body.net-screen .seg button.on { background: var(--net-ctl-on); color: var(--net-ink); }
+body.net-screen [data-net-theme=contrast] .seg button.on, body.net-screen[data-net-theme=contrast] .seg button.on { color: #000; }
+body.net-screen .btn { background: var(--net-seg); color: var(--net-ink); border-color: var(--net-ctl-line); }
 body.net-screen .net-stage, body.net-screen .net-side { height: calc(100vh - 140px); }
-.net-foot { padding: 8px 18px; color: #6f6e68; }
-.net-foot a { color: #9b9a92; }
+.net-foot { padding: 8px 18px; color: var(--net-muted); }
+.net-foot a { color: var(--net-ink-2); }
+
+/* Style: the map's look (theme, dots, lines, labels, motion), a panel under its button. */
+.net-style { position: relative; }
+.net-style > summary { list-style: none; cursor: pointer; }
+.net-style > summary::-webkit-details-marker { display: none; }
+.net-style-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; width: 300px; padding: 12px 14px; border-radius: 10px;
+  background: var(--net-surface); color: var(--net-ink); border: 1px solid var(--net-line); box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; font-size: 12px; }
+.net-style-panel > label { display: contents; }
+.net-style-panel > label > span:first-child { color: var(--net-ink-2); }
+.net-style-panel select { font: inherit; padding: 3px 6px; border: 1px solid var(--net-ctl-line); border-radius: 6px; background: var(--net-ctl); color: var(--net-ink); }
+.net-style-panel input[type=range] { width: 100%; accent-color: var(--s1); }
+.net-style-panel .check { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; color: var(--net-ink-2); }
+.net-style-panel .row { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; margin-top: 2px; }
+.net-style-panel .row .muted { color: var(--net-muted); }
+.net.no-legend .net-legend { display: none; }
