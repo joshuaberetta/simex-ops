@@ -54,8 +54,9 @@ class Team(models.Model):
         return self.name
 
     def leader(self):
-        """The team's active leader (a Person, role tl), or None."""
-        return self.people.filter(role="tl", active=True).first()
+        """The team's active leader (a Person, role tl), or None (once per web request)."""
+        from . import reqcache
+        return reqcache.memo(("team_leader", self.pk), lambda: self.people.filter(role="tl", active=True).first())
 
 
 class TeamRole(models.Model):

@@ -17,7 +17,7 @@ import openpyxl
 from django.conf import settings
 from django.db.models import Count
 
-from . import addresses, render as rnd
+from . import addresses, render as rnd, reqcache
 from .models import Inject, Sender, Team
 
 # Most specific names first: a column is claimed by the first field that names it.
@@ -186,6 +186,7 @@ def apply(items, lines, deactivate_missing=()):
         x.save()
         added, updated = added + new, updated + (not new)
     deactivated = Sender.objects.filter(pk__in=list(deactivate_missing), active=True, team_leader=False).update(active=False)
+    reqcache.clear()
     return added, updated, deactivated
 
 

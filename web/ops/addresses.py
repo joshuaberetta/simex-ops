@@ -10,7 +10,7 @@ import unicodedata
 
 from django.conf import settings
 
-from . import conf, render as rnd
+from . import conf, render as rnd, reqcache
 from .models import Person, Sender, Team
 
 KEYS = ("team_local", "team_domain", "member_local", "member_domain")
@@ -65,8 +65,13 @@ def persona_addresses(teams=None):
 def member_addresses(pats=None):
     """{person id: their own address} for every team member (participants, active or not, so
     an address never moves to someone else): from the patterns, with their id added when a
-    team, a persona or an earlier member already has it."""
+    team, a persona or an earlier member already has it. Once per web request (ops/reqcache.py:
+    every member address on a page read the whole roster and every persona again)."""
     pats = pats or patterns()
+    return reqcache.memo(("member_addresses", tuple(sorted(pats.items()))), lambda: _member_addresses(pats))
+
+
+def _member_addresses(pats):
     teams = list(Team.objects.all())
     taken = {team_address(t, pats) for t in teams} | persona_addresses(teams)
     out = {}

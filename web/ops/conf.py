@@ -1,5 +1,6 @@
 """Operator settings stored in the database (Settings tab)."""
 
+from . import reqcache
 from .models import Setting
 
 DEFAULTS = {
@@ -59,13 +60,19 @@ DEFAULTS = {
 CHANNEL_MODES = {"email": "Email (Resend)", "inapp": "SIMEX Mail (in-app inboxes)", "per_inject": "Per inject"}
 
 
+# Read fresh every time, even within a request: a long-running send must see a pause (or
+# disarming) straight away; the scheduler's heartbeat changes under a request.
+FRESH = {"paused", "live_armed", "scheduler_tick"}
+
+
 def get(key):
-    # A fresh query every time: a long-running send must see a pause straight away.
+    if key not in FRESH and reqcache.active():  # once per web request (ops/reqcache.py)
+        return _all().get(key, DEFAULTS.get(key, ""))
     value = Setting.objects.filter(key=key).values_list("value", flat=True).first()
     return value if value is not None else DEFAULTS.get(key, "")
 
 
-def get_all():
+def _read_all():
     out = dict(DEFAULTS)
     for key, value in Setting.objects.values_list("key", "value"):
         if value is not None:
@@ -73,8 +80,19 @@ def get_all():
     return out
 
 
+def _all():
+    return reqcache.memo("conf", _read_all)
+
+
+def get_all():
+    """Every setting (a copy: callers may change it). Within a web request, as the request
+    began; get() reads the FRESH ones (pause, arming) anew each time."""
+    return dict(_all()) if reqcache.active() else _read_all()
+
+
 def put(key, value):
     Setting.objects.update_or_create(key=key, defaults={"value": value})
+    reqcache.clear()
 
 
 def flag(key):

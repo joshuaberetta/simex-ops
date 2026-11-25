@@ -12,8 +12,12 @@ from django.http import JsonResponse
 
 
 def is_excon(user):
-    return user.is_authenticated and user.is_active and (
-        user.is_staff or user.is_superuser or user.groups.filter(name="excon").exists())
+    if not (user.is_authenticated and user.is_active):
+        return False
+    if user.is_staff or user.is_superuser:
+        return True
+    from . import reqcache  # the group, once per web request
+    return reqcache.memo(("excon_group", user.pk), lambda: user.groups.filter(name="excon").exists())
 
 
 def participant_of(user):

@@ -20,7 +20,7 @@ from django.db import IntegrityError, connection, transaction
 from django.db.models import F
 from django.utils import timezone
 
-from . import addresses, conf, mailer, notices, push, render, richtext, simclock
+from . import addresses, conf, mailer, reqcache, notices, push, render, richtext, simclock
 from .models import (Attachment, Inject, Mail, MailAttachment, Message, MessageAttachment, Person, Team, TestRun,
                      TestRunItem, audit)
 
@@ -34,6 +34,7 @@ def test_team():
     t, _ = Team.objects.get_or_create(code="test", defaults={"name": "Test team", "is_test": True, "sort": 99})
     if not t.is_test:
         Team.objects.filter(pk=t.pk).update(is_test=True)
+        reqcache.clear()
     return t
 
 

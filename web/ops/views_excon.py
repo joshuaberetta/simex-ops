@@ -21,7 +21,7 @@ from django.utils import timezone
 from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_POST
 
-from . import (activity, addresses, ai, ai_docs, legacy_import, backup, checks, reset, conf, simclock, delivery, desk, documents, importer, inbound, logins, mailer,
+from . import (activity, reqcache, addresses, ai, ai_docs, legacy_import, backup, checks, reset, conf, simclock, delivery, desk, documents, importer, inbound, logins, mailer,
                notices, render as rnd, roster, signin)
 from . import senders_import as senders_import_mod
 from .access import excon_required
@@ -613,6 +613,7 @@ def senders_page(request):
         x.save()
         if x.team_leader:  # one team leader persona: each team's leader plays it
             Sender.objects.exclude(pk=x.pk).filter(team_leader=True).update(team_leader=False)
+            reqcache.clear()
         renamed = 0
         if old and old != local and P.get("rename_injects") == "1":
             renamed = Inject.objects.filter(sender_local=old).update(sender_local=local)

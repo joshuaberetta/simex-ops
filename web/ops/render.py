@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 
 from django.conf import settings as config
 
+from . import reqcache
 from .models import Person, Sender, Team
 
 PLACEHOLDER = re.compile(r"\{(team|team_name|name|first_name)\}")
@@ -115,7 +116,12 @@ def persona_address(sender, local, ctx=None, channel="inapp"):
 
 def sender_by_local(local):
     """(Sender, placeholder context) behind a persona username, also one filled in from a
-    {team} username (undac-a-tl from undac-{team}-tl)."""
+    {team} username (undac-a-tl from undac-{team}-tl). Once per web request (ops/reqcache.py)."""
+    s, ctx = reqcache.memo(("sender_by_local", local), lambda: _sender_by_local(local))
+    return s, dict(ctx)
+
+
+def _sender_by_local(local):
     s = Sender.objects.filter(local_part=local).first()
     if s:
         return s, {}
@@ -136,11 +142,16 @@ def team_ctx(team):
     return {"team": team.code, "team_name": team.name, "name": team.name, "first_name": team.name}
 
 
+def leader_sender():
+    """The persona marked as the team leader on the Senders tab (once per web request)."""
+    return reqcache.memo("leader_sender", lambda: Sender.objects.filter(team_leader=True, active=True).first())
+
+
 def leader_persona(team):
     """The team leader persona as team's leader plays it: {"local", "name", "addr"} (username
     with {team} filled, name shown, SIMEX Mail address), or None when no persona is marked
     as the team leader on the Senders tab."""
-    s = Sender.objects.filter(team_leader=True, active=True).first()
+    s = leader_sender()
     if not s or not team:
         return None
     ctx = team_ctx(team)
@@ -151,7 +162,7 @@ def leader_persona(team):
 
 def leader_locals():
     """{filled team leader username: team id}, over all active teams."""
-    s = Sender.objects.filter(team_leader=True, active=True).first()
+    s = leader_sender()
     if not s:
         return {}
     return {fill(s.local_part, team_ctx(t)).lower(): t.id for t in Team.objects.filter(active=True)}
