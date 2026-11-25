@@ -659,6 +659,7 @@ def conversations(v, folder, q="", filters=None):
             on.setdefault(tl.thread, []).append(_label_dict(tl.label))
     rows = []
     memo, team_names = {}, dict(Team.objects.values_list("id", "name")) if v.desk else {}
+    started = desk_started_by_inject(all_in) if v.desk else {}
     for t in order:
         latest = threads[t][0]
         conv = [m for m in all_in.get(t, []) if (folder == "trash") == (m.trashed_at is not None)] or threads[t]
@@ -669,7 +670,7 @@ def conversations(v, folder, q="", filters=None):
                 n = m.author.name  # who in the team wrote it
             if n not in names:
                 names.append(n)
-        if folder == "sent":
+        if folder == "sent" or (filters and filters.dir == "out"):
             people = "To: " + (latest.to_label.split(" <")[0] if latest.to_label else "")
         else:
             people = ", ".join(names[-3:])
@@ -683,9 +684,12 @@ def conversations(v, folder, q="", filters=None):
                      "has_files": any(m.attached for m in threads[t]), "draft": False,
                      "labels": sorted(on.get(t, []), key=lambda x: x["name"].lower()), "all_labels": ids_on.get(t, []),
                      "desk": desk_chips(conv, memo, team_names) if v.desk else None,
+                     "inject": started.get(t),  # the persona desk: a conversation an inject started
                      "replied": replied and folder != "sent",
                      "awaiting": got is not None and not replied,  # received, nothing sent since (Not replied)
-                     "invite": any(m.event_id for m in threads[t])})  # SIMEX Calendar
+                     "invite": any(m.event_id for m in threads[t]),  # SIMEX Calendar
+                     # The persona desk: which way the row's latest message went (its Inbox or Sent copy).
+                     "dir": ("out" if latest.folder == "sent" else "in") if v.desk else ""})
     if v.sees_ai:
         flags = ai_flags(v.team, {t: threads[t] for t in order})
         for r in rows:
@@ -743,6 +747,26 @@ def ai_flags(team, threads):
     for d in DocumentAnalysis.objects.filter(team=team, status="done", sha256__in=list(shas)):
         keep(shas[d.sha256], d.ai_written, f"{d.filename}: {d.ai_signals}")
     return best
+
+
+INJECT_KINDS = ("live", "test", "oneoff")  # an inject's own delivery (a follow-up continues one)
+
+
+def desk_started_by_inject(all_in):
+    """The persona desk's lists: {thread: {"id", "mel_id"}} for conversations whose first message
+    is an inject's delivery (all_in: {thread: [Mail]}). Desk and ExCon only: participants never
+    see what is an inject."""
+    from .models import Message
+    first = {}
+    for t, ms in all_in.items():
+        m = min(ms, key=lambda x: x.id)
+        if m.message_id:
+            first[m.message_id] = t
+    out, link = {}, conf.flag("desk_injects")  # its page on the desk's Injects tab, when that is on
+    for mid, iid, mel in (Message.objects.filter(id__in=list(first), kind__in=INJECT_KINDS, inject__isnull=False)
+                          .values_list("id", "inject_id", "inject__mel_id")):
+        out[first[mid]] = {"id": iid, "mel_id": mel, "href": f"/inbox/desk/injects/{iid}/" if link else ""}
+    return out
 
 
 def desk_chips(mails, memo, team_names):

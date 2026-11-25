@@ -26,8 +26,13 @@ STATE_KEYS = [k for k, _ in STATES]
 WAITS = [(15, "15 minutes"), (30, "30 minutes"), (60, "1 hour"), (120, "2 hours")]
 RECENTS = [(15, "15 minutes"), (60, "hour"), (180, "3 hours"), (720, "12 hours")]
 KINDS = [("live", "Live teams only"), ("test", "Test traffic only")]
+# The persona desk's direction (dir=): what the desk received (teams' and other personas' mail to a
+# persona, its Inbox copies) or what it sent as the personas (its Sent copies). Each row then shows
+# its latest message that way, as in a Sent folder. Not on the lists that are one way already.
+DIRS = [("in", "Received"), ("out", "Sent")]
+NO_DIR = ("inbox", "sent", "drafts", "trash", "scheduled")
 
-PARAMS = ("f", "p", "t", "st", "own", "wait", "kind", "recent")
+PARAMS = ("f", "dir", "p", "t", "st", "own", "wait", "kind", "recent")
 
 
 def _ints(values):
@@ -54,7 +59,9 @@ class Filters:
         self.general = [k for k in GENERAL_KEYS if k in GET.getlist("f")]
         self.personas, self.teams, self.states = [], [], []
         self.own, self.wait, self.kind, self.recent = "", None, "", None
+        self.dir = ""
         if v.desk:
+            self.dir = GET.get("dir") if GET.get("dir") in dict(DIRS) and self.dir_ok else ""
             self.personas = _ints(GET.getlist("p"))
             self.teams = _ints(GET.getlist("t"))
             self.states = [k for k in STATE_KEYS if k in GET.getlist("st")]
@@ -67,7 +74,7 @@ class Filters:
     # --- state ------------------------------------------------------------------------------
     def params(self, **change):
         """The filters as [(name, value)] for a URL, with change applied (name -> list or value)."""
-        cur = {"f": self.general, "p": self.personas, "t": self.teams, "st": self.states, "own": self.own,
+        cur = {"f": self.general, "dir": self.dir, "p": self.personas, "t": self.teams, "st": self.states, "own": self.own,
                "wait": self.wait, "kind": self.kind, "recent": self.recent}
         cur.update(change)
         out = []
@@ -77,6 +84,11 @@ class Filters:
                 if x not in (None, ""):
                     out.append((name, x))
         return out
+
+    @property
+    def dir_ok(self):
+        """Whether this list can be narrowed to received or sent (the desk's mixed lists)."""
+        return bool(self.v.desk) and self.folder not in NO_DIR
 
     @property
     def active(self):
@@ -105,6 +117,8 @@ class Filters:
         from .models import Sender
         from .views_inbox import persona_locals
         box = self.v.mails()
+        if self.dir:  # the mails themselves: each row's latest is then the latest received / sent
+            qs = qs.filter(folder="inbox" if self.dir == "in" else "sent")
         if self.personas:
             locs = [loc for s in Sender.objects.filter(pk__in=self.personas) for loc in persona_locals(s)]
             qs = qs.filter(thread__in=box.filter(persona__in=locs).values("thread"))
@@ -167,7 +181,10 @@ class Filters:
             nxt = [k for k in self.general if k != key] if on else self.general + [key]
             chips.append({"key": key, "name": name, "on": on, "n": n, "href": self.url(q, f=nxt)})
         out = {"chips": chips, "active": self.active, "clear": self.url(q, **{k: [] for k in PARAMS}),
-               "desk": None}
+               "desk": None, "dirs": None, "dir": self.dir}
+        if self.dir_ok:  # All / Received / Sent
+            out["dirs"] = [{"key": "", "name": "All", "on": not self.dir, "href": self.url(q, dir="")}] + \
+                [{"key": k, "name": name, "on": self.dir == k, "href": self.url(q, dir=k)} for k, name in DIRS]
         if self.v.desk:
             out["desk"] = self._desk_bar(rows, now, q)
         return out

@@ -1031,6 +1031,26 @@ body.side-collapsed .cal-side .cal-mini, body.side-collapsed .cal-side .cal-desk
 .gm-fchip-n { color: var(--muted); font-size: 12px; }
 .gm-fchip.on .gm-fchip-n { color: inherit; }
 .gm-fchip .ic { fill: currentColor; }
+/* The persona desk's All / Received / Sent (dir=), one control, like the toolbar's segmented choices */
+.gm-fseg { display: inline-flex; flex: none; border: 1px solid #c4c7c5; border-radius: 8px; overflow: hidden; background: #fff; }
+.gm-fseg-btn { display: inline-flex; align-items: center; gap: 4px; padding: 3px 12px; font-size: 13px; line-height: 20px;
+  color: #444746; text-decoration: none; white-space: nowrap; }
+.gm-fseg-btn + .gm-fseg-btn { border-left: 1px solid #c4c7c5; }
+.gm-fseg-btn:hover { background: #f2f2f2; }
+.gm-fseg-btn.on { background: var(--sel, #d3e3fd); color: #041e49; font-weight: 500; }
+.gm-fseg-btn .ic { fill: currentColor; }
+/* Each desk row: which way its latest message went */
+.gm-dir { display: inline-flex; align-items: center; gap: 2px; flex: none; order: 0; font-size: 12px; line-height: 18px;
+  padding: 0 6px 0 4px; border-radius: 4px; font-weight: 500; }
+.gm-dir .ic { fill: currentColor; }
+.gm-dir-in { background: #e8f0fe; color: #0b57d0; }
+.gm-dir-out { background: #f1f3f4; color: #444746; }
+/* A desk conversation an inject started (views_inbox.desk_started_by_inject) */
+.gm-label.gm-injectchip { display: inline-flex; align-items: center; gap: 3px; background: #fff; color: #8430ce;
+  border: 1px solid #8430ce; line-height: 16px; font-weight: 500; text-decoration: none; }
+.gm-label.gm-injectchip .ic { fill: currentColor; }
+a.gm-label.gm-injectchip:hover { background: #f3e8fd; }
+.gm-chips > .gm-injectchip { order: 0; }
 .gm-fsep { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
 .gm-fclear { font-size: 13px; color: var(--blue, #0b57d0); margin-left: 4px; text-decoration: none; }
 .gm-fclear:hover { text-decoration: underline; }

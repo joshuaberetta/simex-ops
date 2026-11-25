@@ -17,6 +17,12 @@ EVERYONE = {PARTICIPANT, LEADER, DESK, RP, EXCON}
 SHOWN = 8  # notes listed in the drawer (the newest)
 
 ENTRIES = [
+    {"key": "2026-11-desk-received-sent", "date": date(2026, 11, 25), "who": {DESK, EXCON},
+     "title": "Received, sent or an inject, at a glance",
+     "body": "Click a persona or a team in the side bar: each conversation now says **Received** (a team or "
+             "another persona wrote last) or **Sent** (the persona did). **All · Received · Sent** above the list "
+             "shows only one way: what the teams wrote to that persona, or what it sent them. A purple **Inject** "
+             "tag marks every conversation an inject started."},
     {"key": "2026-11-desk-scheduled", "date": date(2026, 11, 25), "who": {DESK, EXCON},
      "title": "Scheduled: AI persona answers before they go",
      "body": "SIMEX AI now drafts an AI persona's answer as soon as a team (or another persona) writes to it. "

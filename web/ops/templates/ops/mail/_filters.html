@@ -2,6 +2,8 @@
 and a panel of more (its inputs belong to the GET form #gm-filter outside the list's bulk-action form).{% endcomment %}
 {% if filters %}{% with d=filters.desk %}
 <div class="gm-filterbar" data-filterbar>
+  {% if filters.dirs %}<span class="gm-fseg" role="group" aria-label="Received or sent">{% for c in filters.dirs %}<a class="gm-fseg-btn{% if c.on %} on{% endif %}" href="{{ c.href }}" aria-pressed="{% if c.on %}true{% else %}false{% endif %}" title="{% if c.key == 'in' %}Only what the desk received: teams' and other personas' messages to the personas{% elif c.key == 'out' %}Only what the desk sent as the personas{% else %}Received and sent together, each row marked{% endif %}">{% if c.key == 'in' %}{% icon "call_received" 16 %}{% elif c.key == 'out' %}{% icon "call_made" 16 %}{% endif %}{{ c.name }}</a>{% endfor %}</span>
+  <span class="gm-fsep"></span>{% endif %}
   {% for c in filters.chips %}<a class="gm-fchip{% if c.on %} on{% endif %}" href="{{ c.href }}" aria-pressed="{% if c.on %}true{% else %}false{% endif %}" title="{% if c.on %}Show all again{% else %}Show only these{% endif %}">{% if c.on %}<span class="gm-fchip-tick">✓</span>{% endif %}{{ c.name }}{% if c.n or c.on %} <span class="gm-fchip-n">{{ c.n }}</span>{% endif %}</a>{% endfor %}
   {% if d %}
   <span class="gm-fsep"></span>
@@ -11,6 +13,7 @@ and a panel of more (its inputs belong to the GET form #gm-filter outside the li
     <div class="gm-fpanel" role="group" aria-label="Filters">
       <input type="hidden" name="folder" value="{{ folder }}" form="gm-filter">
       {% if q %}<input type="hidden" name="q" value="{{ q }}" form="gm-filter">{% endif %}
+      {% if filters.dir %}<input type="hidden" name="dir" value="{{ filters.dir }}" form="gm-filter">{% endif %}
       {% for k in d.general %}<input type="hidden" name="f" value="{{ k }}" form="gm-filter">{% endfor %}
       <fieldset><legend>Where it stands</legend>
         {% for s in d.states %}<label class="gm-fopt"><input type="checkbox" name="st" value="{{ s.key }}" form="gm-filter"{% if s.on %} checked{% endif %}> {{ s.name }} <span class="gm-fchip-n">{{ s.n }}</span></label>{% endfor %}

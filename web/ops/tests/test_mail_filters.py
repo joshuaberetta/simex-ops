@@ -99,3 +99,50 @@ def test_the_desk_filters(excon):
     assert t.status_code == 200 and not t.context["next_t"] and not t.context["prev_t"]
     assert not MailAction.objects.filter(action="filter").exists()  # the desk's reading is never tracked
     assert DeskConversation.objects.filter(thread=got_a.thread, owner=d.person.user).exists()
+
+
+def test_the_desk_received_or_sent(excon):
+    setup(excon)
+    deliver_now("3-13")
+    ta, tb = Team.objects.get(code="a"), Team.objects.get(code="b")
+    pa = participant("a")
+    got_a, _ = team_writes(pa, ta, "Where is the convoy?")
+    only_b = Mail.objects.get(team=None, folder="sent", desk_team=tb).thread  # Team B never answered
+    donot = Sender.objects.get(local_part="donotreply")
+    d = desk_client()
+    page = d.get(f"/inbox/desk/?folder=a{donot.id}")
+    assert {got_a.thread, only_b} <= set(threads(page))
+    dirs = {r["thread"]: r["dir"] for r in page.context["rows"]}
+    assert dirs[got_a.thread] == "in" and dirs[only_b] == "out"  # each row marked
+    assert [c["name"] for c in page.context["filters"]["dirs"]] == ["All", "Received", "Sent"]
+    assert b'class="gm-dir gm-dir-out"' in page.content and b'class="gm-fseg"' in page.content
+    # Received: only conversations with a message to the persona, the row showing that one.
+    page = d.get(f"/inbox/desk/?folder=a{donot.id}&dir=in")
+    assert threads(page) == [got_a.thread] and page.context["rows"][0]["latest"].folder == "inbox"
+    assert page.context["fq"] == "&dir=in" and b'class="gm-dir ' not in page.content
+    # Sent: what the persona sent, "To:" the team, as in a Sent folder; kept on the thread view's links.
+    page = d.get(f"/inbox/desk/?folder=a{donot.id}&dir=out")
+    assert {got_a.thread, only_b} <= set(threads(page))
+    assert all(r["latest"].folder == "sent" and r["people"].startswith("To: ") for r in page.context["rows"])
+    assert d.get(f"/inbox/desk/t/{only_b}/?folder=a{donot.id}&dir=out").context["fq"] == "&dir=out"
+    # Not on the lists that are one way already.
+    for folder in ("inbox", "sent"):
+        page = d.get(f"/inbox/desk/?folder={folder}&dir=in")
+        assert page.context["filters"]["dirs"] is None and page.context["fq"] == ""
+    # Never in a team's mailbox.
+    page = pa.get("/inbox/?folder=all&dir=out")
+    assert page.context["filters"]["dirs"] is None and page.context["fq"] == ""
+
+
+def test_the_desk_marks_conversations_an_inject_started(excon):
+    setup(excon)
+    deliver_now("3-13")
+    ta = Team.objects.get(code="a")
+    pa = participant("a")
+    got_a, _ = team_writes(pa, ta, "Where is the convoy?")
+    d = desk_client()
+    for folder in ("inbox", "sent"):
+        page = d.get(f"/inbox/desk/?folder={folder}")
+        row = next(r for r in page.context["rows"] if r["thread"] == got_a.thread)
+        assert row["inject"]["mel_id"] == "3-13" and b"gm-injectchip" in page.content
+    assert b"gm-injectchip" not in pa.get("/inbox/?folder=inbox").content  # never for participants
