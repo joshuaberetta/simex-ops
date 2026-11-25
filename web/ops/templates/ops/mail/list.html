@@ -26,6 +26,7 @@
       {% else %}
         {% if folder != 'sent' %}<button class="gm-icon-btn" name="action" value="archive" title="Archive" aria-label="Archive">{% icon "archive" %}</button>{% endif %}
         <button class="gm-icon-btn" name="action" value="trash" title="Delete" aria-label="Delete">{% icon "trash" %}</button>
+        {% if v.desk %}<button class="gm-icon-btn" name="act" value="done" formaction="/inbox/desk/mark/" title="No reply needed: out of Needs attention until the team writes again" aria-label="No reply needed" data-desk-bulk-done>{% icon "done" %}</button>{% endif %}
         <span class="gm-tb-sep"></span>
         <button class="gm-icon-btn" name="action" value="read" title="Mark as read" aria-label="Mark as read">{% icon "read" %}</button>
         <button class="gm-icon-btn" name="action" value="unread" title="Mark as unread" aria-label="Mark as unread">{% icon "unread" %}</button>

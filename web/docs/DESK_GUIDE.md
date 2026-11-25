@@ -60,7 +60,7 @@ At the top of each conversation:
 - **Follow up** now or in 15 minutes to 4 hours, with a note (*chase the convoy ETA*): it waits in Later, comes back to Needs attention when due, and ends when a persona writes in it (or **Stop**).
 - **Ask SIMEX AI**, when SIMEX AI hasn't read it yet; **Next waiting** to move on.
 
-Tick several rows in the Inbox for **I'll take these**, **Assign to…**, **No reply needed** or **Reopen** at once; the ✓ on a row (on hover) is **No reply needed**.
+Tick several rows in the Inbox for **I'll take these**, **Assign to…**, **No reply needed** or **Reopen** at once (on a phone, the ✓ next to Delete above the list is **No reply needed**); the ✓ on a row (on hover) is **No reply needed**, and so is the ✓ next to Delete at the top of an open conversation.
 
 ## Your conversations and your notifications
 - On the left, **Assigned to me** has the conversations you took or were given, with what needs attention first; its number is how many of them need attention. **Following** has the ones you answered in, set a follow-up on or follow, but don't have.

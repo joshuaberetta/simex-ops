@@ -17,6 +17,10 @@ EVERYONE = {PARTICIPANT, LEADER, DESK, RP, EXCON}
 SHOWN = 8  # notes listed in the drawer (the newest)
 
 ENTRIES = [
+    {"key": "2026-11-desk-done-toolbar", "date": date(2026, 11, 25), "who": {DESK, EXCON},
+     "title": "No reply needed, from the toolbar",
+     "body": "In an open conversation, the ✓ next to Delete marks it as needing no reply (and opens the next one "
+             "waiting). Tick several rows in the Inbox and the same ✓ marks them all at once, on a phone too."},
     {"key": "2026-11-list-filters", "date": date(2026, 11, 25), "who": {PARTICIPANT, LEADER},
      "title": "Show only unread mail",
      "body": "Above the list, **Unread**, **Starred**, **Has files** and **Not replied** show only those "

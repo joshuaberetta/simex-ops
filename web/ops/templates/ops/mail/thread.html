@@ -13,6 +13,9 @@
     {% if in_inbox %}<button class="gm-icon-btn" name="action" value="archive" title="Archive (e)" aria-label="Archive" data-key-archive>{% icon "archive" %}</button>
     {% else %}<button class="gm-icon-btn" name="action" value="unarchive" title="Move to Inbox" aria-label="Move to Inbox">{% icon "unarchive" %}</button>{% endif %}
     <button class="gm-icon-btn" name="action" value="trash" title="Delete (#)" aria-label="Delete" data-key-trash>{% icon "trash" %}</button>
+    {% if desk_state.waiting %}{% if next_waiting %}<input type="hidden" name="next_done" value="{{ base }}/t/{{ next_waiting }}/?folder={{ folder }}">{% endif %}
+    <button class="gm-icon-btn" name="act" value="done" formaction="/inbox/desk/mark/" title="No reply needed: out of Needs attention until the team writes again{% if next_waiting %}; opens the next one waiting{% endif %}" aria-label="No reply needed" data-desk-done>{% icon "done" %}</button>
+    {% elif desk_state.done_by %}<button class="gm-icon-btn" name="act" value="reopen" formaction="/inbox/desk/mark/" title="Reopen: no reply needed was marked by {{ desk_state.done_by }}" aria-label="Reopen">{% icon "restore" %}</button>{% endif %}
     <span class="gm-tb-sep"></span>
     <button class="gm-icon-btn" name="action" value="unread" title="Mark as unread" aria-label="Mark as unread">{% icon "unread" %}</button>
     <span class="gm-tb-sep"></span>

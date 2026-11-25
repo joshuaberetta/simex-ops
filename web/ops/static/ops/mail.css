@@ -609,7 +609,7 @@ body.desk .gm-row[style*="--persona"]::after { content: ""; position: absolute; 
   .gm-aicol { grid-column: 2 / 4; width: auto; justify-content: flex-start; padding: 0; order: 5; }
   .gm-aicol:empty { display: none; }
 }
-.gm-desk-btn { padding: 4px 12px; font-size: 13px; margin-left: 4px; }
+.gm-desk-btn { padding: 4px 12px; font-size: 13px; margin-left: 4px; white-space: nowrap; flex: none; }
 .gm-desk-wait { display: block; margin: 0 16px 8px 12px; padding: 6px 10px; border-radius: 8px; background: #fce8e6; color: #a50e0e;
   font-weight: 600; font-size: 13px; text-decoration: none; }
 .gm-deskbar { margin: 0 0 14px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: #fff; font-size: 14px; }
