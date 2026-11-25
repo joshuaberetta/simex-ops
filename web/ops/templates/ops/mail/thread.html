@@ -112,6 +112,7 @@
   </article>
   {% endfor %}
 
+  {% if desk_npc %}{% include "ops/mail/_npc_scheduled.html" with j=desk_npc %}{% endif %}
   {% if not readonly %}
   <div class="gm-reply-actions" data-reply-actions>
     {% if can_reply %}<button type="button" class="gm-outline-btn" data-reply="{{ last.id }}">{% icon "reply" 18 %} Reply</button>

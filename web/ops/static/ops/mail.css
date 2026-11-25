@@ -1057,3 +1057,21 @@ body.side-collapsed .cal-side .cal-mini, body.side-collapsed .cal-side .cal-desk
   .gm-filterbar { flex-wrap: nowrap; overflow-x: auto; padding: 4px 8px 8px; }
   .gm-fpanel { position: fixed; left: 8px; right: 8px; top: 120px; max-height: 70vh; overflow-y: auto; }
 }
+
+/* The persona desk: an AI persona's answer not sent yet (_npc_scheduled.html), like a scheduled
+   message at the foot of the conversation; its chip on list rows (_desk_state.html). */
+.gm-label.gm-st-npc { display: inline-flex; align-items: center; gap: 3px; }
+.gm-label.gm-st-npc.held { background: #fce8e6; color: #a50e0e; }
+.gm-label.gm-st-npc .ic { fill: currentColor; }
+.gm-npc-sched { background: #faf6ff; border: 1px dashed #b89be6; border-radius: 10px; padding: 14px 14px 12px; margin: 12px 0; }
+.gm-npc-sched.gm-npc-held, .gm-npc-sched.gm-npc-failed { background: #fff6f5; border-color: #e5a29c; }
+.gm-npc-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.gm-npc-head .ic { fill: #6236b0; }
+.gm-npc-note { font-size: 13px; color: var(--muted, #5f6368); margin-bottom: 8px; }
+.gm-npc-form textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; line-height: 1.45; padding: 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: #fff; resize: vertical; }
+.gm-npc-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.gm-npc-acts .primary { background: #0b57d0; color: #fff; border-color: #0b57d0; }
+.gm-npc-acts .primary .ic { fill: #fff; }
+.gm-npc-time { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.gm-npc-time select, .gm-npc-time input { height: 30px; border: 1px solid var(--line); border-radius: 15px; padding: 0 10px; font: inherit; font-size: 13px; background: #fff; }

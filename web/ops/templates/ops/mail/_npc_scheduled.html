@@ -1,0 +1,41 @@
+{% load ops %}{% comment %}The persona desk: an AI persona's answer in this conversation not sent yet (views_inbox._desk_npc, npc.OPEN), at the foot of the conversation like a scheduled message in webmail. j: the NpcReply. Posts to /inbox/desk/answers/<id>/ (views_desk_npc).{% endcomment %}
+<article class="gm-msg open gm-npc-sched gm-npc-{{ j.status }}" id="scheduled-answer" data-npc-job="{{ j.id }}">
+  <div class="gm-avatar" style="background: {{ j.persona|avatar_colour }}">{{ j.persona|initial }}</div>
+  <div class="gm-msg-main">
+    <div class="gm-npc-head">
+      {% icon "clock" 18 %}
+      <b>{{ j.persona }}</b> <span class="gm-label gm-st-npc">AI persona</span>
+      {% if j.status == 'queued' %}<span>sends {% if j.to %}to {{ j.to }} {% endif %}at <b>{{ j.due_at|date:"D H:i" }}</b></span>
+      {% elif j.status == 'writing' %}<span>SIMEX AI is writing the answer{% if j.body %} again (a later message came in){% endif %}…</span>
+      {% elif j.status == 'held' %}<span><b>waiting to be sent</b>{% if j.note %}: {{ j.note }}{% endif %}</span>
+      {% elif j.status == 'failed' %}<span class="err"><b>failed</b>{% if j.error %}: {{ j.error|truncatechars:200 }}{% endif %}</span>{% endif %}
+      {% if j.edited_by %}<small class="muted">· edited by {{ j.edited_by }}</small>{% elif j.body %}<small class="muted">· SIMEX AI's draft{% if j.status == 'queued' and not j.current %}, written before the latest message: rewritten before it goes{% endif %}</small>{% endif %}
+    </div>
+    {% if j.out.flags or j.out.note %}<div class="gm-npc-note">{% for f in j.out.flags %}<span class="gm-flag">{{ f }}</span>{% endfor %} {{ j.out.note }}</div>{% endif %}
+    <form method="post" action="/inbox/desk/answers/{{ j.id }}/" class="gm-npc-form" data-npc-form>{% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}#scheduled-answer">
+      {% if j.status != 'writing' %}
+      <textarea name="body" rows="{% if j.body %}10{% else %}4{% endif %}" placeholder="No draft yet: SIMEX AI writes it within a minute, or write it here." aria-label="The answer" data-npc-body>{{ j.body }}</textarea>
+      {% endif %}
+      <div class="gm-npc-acts">
+        {% if j.status != 'writing' %}
+        <button class="gm-pill-btn primary" name="act" value="send" title="Send it now as {{ j.persona }}, with your changes">{% icon "send" 16 %} Send now</button>
+        <button class="gm-pill-btn" name="act" value="save" title="Keep your text: it goes at the scheduled time and is never rewritten">Save changes</button>
+        <span class="gm-npc-time">
+          <select name="minutes" aria-label="Send in">
+            <option value="">Change time…</option>
+            <option value="5">in 5 min</option><option value="15">in 15 min</option><option value="30">in 30 min</option>
+            <option value="60">in 1 hour</option><option value="120">in 2 hours</option><option value="240">in 4 hours</option>
+          </select>
+          <span class="muted small">or</span>
+          <input type="datetime-local" name="at" aria-label="Send at" value="">
+          <button class="gm-pill-btn" name="act" value="time">{% if j.status == 'held' %}Schedule{% else %}Reschedule{% endif %}</button>
+        </span>
+        {% endif %}
+        {% if j.status == 'failed' %}<button class="gm-pill-btn" name="act" value="retry">Write it again</button>{% endif %}
+        <button type="button" class="gm-pill-btn" data-npc-mine title="Cancel the AI persona's answer and write your own in the reply box (its draft goes in)">Answer it myself</button>
+        <button class="gm-pill-btn" name="act" value="cancel" title="The AI persona doesn't answer: nothing is sent">Cancel the answer</button>
+      </div>
+    </form>
+  </div>
+</article>

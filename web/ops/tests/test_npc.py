@@ -90,9 +90,13 @@ def test_answers_in_simex_mail_after_its_delay(excon, fake):
     job = NpcReply.objects.get()
     assert job.response == r and job.status == "queued"
     assert timedelta(minutes=0.9) <= job.due_at - timezone.now() <= timedelta(minutes=3.1)
-    assert npc.tick() == 0 and not fake.calls  # not due yet
+    assert npc.tick() == 1 and len(fake.calls) == 1  # drafted at once, not sent: not due yet
+    job.refresh_from_db()
+    assert job.status == "queued" and "Km 12" in job.body and job.draft_for == r.id
+    assert not Message.objects.filter(npc=True).exists()
+    assert npc.tick() == 0  # nothing more to write or send
     due_now()
-    assert npc.tick() == 1
+    assert npc.tick() == 1 and len(fake.calls) == 1  # sent the draft: no second call
     job.refresh_from_db()
     m = job.message
     assert job.status == "sent" and m.npc and m.kind == "reply" and m.idem_key == f"npc-{job.id}" and m.status == "sent"
@@ -169,7 +173,9 @@ def test_failed_answer_retries_then_fails(excon, fake):
     write_to(participant("test", "Jo"))
     for _ in range(npc.MAX_ATTEMPTS):
         due_now()
-        npc.tick()
+        assert npc.tick() == 1
+        assert npc.tick() == 0  # tried again only after RETRY_AFTER
+        NpcReply.objects.update(updated_at=timezone.now() - npc.RETRY_AFTER)
     job = NpcReply.objects.get()
     assert job.status == "failed" and job.attempts == npc.MAX_ATTEMPTS
     assert Notice.objects.filter(key=f"npc:{job.id}:failed").exists()
@@ -188,7 +194,7 @@ def test_email_answer_waits_for_content_and_threads(excon, fake):
     due_now()
     assert npc.tick() == 0  # its text isn't fetched yet
     Response.objects.filter(pk=r.pk).update(fetched=True, text="Which roads are open?", message_id_header="<abc@x>")
-    assert npc.tick() == 1
+    assert npc.tick() == 2  # written, and sent as it is due
     m = Message.objects.get(npc=True)
     assert m.channel == "email" and m.to == [pa.person.email] and m.extra_headers["In-Reply-To"] == "<abc@x>"
 

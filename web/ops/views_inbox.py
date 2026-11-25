@@ -539,6 +539,8 @@ def desk_assigned(v, folder):
     from .models import DeskConversation, DeskWatch
     if not (v.desk and folder):
         return None
+    if folder == "scheduled":  # an AI persona's answer not sent yet (npc.OPEN), like webmail's Scheduled
+        return "Scheduled", desk.scheduled_threads()
     owned = DeskConversation.objects.filter(owner__isnull=False)
     if folder == "mine":
         return DESK_FOLDERS[folder], owned.filter(owner=v.user).values("thread")
@@ -772,7 +774,11 @@ def desk_side(v):
                          "unread": len({t for t, p, _ in unread if p in locs})})
     teams = [{"key": f"t{t.id}", "name": t.name, "test": t.is_test,
               "unread": len({th for th, _, tid in unread if tid == t.id})} for t in Team.objects.filter(active=True)]
-    return {"personas": personas, "teams": teams, "attention": len(desk_attention(v)), "mine": _desk_mine(v)}
+    from .models import NpcReply
+    scheduled = {"n": len(desk.scheduled_threads()),
+                 "held": NpcReply.objects.filter(status__in=["held", "failed"]).count()}
+    return {"personas": personas, "teams": teams, "attention": len(desk_attention(v)), "mine": _desk_mine(v),
+            "scheduled": scheduled}
 
 
 def _desk_mine(v):
@@ -1172,6 +1178,7 @@ def thread_view(request, v, thread):
         mails = one_copy(mails)  # persona mail: its Inbox copy only, not its Sent copy beside it
         last = mails[-1]
     subject = mails[0].subject
+    desk_state = desk.states([thread], v.user).get(thread) if v.desk else None
     from . import calendar
     cards = calendar.cards(v, mails)  # SIMEX Calendar: the invitation cards
     for m in mails:
@@ -1196,7 +1203,7 @@ def thread_view(request, v, thread):
         pos=i + 1, total=len(keys), last=last, thread_js=thread_js, can_reply=can_reply,
         cal_events=calendar.thread_events(v, mails), cal_create=not v.readonly and not v.peer,
         desk_chips=desk_chips(mails, {}, dict(Team.objects.values_list("id", "name"))) if v.desk else None,
-        desk_state=desk.states([thread], v.user).get(thread) if v.desk else None,
+        desk_state=desk_state, desk_npc=_desk_npc(desk_state, v),
         desk_conv=desk.conversation(thread) if v.desk else None, desk_ai=v.desk and desk_ai.enabled(),
         desk_watching=v.desk and desk.watching(thread, v.user),
         leader_suggest=v.leader_box and can_reply and suggest_leader.enabled()
@@ -1205,6 +1212,21 @@ def thread_view(request, v, thread):
         in_inbox=any(m.folder == "inbox" and not m.archived for m in mails), starred=any(m.starred for m in mails),
         thread_labels=[_label_dict(tl.label) for tl in ThreadLabel.objects.filter(label__in=v.labels(), thread=thread)
                        .select_related("label").order_by("label__name")]))
+
+
+def _desk_npc(st, v):
+    """The AI persona's answer not sent yet in a desk conversation (its Scheduled panel), or None."""
+    from . import npc
+    from .models import NpcReply
+    if not (st and st.get("npc") and st["npc"]["status"] in npc.OPEN):
+        return None
+    job = NpcReply.objects.filter(pk=st["npc"]["id"]).select_related("npc__sender").first()
+    if job is None:
+        return None
+    job.current = npc.draft_current(job)
+    job.persona = st["npc"]["who"]
+    job.to = (job.mail.from_name if job.mail_id else job.team.name if job.team_id else "")
+    return job
 
 
 def one_copy(mails):
@@ -1230,6 +1252,9 @@ def _desk_thread(mails):
     desk (or which AI persona) wrote it, and the From each one is answered as (desk_as, the
     Sender's "p:<username>", {team} unfilled); the conversation's default From and its presence URL."""
     memo, choices = {}, {f["key"] for f in desk_from_choices()}
+    from .models import NpcReply
+    edited = {mid: f", edited by {who}" for mid, who in NpcReply.objects.filter(
+        message_id__in=[m.message_id for m in mails if m.message_id], edited_by__gt="").values_list("message_id", "edited_by")}
     for m in mails:
         m.desk_chip = desk.describe(m.persona, m.desk_team, memo) if m.persona else None
         s, _ = rnd.sender_by_local(m.persona) if m.persona else (None, None)
@@ -1237,7 +1262,7 @@ def _desk_thread(mails):
         msg = m.message if m.message_id and (m.folder == "sent" or m.message.kind == desk.PERSONA_KIND) else None
         m.desk_inject = msg.inject_id if msg and msg.kind in ("live", "test", "oneoff", "followup") \
             and conf.flag("desk_injects") else None
-        m.desk_by = "" if not msg else ("Written by the AI persona" if msg.npc else f"Sent by {m.author.name}"
+        m.desk_by = "" if not msg else (f"Written by the AI persona{edited.get(msg.id, '')}" if msg.npc else f"Sent by {m.author.name}"
                                         if m.author else "Inject" if msg.kind in ("live", "test", "oneoff")
                                         else "Follow-up (ExCon)" if msg.kind == "followup" else "Sent by ExCon")
     last_in = next((m for m in reversed(mails) if m.folder == "inbox" and m.desk_as), None)

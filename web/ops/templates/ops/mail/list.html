@@ -49,6 +49,7 @@
   </div>
   {% include "ops/mail/_filters.html" %}
   {% if q %}<div class="gm-searchnote">Results for <b>{{ q }}</b> in {% if folder == 'inbox' %}all mail{% else %}{{ folder }}{% endif %}</div>{% endif %}
+  {% if folder == 'scheduled' %}<div class="gm-searchnote">{% icon "clock" 18 %} AI personas' answers not sent yet go at their scheduled time. SIMEX AI drafts each one as soon as it is queued: open the conversation to read it, edit it, send it now, change when it goes, or cancel it and answer yourself.</div>{% endif %}
   {% if folder == 'trash' and rows %}<div class="gm-searchnote">Messages in Trash stay here; nothing is deleted for good during the exercise.</div>{% endif %}
   <div class="gm-list" role="list">
     {% for r in rows %}{% with m=r.latest st=r.state %}
@@ -71,7 +72,7 @@
         {% if folder != 'inbox' and m.folder == 'inbox' and not m.archived %}<span class="gm-label">Inbox</span>{% endif %}
         {% for l in r.labels %}<span class="gm-label"{% if l.colour %} style="background: {{ l.colour }}; color: {{ l.fg }}"{% endif %}>{{ l.name }}</span>{% endfor %}
         {% if r.invite %}<span class="gm-label gm-invite">{% icon "event" 14 %}Invitation</span>{% endif %}
-        <span class="gm-s">{{ r.subject|default:"(no subject)" }}</span>{% with sn=m.body|snippet:140 %}{% if sn %}<span class="gm-snip"> - {{ sn }}</span>{% endif %}{% endwith %}
+        <span class="gm-s">{{ r.subject|default:"(no subject)" }}</span>{% if folder == 'scheduled' and st.npc %}<span class="gm-snip"> - {% if st.npc.snippet %}{{ st.npc.who }}: {{ st.npc.snippet|truncatechars:140 }}{% else %}SIMEX AI is drafting {{ st.npc.who }}'s answer…{% endif %}</span>{% else %}{% with sn=m.body|snippet:140 %}{% if sn %}<span class="gm-snip"> - {{ sn }}</span>{% endif %}{% endwith %}{% endif %}
       </span>
         {% if st or r.desk %}<span class="gm-chips">{% comment %}the persona desk: a second line under the subject{% endcomment %}
         {% if r.desk %}{% for p in r.desk.personas %}<span class="gm-label gm-persona" style="background: {{ p.colour }}; color: {{ p.fg }}" title="{{ p.addr }}">{{ p.name }}</span>{% endfor %}{% for t in r.desk.teams %}<span class="gm-label gm-teamchip">{{ t }}</span>{% endfor %}{% if r.desk.test %}<span class="gm-label test">Test</span>{% endif %}{% endif %}
@@ -97,7 +98,7 @@
       {% endif %}
     </div>
     {% endwith %}{% empty %}
-    <div class="gm-empty">{% if filters.active %}No conversations match these filters. <a href="{{ filters.clear }}">Clear filters</a>{% elif q %}No messages matched your search.{% elif folder == 'inbox' %}Your inbox is empty.{% elif folder == 'starred' %}No starred messages. Stars let you give messages a special status to make them easier to find.{% elif folder == 'drafts' %}You don't have any saved drafts.{% elif folder == 'trash' %}No conversations in Trash.{% elif folder|slice:":1" == 'l' %}There are no conversations with this label. Select conversations and use <b>Move to</b> or <b>Labels</b>, or drag them onto the label.{% else %}No conversations.{% endif %}</div>
+    <div class="gm-empty">{% if filters.active %}No conversations match these filters. <a href="{{ filters.clear }}">Clear filters</a>{% elif q %}No messages matched your search.{% elif folder == 'inbox' %}Your inbox is empty.{% elif folder == 'starred' %}No starred messages. Stars let you give messages a special status to make them easier to find.{% elif folder == 'drafts' %}You don't have any saved drafts.{% elif folder == 'trash' %}No conversations in Trash.{% elif folder == 'scheduled' %}No AI persona answers are waiting to go.{% elif folder|slice:":1" == 'l' %}There are no conversations with this label. Select conversations and use <b>Move to</b> or <b>Labels</b>, or drag them onto the label.{% else %}No conversations.{% endif %}</div>
     {% endfor %}
   </div>
 </form>

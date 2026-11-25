@@ -17,6 +17,14 @@ EVERYONE = {PARTICIPANT, LEADER, DESK, RP, EXCON}
 SHOWN = 8  # notes listed in the drawer (the newest)
 
 ENTRIES = [
+    {"key": "2026-11-desk-scheduled", "date": date(2026, 11, 25), "who": {DESK, EXCON},
+     "title": "Scheduled: AI persona answers before they go",
+     "body": "SIMEX AI now drafts an AI persona's answer as soon as a team (or another persona) writes to it. "
+             "**Scheduled**, in the side bar, lists every answer not sent yet; rows say *Kobo (AI) sends at "
+             "12:23*, and **More filters → AI persona to answer** finds them in any list. At the foot of the "
+             "conversation you can read the draft, edit it (your text is never rewritten), **Send now**, change "
+             "the time, **Cancel the answer**, or **Answer it myself** (the draft goes into your reply). "
+             "Persona mail to an AI persona shows it too."},
     {"key": "2026-11-desk-ai-answers", "date": date(2026, 11, 25), "who": {DESK, EXCON},
      "title": "Leave it to the AI persona",
      "body": "When a team writes to an AI persona that is going to answer, the conversation goes to **Later** "

@@ -207,17 +207,17 @@ def npc_reply_action(request, jid):
     back = request.POST.get("next") if (request.POST.get("next") or "").startswith("/npcs/") else f"/npcs/{job.npc_id}/"
     if act == "now" and job.status == "queued":
         NpcReply.objects.filter(pk=job.pk, status="queued").update(due_at=now)
-        messages.success(request, "It answers within a minute (the scheduler writes it).")
+        messages.success(request, "It goes within a minute (the scheduler sends its draft, or writes it first).")
     elif act == "send" and job.status == "held":
         body = (request.POST.get("body") or "").strip()
         if not body:
             messages.error(request, "The answer is empty.")
         else:
-            npc.send(job, body, _u(request))
-            if job.status == "failed":
-                messages.error(request, f"Not sent to {to}: {job.error}")
-            else:
+            try:
+                npc.send_now(job, body, _u(request))
                 messages.success(request, f"Sent to {to}.")
+            except npc.JobError as e:
+                messages.error(request, f"Not sent to {to}: {e}")
     elif act == "skip" and job.status in ("queued", "held", "failed"):
         NpcReply.objects.filter(pk=job.pk).update(status="skipped", note=f"Skipped by {_u(request)}.", updated_at=now)
     elif act == "retry" and job.status in ("failed", "skipped"):

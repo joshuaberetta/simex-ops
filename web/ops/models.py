@@ -1009,8 +1009,8 @@ class NpcProfile(models.Model):
 
 
 class NpcReply(models.Model):
-    """An AI persona's answer to a team's conversation: due at a time drawn on arrival, written
-    when due, then sent (or held for ExCon). Messages that arrive while it is queued in the same
+    """An AI persona's answer to a team's conversation: due at a time drawn on arrival, drafted
+    at once, sent when due (or held for ExCon). Messages that arrive while it is queued in the same
     conversation move it on to the latest (one answer to all of them)."""
     npc = models.ForeignKey(NpcProfile, on_delete=models.CASCADE, related_name="replies")
     # A team's conversation: its team and the team's latest message it answers. Persona mail
@@ -1023,6 +1023,12 @@ class NpcReply(models.Model):
     due_at = models.DateTimeField(default=timezone.now)
     note = models.CharField(max_length=300, blank=True, default="")  # why skipped, held...
     body = models.TextField(blank=True, default="")
+    # The draft is written as soon as it is queued (the persona desk's Scheduled folder shows it,
+    # editable): draft_for = the response (or mail) id it answers; when a later message moves the
+    # job on, it no longer matches and SIMEX AI writes it again. edited_by: who on the desk (or
+    # ExCon) edited it; then it is theirs and never rewritten.
+    draft_for = models.IntegerField(null=True, blank=True)
+    edited_by = models.CharField(max_length=150, blank=True, default="")
     out = models.JSONField(default=dict, blank=True)  # shared, flags, note for ExCon
     model = models.CharField(max_length=120, default="")
     attempts = models.IntegerField(default=0)

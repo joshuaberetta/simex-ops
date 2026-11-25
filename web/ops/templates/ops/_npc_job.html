@@ -15,10 +15,10 @@
       <button class="btn small primary" name="action" value="send">Send as {{ j.npc.sender.display_name|default:j.npc.sender.local_part }}</button>
       <button class="btn small" name="action" value="skip">Don't answer</button>
     </form>
-    {% elif j.body %}<details><summary class="small">The answer{% if j.out.shared %} · shared: {{ j.out.shared|join:"; "|truncatechars:80 }}{% endif %}</summary><pre class="mailtext">{{ j.body }}</pre></details>{% endif %}
+    {% elif j.body %}<details><summary class="small">{% if j.status == 'queued' %}The draft{% if j.edited_by %}, edited by {{ j.edited_by }}{% else %} (SIMEX AI){% endif %}: <a href="/inbox/desk/?folder=scheduled">edit it on the persona desk</a>{% else %}The answer{% endif %}{% if j.out.shared %} · shared: {{ j.out.shared|join:"; "|truncatechars:80 }}{% endif %}</summary><pre class="mailtext">{{ j.body }}</pre></details>{% endif %}
   </td>
   <td class="nowrap">{% if j.status != 'held' %}<form method="post" action="/npcs/answers/{{ j.id }}/" class="inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}">
-    {% if j.status == 'queued' %}<button class="btn small" name="action" value="now">Answer now</button> <button class="link" name="action" value="skip">skip</button>
+    {% if j.status == 'queued' %}<button class="btn small" name="action" value="now">{% if j.body %}Send now{% else %}Answer now{% endif %}</button> <button class="link" name="action" value="skip">skip</button>
     {% elif j.status == 'failed' or j.status == 'skipped' %}<button class="btn small" name="action" value="retry">{% if j.status == 'failed' %}Try again{% else %}Answer anyway{% endif %}</button>
     {% elif j.message_id %}<a href="/log/{{ j.message_id }}/" class="small">{{ j.message.status }}</a>{% endif %}
   </form>{% endif %}</td>

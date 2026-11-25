@@ -630,6 +630,17 @@
         inline.rte.focus(true);
       };
     }
+    // The persona desk: an AI persona's answer not sent yet (_npc_scheduled.html). Answer it
+    // myself: cancel it, and its draft goes into the reply box to be written as a person.
+    const mineBtn = $("[data-npc-mine]");
+    if (mineBtn) mineBtn.onclick = async () => {
+      const form = mineBtn.closest("form"), text = $("[data-npc-body]", form);
+      const r = await post(form.action, { act: "cancel" });
+      if (!r.ok) { snack(((await r.json().catch(() => ({}))).error) || "Not cancelled"); return; }
+      form.closest("[data-npc-job]").remove();
+      if (window.simexReplyWith) window.simexReplyWith(String(tdata.last), text ? text.value : "");
+      snack("The AI persona's answer is cancelled: yours goes instead");
+    };
     // The persona desk: who else on the desk has this conversation open, or is answering it.
     const pres = $("[data-presence]");
     if (pres && tdata.presence) {

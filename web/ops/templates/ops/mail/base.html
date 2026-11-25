@@ -146,6 +146,8 @@
         {% icon "person" %}<span class="gm-flabel">Assigned to me</span><span class="gm-count">{% if m.attention %}{{ m.attention }}{% elif m.n %}<span class="muted">{{ m.n }}</span>{% endif %}</span></a></li>{% endwith %}
       {% with m=desk_side.mine.watching %}<li><a href="{{ base }}/?folder=watching" class="{% if folder == 'watching' and not q %}on{% endif %}{% if m.attention %} bold{% endif %}" title="Conversations you answered in, set a follow-up on or follow, and don't have: {{ m.n }}{% if m.attention %}, {{ m.attention }} needing attention{% endif %}">
         {% icon "eye" %}<span class="gm-flabel">Following</span><span class="gm-count">{% if m.attention %}{{ m.attention }}{% elif m.n %}<span class="muted">{{ m.n }}</span>{% endif %}</span></a></li>{% endwith %}
+      {% with m=desk_side.scheduled %}{% if m.n or folder == 'scheduled' %}<li><a href="{{ base }}/?folder=scheduled" class="{% if folder == 'scheduled' and not q %}on{% endif %}{% if m.held %} bold{% endif %}" title="AI personas' answers not sent yet: read SIMEX AI's draft, edit it, send it now, change when it goes or answer yourself{% if m.held %}; {{ m.held }} waiting for a person{% endif %}">
+        {% icon "clock" %}<span class="gm-flabel">Scheduled</span><span class="gm-count">{% if m.held %}{{ m.held }}{% elif m.n %}<span class="muted">{{ m.n }}</span>{% endif %}</span></a></li>{% endif %}{% endwith %}
     </ul>{% endif %}
     <ul class="gm-folders">
       {% for key, label in folders %}

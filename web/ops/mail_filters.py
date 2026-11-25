@@ -20,7 +20,7 @@ GENERAL_KEYS = [k for k, _ in GENERAL]
 
 # The persona desk's conversation states (desk.states), any of them (OR).
 STATES = [("attention", "Needs attention"), ("waiting", "A team is waiting"), ("urgent", "Urgent (SIMEX AI)"),
-          ("quiet", "Probably no reply needed"), ("follow", "Follow-up set"), ("npc", "AI persona answering"),
+          ("quiet", "Probably no reply needed"), ("follow", "Follow-up set"), ("npc", "AI persona to answer (Scheduled)"),
           ("done", "Marked no reply needed")]
 STATE_KEYS = [k for k, _ in STATES]
 WAITS = [(15, "15 minutes"), (30, "30 minutes"), (60, "1 hour"), (120, "2 hours")]
@@ -252,8 +252,8 @@ def _state(key, st):
         return bool(st["triage"] and st["triage"]["urgency"] == "high")
     if key == "follow":
         return bool(st["follow"])
-    if key == "npc":
-        return bool(st["npc"])
+    if key == "npc":  # an AI persona's answer not sent yet: what Scheduled lists
+        return bool(st["npc"]) and st["npc"]["status"] != "skipped"
     if key == "done":
         return bool(st["done_by"])
     return False

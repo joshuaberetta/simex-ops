@@ -128,7 +128,7 @@ def test_ai_persona_about_to_answer_is_later(excon):
     s = rows(d)[1][got.thread]
     assert s["section"] == desk.LATER and s["npc"]["status"] == "queued"
     page = d.get("/inbox/desk/").content.decode()
-    assert "AI persona answers at" in page and "no reply needed" in page
+    assert "(AI) sends at" in page and "no reply needed" in page
     assert "no need to answer it here" in d.get(f"/inbox/desk/t/{got.thread}/").content.decode()
     NpcReply.objects.update(status="held")
     assert rows(d)[1][got.thread]["section"] == desk.ATTENTION

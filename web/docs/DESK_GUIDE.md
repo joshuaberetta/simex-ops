@@ -24,7 +24,7 @@ SIMEX AI searches the desk's mailbox, the teams' mailboxes, the injects, the rol
 
 ## Telling the personas apart
 - Every conversation shows a **coloured tag for each persona** in it and a grey tag for the **team** on the other side (and **Test** for the Test team). The colours are the same everywhere: the tag, the coloured edge of the row and of each message, the dot in the side bar and the **From** of your message. ExCon can change a persona's colour on the Senders tab.
-- In a conversation, each message from a persona says who sent it: **Inject**, **Follow-up (ExCon)**, **Sent by** a desk member, **Sent by ExCon** or **Written by the AI persona**. A team's message shows which persona it went **to**.
+- In a conversation, each message from a persona says who sent it: **Inject**, **Follow-up (ExCon)**, **Sent by** a desk member, **Sent by ExCon** or **Written by the AI persona** (*, edited by …* if someone on the desk changed it in Scheduled). A team's message shows which persona it went **to**.
 - On the left, **Personas** shows one persona's conversations and **Teams** one team's, each with its unread conversations. **AI** marks personas that answer on their own.
 
 ## The Injects tab
@@ -45,7 +45,9 @@ How the desk is keeping up, refreshed every minute: what needs attention and how
 Several of you share the desk, so *read* doesn't mean *answered*. The **Inbox** comes in sections:
 - **Needs attention**: a team is waiting for a persona's answer (*Waiting 12 min*), a follow-up is due, or an AI persona's answer was held. The longest waiting first; **Urgent** ones above. The red box on the left says how many.
 - **Probably no reply needed (SIMEX AI)**: SIMEX AI reads the team's latest message as a thanks or an acknowledgement. Check it, then **No reply needed**.
-- **Later**: follow-ups not due yet, and conversations an AI persona is about to answer (*AI persona answers at 14:20 · no reply needed*). Leave those to it: your devices aren't pinged for them, and the bell says the AI persona answers. If it isn't answering one (*AI persona not answering this one*), it stays in Needs attention for you.
+- **Later**: follow-ups not due yet, and conversations an AI persona is about to answer (*Kobo (AI) sends at 14:20 · no reply needed*). Leave those to it: your devices aren't pinged for them, and the bell says the AI persona answers. If it isn't answering one (*AI persona not answering this one*), it stays in Needs attention for you.
+
+**Scheduled** (side bar). Every AI persona's answer not sent yet, to a team or to another persona. SIMEX AI drafts it within a minute of the message arriving; open the conversation and, at its foot, read it and: edit it and **Save changes** (it goes at its time with your words, never rewritten), **Send now**, **Change time…** then **Reschedule**, **Cancel the answer**, or **Answer it myself** (the draft goes into your reply). If the team writes again first, the draft is written again; one you edited is held for you instead (*answer waiting to be sent*, in Needs attention too). **More filters → AI persona to answer** finds them in any list.
 - **Answered or nothing to answer**: the rest.
 
 Prefer your Inbox like any email, newest at the top? Click **In sections · show newest first** above the list (and **Newest first · show in sections** to go back); your choice stays as you move around.

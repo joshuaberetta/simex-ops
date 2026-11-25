@@ -578,10 +578,15 @@ def states(threads, user=None, now=None):
         mails.setdefault(t, []).append((mid, folder, team_id, at, rid))
     convs = {c.thread: c for c in DeskConversation.objects.filter(thread__in=threads)}
     rids = [m[4] for ms in mails.values() for m in ms if m[4]]
-    npc = {}
+    from . import npc as npc_
+    npc, pp = {}, {}
     for job in (NpcReply.objects.filter(response_id__in=rids, status__in=["queued", "writing", "held", "failed", "skipped"])
                 .select_related("npc__sender").order_by("id")):
         npc[job.response_id] = job
+    # Persona mail: an AI persona's answer to another persona (no team waits on it, but it is scheduled).
+    for job in (NpcReply.objects.filter(thread_key__in=[f"pp:{t}"[:300] for t in threads], status__in=npc_.OPEN)
+                .select_related("npc__sender").order_by("-due_at")):
+        pp[job.thread_key[3:]] = job  # the soonest due last, so it wins
     out = {}
     for t in threads:
         ms, c = mails.get(t, []), convs.get(t)
@@ -613,11 +618,14 @@ def states(threads, user=None, now=None):
             if waiting and c.ai_status == "done" and c.ai_upto >= last_in:
                 st["triage"] = {"need": c.ai_need, "urgency": c.ai_urgency, "ask": c.ai_ask, "reason": c.ai_reason}
         job = npc.get(last_rid) if waiting else None
+        if job is None or job.status == "skipped":
+            job = pp.get(t) or job
         if job:  # skipped: its timing drew no answer this time, so a person answers it
-            st["npc"] = {"status": job.status, "due_at": job.due_at,
-                         "who": job.npc.sender.display_name or job.npc.sender.local_part}
-        if waiting and job and job.status in ("queued", "writing"):
+            st["npc"] = npc_state(job)
+        if job and job.status in ("queued", "writing") and (waiting or job.mail_id):
             st["section"] = LATER  # the AI persona answers it
+        elif job and job.mail_id and job.status in ("held", "failed"):
+            st["section"] = ATTENTION  # persona mail its AI persona's answer waits on a person for
         elif waiting and st["triage"] and st["triage"]["need"] == "none" and not (st["follow"] and st["follow"]["due"]):
             st["section"] = QUIET
         elif waiting or (st["follow"] and st["follow"]["due"]):
@@ -626,6 +634,31 @@ def states(threads, user=None, now=None):
             st["section"] = LATER
         out[t] = st
     return out
+
+
+def npc_state(job):
+    """An AI persona's answer as desk.states gives it (st["npc"]): the Scheduled folder's row
+    and the thread's panel."""
+    return {"id": job.id, "status": job.status, "due_at": job.due_at, "draft": bool(job.body),
+            "snippet": " ".join((job.body or "").split())[:200], "edited_by": job.edited_by,
+            "persona_mail": bool(job.mail_id), "who": job.npc.sender.display_name or job.npc.sender.local_part}
+
+
+def scheduled_threads():
+    """The desk conversations with an AI persona's answer not sent yet (queued, being written,
+    held or failed): the persona desk's Scheduled folder."""
+    from . import npc as npc_
+    out = []
+    for key, rid in NpcReply.objects.filter(status__in=npc_.OPEN).values_list("thread_key", "response_id"):
+        if key.startswith("pp:"):
+            out.append(key[3:])
+        elif rid:
+            out.append(rid)
+    rids = [x for x in out if isinstance(x, int)]
+    threads = [x for x in out if isinstance(x, str)]
+    threads += list(Mail.objects.filter(team=None, owner=None, desk_response_id__in=rids)
+                    .values_list("thread", flat=True))
+    return list(dict.fromkeys(threads))
 
 
 def sort_key(st, latest_at):

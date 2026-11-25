@@ -160,6 +160,20 @@ def team_conversations(team):
 
 # --- intake --------------------------------------------------------------------------------------
 
+WAITING = ("queued", "writing")  # not sent yet: a later message in the conversation moves it on
+OPEN = ("queued", "writing", "held", "failed")  # a person may still act on it (the desk's Scheduled)
+
+
+def _moved_on(q, who):
+    """A later message in the conversation for the answer q (its response or mail just set): its
+    draft no longer answers the latest, so SIMEX AI writes it again (draft_for no longer matches);
+    one a person edited is theirs: it is held for them to look at again instead."""
+    fields = ["response", "mail", "updated_at"]
+    if q.edited_by and q.status == "queued":
+        q.status, q.note = "held", f"{who} wrote again after {q.edited_by} edited this answer: check it before sending."
+        fields += ["status", "note"]
+    q.save(update_fields=fields)
+
 def on_response(r):
     """A team's message to a persona (inbound.from_mail, inbound._new_email). If the persona is
     an enabled AI persona for that team, queue its answer, or let the one already queued for
@@ -173,10 +187,11 @@ def on_response(r):
         return None
     key = inbound.thread_key(r)[:300]
     with transaction.atomic():
-        q = NpcReply.objects.select_for_update().filter(npc=p, team_id=r.team_id, thread_key=key, status="queued").first()
+        q = NpcReply.objects.select_for_update().filter(npc=p, team_id=r.team_id, thread_key=key,
+                                                        status__in=WAITING).first()
         if q:
             q.response = r
-            q.save(update_fields=["response", "updated_at"])
+            _moved_on(q, r.team.name if r.team_id else "The team")
             return q
         minutes = draw_minutes(p)
         if minutes is None:
@@ -220,10 +235,10 @@ def on_persona_mail(mail, m, sender, to, teams):
         if not p:
             continue
         with transaction.atomic():
-            q = NpcReply.objects.select_for_update().filter(npc=p, thread_key=key, status="queued").first()
+            q = NpcReply.objects.select_for_update().filter(npc=p, thread_key=key, status__in=WAITING).first()
             if q:
                 q.mail = mail
-                q.save(update_fields=["mail", "updated_at"])
+                _moved_on(q, sender.display_name or sender.local_part)
                 out.append(q)
                 continue
             minutes = draw_minutes(p)
@@ -325,9 +340,24 @@ def take_over(profiles, now=None):
 
 # --- the worker ------------------------------------------------------------------------------------
 
+def trigger(job):
+    """The message an answer is for now: the desk's copy of persona mail, else the team's Response."""
+    return job.mail_id if job.mail_id else job.response_id
+
+
+def draft_current(job):
+    """Its draft answers the latest message (or a person wrote it): ready to send when due."""
+    return bool(job.body) and (bool(job.edited_by) or job.draft_for == trigger(job))
+
+
+CURRENT = Q(body__gt="") & (Q(edited_by__gt="") | Q(mail__isnull=True, draft_for=F("response_id"))
+                            | Q(mail__isnull=False, draft_for=F("mail_id")))
+
+
 def tick(limit=LIMIT):
-    """One pass of the AI loop: write and send the answers that are due. Returns the number of
-    model calls made."""
+    """One pass of the AI loop: draft the answers queued (at once, whenever they are due, so the
+    persona desk can read and edit them in Scheduled), then send those due. Returns the number of
+    model calls made and answers sent."""
     if not active() or conf.flag("paused"):
         return 0
     now = timezone.now()
@@ -337,29 +367,44 @@ def tick(limit=LIMIT):
                                        created_at__lt=now - timedelta(minutes=1)).order_by("id"))
     if left:
         delivery.deliver(left)
-    if not ai.enabled():
-        return 0
     n = 0
-    due = (NpcReply.objects.filter(status="queued", due_at__lte=now)
-           .exclude(response__channel="email", response__fetched=False).order_by("due_at"))
-    for job in due[:limit]:
-        if not ai.under_cap():
-            break
-        if not NpcReply.objects.filter(pk=job.pk, status="queued").update(status="writing", attempts=F("attempts") + 1,
-                                                                          updated_at=now):
+    queued = NpcReply.objects.filter(status="queued").exclude(response__channel="email", response__fetched=False)
+    if ai.enabled():
+        drafts = (queued.exclude(CURRENT).exclude(error__isnull=False, updated_at__gt=now - RETRY_AFTER)
+                  .order_by("due_at"))
+        for job in drafts[:limit]:
+            if not ai.under_cap():
+                break
+            if not NpcReply.objects.filter(pk=job.pk, status="queued").update(
+                    status="writing", attempts=F("attempts") + 1, updated_at=now):
+                continue
+            n += 1
+            draft(job.pk)
+    for job in queued.filter(CURRENT, due_at__lte=timezone.now()).order_by("due_at")[:limit * 4]:
+        if not NpcReply.objects.filter(pk=job.pk, status="queued").update(status="writing", updated_at=timezone.now()):
             continue
         n += 1
-        run(job.pk)
+        release(job.pk)
     return n
 
 
-def run(job_id):
+def _gone(job):
+    """The persona was turned off (or the team left its scope) before it answered: skipped."""
+    if job.npc.enabled and (job.mail_id or in_scope(job.team)):
+        return False
+    NpcReply.objects.filter(pk=job.pk).update(status="skipped", note="The persona was turned off before it answered.",
+                                              updated_at=timezone.now())
+    return True
+
+
+def draft(job_id):
+    """Write the answer of a job claimed for writing; it stays queued (or goes on to be sent, if
+    due). The job's response or mail may move on while the model writes: draft_for keeps the one
+    it was written for, so the next pass writes it again."""
     job = NpcReply.objects.select_related("npc__sender", "team", "response", "mail").get(pk=job_id)
-    p = job.npc
-    if not p.enabled or not (in_scope(job.team) if not job.mail_id else True):
-        job.status, job.note = "skipped", "The persona was turned off before it answered."
-        job.save()
+    if _gone(job):
         return job
+    upto = trigger(job)
     try:
         out, used = write_persona(job) if job.mail_id else write(job)
         body = (out.get("body") or "").strip()
@@ -368,28 +413,114 @@ def run(job_id):
     except Exception as e:  # AiError, or anything else in the worker thread: retried, then failed
         if not isinstance(e, ai.AiError):
             log.exception("AI persona answer %s failed", job.id)
-        job.error = str(e)[:500] if isinstance(e, ai.AiError) else f"{type(e).__name__}: {e}"[:500]
-        if job.attempts < MAX_ATTEMPTS:
-            job.status, job.due_at = "queued", timezone.now() + RETRY_AFTER
-        else:
-            job.status = "failed"
-        job.save()
+        error = str(e)[:500] if isinstance(e, ai.AiError) else f"{type(e).__name__}: {e}"[:500]
+        status = "queued" if job.attempts < MAX_ATTEMPTS else "failed"
+        NpcReply.objects.filter(pk=job.pk, status="writing").update(status=status, error=error, updated_at=timezone.now())
+        job.refresh_from_db()
         if job.status == "failed":
             notices.npc(job)
         return job
-    job.body, job.model, job.error = body, used, None
-    job.out = {"shared": out.get("shared") or [], "flags": [f for f in out.get("flags") or [] if f in FLAGS],
-               "note": out.get("note") or ""}
+    out = {"shared": out.get("shared") or [], "flags": [f for f in out.get("flags") or [] if f in FLAGS],
+           "note": out.get("note") or ""}
+    # Only if nobody acted on it meanwhile (a person cancelled it, took it over or sent their own).
+    NpcReply.objects.filter(pk=job.pk, status="writing", edited_by="").update(
+        status="queued", body=body, model=used, error=None, out=out, draft_for=upto, attempts=0, updated_at=timezone.now())
+    job.refresh_from_db()
+    if "escalate" in out["flags"]:  # ExCon hears before it goes, not after
+        notices.npc(job)
+    return job
+
+
+def release(job_id):
+    """A due answer with its draft ready (claimed: status writing): sent as the persona, or held
+    for a person if the persona doesn't send on its own."""
+    job = NpcReply.objects.select_related("npc__sender", "team", "response", "mail").get(pk=job_id)
+    if _gone(job):
+        return job
+    if not draft_current(job):  # moved on meanwhile: written again first
+        NpcReply.objects.filter(pk=job.pk, status="writing").update(status="queued")
+        return job
     try:
-        if p.auto_send:
+        if job.npc.auto_send or job.edited_by or (job.out or {}).get("scheduled_by"):  # or a person approved it
             send(job)
         else:
-            job.status, job.note = "held", "Waiting for ExCon (this persona doesn't send on its own)."
+            job.status, job.note = "held", "Waiting for a person to send it (this persona doesn't send on its own)."
             job.save()
     except Exception as e:
         log.exception("AI persona answer %s not sent", job.id)
         job.status, job.error = "failed", f"{type(e).__name__}: {e}"[:500]
         job.save()
+    notices.npc(job)
+    return job
+
+
+def run(job_id):
+    """Draft a claimed job now and, if it is due, send it (tests; tick does both in turn)."""
+    job = draft(job_id)
+    if job.status == "queued" and draft_current(job) and job.due_at <= timezone.now():
+        if NpcReply.objects.filter(pk=job.pk, status="queued").update(status="writing"):
+            job = release(job.pk)
+    return job
+
+
+# --- a person on the persona desk (or ExCon) with an answer not sent yet ----------------------------
+
+class JobError(Exception):
+    pass
+
+
+def edit(job, body, who):
+    """A person's text for the answer: it is theirs from now on (never written again)."""
+    body = (body or "").strip()
+    if not body:
+        raise JobError("The answer is empty.")
+    if body == (job.body or "").strip() and job.status in ("queued", "held", "failed"):
+        return job  # unchanged: still SIMEX AI's draft (rewritten if the conversation moves on)
+    if not NpcReply.objects.filter(pk=job.pk, status__in=("queued", "held", "failed")).update(
+            body=body, edited_by=who[:150], draft_for=trigger(job), error=None, updated_at=timezone.now()):
+        raise JobError("That answer has moved on (sent, cancelled or being written): nothing changed.")
+    job.refresh_from_db()
+    audit("npc_reply_edit", f"#{job.id} {job.npc.sender.local_part}", who)
+    return job
+
+
+def reschedule(job, due, who):
+    """It goes at due. A person scheduling it approves its text: it then goes even if the persona
+    doesn't send on its own (until SIMEX AI writes it again)."""
+    out = {**(job.out or {}), "scheduled_by": who[:150]}
+    if not NpcReply.objects.filter(pk=job.pk, status__in=("queued", "held")).update(
+            due_at=due, status="queued", note="", out=out, updated_at=timezone.now()):
+        raise JobError("That answer has moved on (sent, cancelled or being written): nothing changed.")
+    job.refresh_from_db()
+    audit("npc_reply_time", f"#{job.id} {job.npc.sender.local_part} at {timezone.localtime(due):%Y-%m-%d %H:%M}", who)
+    return job
+
+
+def cancel(job, who, why="on the persona desk"):
+    """Nobody's AI answer goes: a person answers (or nobody needs to)."""
+    if not NpcReply.objects.filter(pk=job.pk, status__in=OPEN).update(
+            status="skipped", note=f"Cancelled by {who} {why}."[:300], updated_at=timezone.now()):
+        raise JobError("That answer has moved on: nothing changed.")
+    job.refresh_from_db()
+    audit("npc_reply_cancel", f"#{job.id} {job.npc.sender.local_part}", who)
+    return job
+
+
+def send_now(job, body, who, user=None):
+    """Send it now as the persona (with a person's text, if changed): who names them, user
+    (their username) goes in the audit and the Log."""
+    body = (body or "").strip() or job.body
+    if not body:
+        raise JobError("The answer is empty: wait for SIMEX AI's draft, or write it.")
+    if body != job.body:
+        job = edit(job, body, who)
+    if not NpcReply.objects.filter(pk=job.pk, status__in=("queued", "held", "failed")).update(
+            status="writing", updated_at=timezone.now()):
+        raise JobError("That answer has moved on (sent, cancelled or being written): nothing changed.")
+    job.refresh_from_db()
+    send(job, user=user or who)
+    if job.status == "failed":
+        raise JobError(job.error or "Not sent.")
     notices.npc(job)
     return job
 
