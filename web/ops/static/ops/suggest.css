@@ -24,3 +24,4 @@
 .sg-src { color: #777; }
 .sg-fact.upcoming, .sg-fact.not_given { color: #b3261e; }
 .sg > .sg-sec:first-of-type ul { color: inherit; }
+.sg-fact.other_team { color: #7a4f01; }

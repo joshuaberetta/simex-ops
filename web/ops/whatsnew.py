@@ -17,6 +17,13 @@ EVERYONE = {PARTICIPANT, LEADER, DESK, RP, EXCON}
 SHOWN = 8  # notes listed in the drawer (the newest)
 
 ENTRIES = [
+    {"key": "2026-11-suggest-desk-mail", "date": date(2026, 11, 25), "who": {DESK, EXCON},
+     "title": "Suggested replies stay consistent across teams",
+     "body": "**Suggest a reply** now reads the persona's other conversations with the team, what the other "
+             "personas have been saying to it, and what this persona already told the **other teams**, so a "
+             "persona gives every team the same facts and positions and doesn't contradict itself. What another "
+             "team asked or was told is never passed on: a fact taken from another team's mail is flagged under "
+             "**Check before sending**."},
     {"key": "2026-11-desk-injects", "date": date(2026, 11, 25), "who": {DESK, EXCON},
      "title": "See the injects coming up",
      "body": "The persona desk has an **Injects** tab (read-only): every inject by time, the next one "
