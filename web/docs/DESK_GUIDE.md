@@ -5,6 +5,7 @@ You are on the **persona desk**: part of ExCon, playing the exercise's personas 
 ## The tabs at the top
 - **Persona desk**: the shared mailbox. Its **Inbox** has every message a team writes to a persona (in SIMEX Mail or by email); its **Sent**, everything the personas sent the teams (the injects, ExCon's follow-ups and answers, the AI personas' answers and what the desk writes). The red number is unread conversations.
 - **Teams & team leaders** (read-only): each team's inbox, its team leader's mailbox and (when members have their own) each member's, exactly as they see them. Opening mail there does **not** mark it read for them. The side bar switches between teams.
+- **Injects** (read-only): what the teams are about to get and have had (below).
 - **Dashboard** and **Assign**: how the desk is keeping up, and who has which conversations (below).
 - **ChatSIMEX** (on the right): ask SIMEX AI (below).
 
@@ -22,6 +23,9 @@ SIMEX AI searches the desk's mailbox, the teams' mailboxes, the injects, the rol
 - Every conversation shows a **coloured tag for each persona** in it and a grey tag for the **team** on the other side (and **Test** for the Test team). The colours are the same everywhere: the tag, the coloured edge of the row and of each message, the dot in the side bar and the **From** of your message. ExCon can change a persona's colour on the Senders tab.
 - In a conversation, each message from a persona says who sent it: **Inject**, **Follow-up (ExCon)**, **Sent by** a desk member, **Sent by ExCon** or **Written by the AI persona**. A team's message shows which persona it went **to**.
 - On the left, **Personas** shows one persona's conversations and **Teams** one team's, each with its unread conversations. **AI** marks personas that answer on their own.
+
+## The Injects tab
+Every inject by time, day by day, the **next** one highlighted with how long until it goes out: which persona it comes from, who gets it (all teams or some, each team's inbox or each participant, the team leaders too) and how, its files, and whether a reply is expected. **Coming up**, **Sent** and **All**; pick a persona or a team, or search. Open one to read it exactly as each team will (names filled in), download its files and, once it has gone, open each team's conversation on the desk. A delivered inject in a conversation says **Inject** with its number: click it for the inject. Use it to be ready: a persona whose inject is about to go out may soon be asked about it. **Never pass on an inject before it goes out**, nor hint at it.
 
 ## The Dashboard tab
 How the desk is keeping up, refreshed every minute: what needs attention and how many nobody has taken, how long the teams wait, how fast you answer, and an hourly strip of messages in against answers out. **Waiting longest** lists the teams waiting, with who has each. **Requests to the personas** shows what the teams asked each persona, unanswered first; **Decisions and commitments** what they told a persona they will do (a cue for a follow-up), and **Figures and facts** the numbers and places they gave (keep the personas' answers consistent with them). **Teams** shows whether one is being left behind, **Personas** which ones carry the load (time for a second person?), **Who is answering** who is online and what each has taken. **Who has which conversations** lists each of you with what you have: how many, how many need attention, the longest wait, follow-ups, and the conversations themselves (open a name). **Nobody has them** shows the open ones nobody has taken. Requests, commitments and flags are SIMEX AI's reading of the teams' messages: a hint, check the message.
@@ -57,7 +61,7 @@ Tick several rows in the Inbox for **I'll take these**, **Assign to…**, **No r
 
 ## Your conversations and your notifications
 - On the left, **Assigned to me** has the conversations you took or were given, with what needs attention first; its number is how many of them need attention. **Following** has the ones you answered in, set a follow-up on or follow, but don't have.
-- The **bell** at the top (next to ?) is yours alone. At its top, **What's new** in SIMEX Mail (the bell opens by itself once when there is something new). It tells you when:
+- The **bell** at the top (next to ?) is yours alone. At its top, **What's new** in SIMEX Mail (a small star on the bell means there is something new). It tells you when:
   - a conversation is given to you, or someone takes over or reassigns one you had;
   - one of your follow-ups falls due;
   - a team writes again in a conversation you have or follow;
@@ -87,7 +91,7 @@ Open the **Calendar** tab (or the **grid of nine dots** at the top right (the ap
 
 ## What you can't do here
 - Write as the **team leader persona**: each team's leader plays it themselves.
-- Change anything in a team's mailbox, or reach ExCon's screens (injects, grading, settings).
+- Change anything in a team's mailbox or an inject, or reach ExCon's screens (grading, settings).
 - Answer a message from an email address ExCon hasn't matched to a team yet. ExCon answers those from the Replies tab.
 
 ## Alerts

@@ -1987,6 +1987,7 @@ def settings_page(request):
         conf.put("team_to_team", "1" if P.get("team_to_team") == "1" else "0")
         conf.put("personal_mailboxes", "1" if P.get("personal_mailboxes") == "1" else "0")
         conf.put("subject_inject_code", "1" if P.get("subject_inject_code") == "1" else "0")
+        conf.put("desk_injects", "1" if P.get("desk_injects") == "1" else "0")
         audit("settings_save", None, _u(request))
         messages.success(request, "Settings saved.")
         return redirect("/settings/")

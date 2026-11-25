@@ -942,8 +942,8 @@ class Notice(models.Model):
 
 
 class WhatsNewSeen(models.Model):
-    """A What's new note (ops/whatsnew.py ENTRIES key) a login has seen: the drawer no longer
-    opens by itself for it."""
+    """A What's new note (ops/whatsnew.py ENTRIES key) a login has seen (the drawer opened):
+    its star on the bell is gone."""
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
     key = models.CharField(max_length=80)
     at = models.DateTimeField(default=timezone.now)

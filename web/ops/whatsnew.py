@@ -1,8 +1,8 @@
 """What's new: a short note on each new feature for the people it concerns (participants,
 team leaders, the persona desk, role players, ExCon), in the notifications drawer of every
-base template (templates/ops/_whatsnew.html, static/ops/whatsnew.js). The drawer opens by
-itself on a login's first page load after a note ships, then the note is seen
-(WhatsNewSeen) and stays listed without opening the drawer again.
+base template (templates/ops/_whatsnew.html, static/ops/whatsnew.js). The drawer never opens by
+itself: a small star on its button says there is something new, and opening it marks the
+notes seen (WhatsNewSeen); they stay listed.
 
 Adding an entry to ENTRIES is the release note: add one, newest first, for any change people
 will notice. key never changes once shipped (it is what "seen" remembers)."""
@@ -17,6 +17,13 @@ EVERYONE = {PARTICIPANT, LEADER, DESK, RP, EXCON}
 SHOWN = 8  # notes listed in the drawer (the newest)
 
 ENTRIES = [
+    {"key": "2026-11-desk-injects", "date": date(2026, 11, 25), "who": {DESK, EXCON},
+     "title": "See the injects coming up",
+     "body": "The persona desk has an **Injects** tab (read-only): every inject by time, the next one "
+             "highlighted, with the persona it comes from, who gets it and how. Open one to read it as each "
+             "team will (names filled in), with its files, and, once sent, a link to each team's conversation. "
+             "*Coming up*, *Sent* and *All*, by persona, team or words. Don't pass on an inject before it "
+             "goes out. An inject in a conversation now links to it too."},
     {"key": "2026-11-persona-voice-role-play", "date": date(2026, 11, 25), "who": {DESK, EXCON},
      "title": "Personas sound like their role-play character",
      "body": "When a persona is also played face to face, by phone or VTC, **Suggest a reply** and "

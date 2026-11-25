@@ -7,6 +7,7 @@ from . import views_calendar as cal
 from . import views_excon as x
 from . import views_desk_board as dbx
 from . import views_desk_chat as chat
+from . import views_desk_injects as dinj
 from . import views_inbox as p
 from . import views_leader as lead
 from . import views_network as net
@@ -96,6 +97,9 @@ urlpatterns = [
     path("inbox/desk/network/", net.desk_network_page),
     path("inbox/desk/network/data/", net.desk_network_data),
     path("inbox/desk/network/poll/", net.desk_network_poll),
+    path("inbox/desk/injects/", dinj.injects),
+    path("inbox/desk/injects/<int:iid>/", dinj.inject),
+    path("inbox/desk/injects/<int:iid>/files/<int:aid>/", dinj.inject_file),
     path("inbox/desk/assign/", dbx.board),
     path("inbox/desk/assign/board/", dbx.board_json),
     path("inbox/desk/assign/defaults/", dbx.defaults),

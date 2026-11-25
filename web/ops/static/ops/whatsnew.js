@@ -1,6 +1,6 @@
 // What's new (ops/whatsnew.py): the notes in a notifications drawer. With something new the
-// drawer opens by itself on load, once: the notes are then marked seen (POST data-wn-url),
-// so the next page doesn't open it again. A drawer of its own (data-wn-bell: SIMEX Mail
+// drawer stays closed: a small star on its button (data-wn-dot) says so, and opening the
+// drawer marks the notes seen (POST data-wn-url), which takes the star away. A drawer of its own (data-wn-bell: SIMEX Mail
 // mailboxes without the desk's bell, the role players' pages) opens and closes here; the
 // desk's and ExCon's are their own scripts', opened by clicking their button.
 (function () {
@@ -30,8 +30,4 @@
     fetch(sec.dataset.wnUrl, { method: "POST", body, credentials: "same-origin", headers: { "X-CSRFToken": csrf(), "X-Requested-With": "fetch" } }).catch(() => {});
   };
   if (toggle) toggle.addEventListener("click", () => setTimeout(() => { if (isOpen()) seen(); }, 0));
-  if (Number(sec.dataset.wnNew) > 0 && toggle) {
-    // after the page's own scripts have set up their drawers
-    setTimeout(() => { if (!isOpen()) toggle.click(); sec.scrollTop = 0; seen(); }, 400);
-  }
 })();

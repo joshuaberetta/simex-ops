@@ -91,6 +91,7 @@
   <a href="/inbox/desk/network/" class="{% if dt.current == 'network' %}on{% endif %}">{% icon "network" 20 %} Network</a>
   <a href="/inbox/desk/calendar/" class="{% if dt.current == 'calendar' %}on{% endif %}">{% icon "event" 20 %} Calendar</a>
   <a href="/inbox/desk/assign/" class="{% if dt.current == 'assign' %}on{% endif %}">{% icon "person" 20 %} Assign</a>
+  {% if dt.injects %}<a href="/inbox/desk/injects/" class="{% if dt.current == 'injects' %}on{% endif %}">{% icon "send" 20 %} Injects <span class="gm-tab-ro">read-only</span></a>{% endif %}
   {% if dt.chat %}<button type="button" class="gm-chat-tab" data-chat-toggle aria-expanded="false" title="Ask SIMEX AI what has been said already, who a persona is, how to answer a team">{% icon "edit" 20 %} ChatSIMEX</button>{% endif %}
 </nav>
 {% endwith %}{% elif member_tabs %}{% with mt=member_tabs %}

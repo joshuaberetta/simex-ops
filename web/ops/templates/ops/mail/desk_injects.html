@@ -1,0 +1,47 @@
+{% extends "ops/mail/base.html" %}{% load ops %}
+{% block title %}Injects · persona desk{% endblock %}
+{% block search %}<form class="gm-search" method="get" action="/inbox/desk/injects/" role="search">
+  <button class="gm-icon-btn" aria-label="Search">{% icon "search" 24 %}</button>
+  <input type="hidden" name="show" value="{{ show }}">{% if persona %}<input type="hidden" name="persona" value="{{ persona }}">{% endif %}{% if team_id %}<input type="hidden" name="team" value="{{ team_id }}">{% endif %}
+  <input name="q" value="{{ q }}" placeholder="Search the injects" autocomplete="off">
+  {% if q %}<a class="gm-icon-btn" href="?show={{ show }}{% if persona %}&amp;persona={{ persona }}{% endif %}{% if team_id %}&amp;team={{ team_id }}{% endif %}" aria-label="Clear search">{% icon "close" 22 %}</a>{% endif %}
+</form>{% endblock %}
+{% block head %}<meta http-equiv="refresh" content="60">{% endblock %}
+{% block side %}{% endblock %}
+{% block main %}
+<div class="gm-dash gm-dinj">
+  <div class="gm-dd-head">
+    <h2>Injects</h2>
+    <span class="gm-dd-kind">{% for k, label in shows.items %}<a href="?show={{ k }}{% if persona %}&amp;persona={{ persona }}{% endif %}{% if team_id %}&amp;team={{ team_id }}{% endif %}{% if q %}&amp;q={{ q|urlencode }}{% endif %}" class="{% if show == k %}on{% endif %}">{{ label }} <span class="muted">{{ counts|get:k }}</span></a>{% endfor %}</span>
+  </div>
+  <form method="get" class="gm-dinj-filters">
+    <input type="hidden" name="show" value="{{ show }}">{% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+    <select name="persona" onchange="this.form.submit()" aria-label="Persona"><option value="">Every persona</option>
+      {% for p in personas %}<option value="{{ p.local }}" {% if p.local == persona %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select>
+    <select name="team" onchange="this.form.submit()" aria-label="Team"><option value="">Every team</option>
+      {% for t in teams %}<option value="{{ t.id }}" {% if t.id == team_id %}selected{% endif %}>{{ t.name }}</option>{% endfor %}</select>
+    <noscript><button class="gm-pill-btn">Show</button></noscript>
+    <span class="small muted">Read-only: what the teams will get or have had, as ExCon planned it. Times are real (exercise time), with the scenario time (◷) under them. Never pass on an inject before it goes out.</span>
+  </form>
+
+  {% for g in groups %}
+  <h2>{{ g.label }}</h2>
+  <table class="gm-dtable gm-dinj-table">
+    {% for i in g.items %}<tr class="{% if i.is_next %}gm-dinj-next{% endif %}{% if i.status == 'draft' or i.status == 'cancelled' %} gm-dinj-off{% endif %}">
+      <td class="nowrap"><b>{% if i.send_at %}{{ i.send_at|time:"H:i" }}{% else %}—{% endif %}</b>
+        {% if i.when %}<div class="{% if i.is_next %}gm-dinj-soon{% else %}muted{% endif %}">{% if i.is_next %}Next · {% endif %}{{ i.when }}</div>{% endif %}
+        {% if i.scenario_dt %}<div class="muted" title="Scenario time">◷ {{ i.scenario_dt }}</div>{% endif %}</td>
+      <td class="nowrap"><a href="/inbox/desk/injects/{{ i.id }}/"><b>{{ i.mel_id }}</b></a>
+        <div><span class="gm-label gm-dinj-st st-{{ i.status }}">{{ i.status_label }}</span></div></td>
+      <td>{% if i.chip %}<span class="gm-label gm-persona" style="background: {{ i.chip.colour }}; color: {{ i.chip.fg }}">{{ i.from_name|default:i.chip.name }}</span>{% else %}<span class="muted">no sender</span>{% endif %}
+        <a href="/inbox/desk/injects/{{ i.id }}/" class="gm-dinj-subj">{{ i.subject|default:"(no subject)" }}</a>
+        <div class="muted gm-dinj-snip">{{ i.body|default:""|truncatechars:160 }}</div></td>
+      <td><div>{{ i.to_words }}</div>
+        <div class="muted small">{% if i.effective_channel == 'email' %}by email{% else %}SIMEX Mail{% if i.also_email %} and personal email{% endif %}{% endif %}{% if i.files %} · {{ i.files }} file{{ i.files|pluralize }}{% endif %}{% if i.expects_reply %} · reply expected{% if i.reply_due_minutes %} within {{ i.reply_due_minutes }} min{% endif %}{% endif %}</div></td>
+    </tr>{% endfor %}
+  </table>
+  {% empty %}
+  <p class="muted">{% if show == 'upcoming' %}No injects still to go{% elif show == 'sent' %}No injects sent yet{% else %}No injects{% endif %}{% if q or persona or team_id %} with these filters{% endif %}.</p>
+  {% endfor %}
+</div>
+{% endblock %}

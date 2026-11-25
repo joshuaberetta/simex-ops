@@ -1,0 +1,52 @@
+{% extends "ops/mail/base.html" %}{% load ops %}
+{% block title %}{{ inj.mel_id }} · Injects · persona desk{% endblock %}
+{% block search %}<div class="gm-search-space">Persona desk · Injects · read-only</div>{% endblock %}
+{% block side %}{% endblock %}
+{% block main %}
+<div class="gm-dash gm-dinj">
+  <p class="small"><a href="/inbox/desk/injects/" class="gm-link">← All injects</a></p>
+  <div class="gm-dd-head">
+    <h2>{% if inj.chip %}<span class="gm-label gm-persona" style="background: {{ inj.chip.colour }}; color: {{ inj.chip.fg }}">{{ inj.from_name|default:inj.chip.name }}</span> {% endif %}{{ inj.mel_id }} · {{ inj.subject|default:"(no subject)" }}</h2>
+    <span class="gm-label gm-dinj-st st-{{ inj.status }}">{{ inj.status_label }}</span>
+  </div>
+
+  <table class="gm-dtable gm-dinj-facts">
+    <tr><th>Goes out</th><td>{% if inj.send_at %}<b>{{ inj.send_at|date:"D j M Y, H:i" }}</b>{% if inj.when %} · {{ inj.when }}{% endif %}{% else %}<span class="muted">no send time</span>{% endif %}
+      {% if inj.sent_at %}<div class="muted">Sent {{ inj.sent_at|date:"D j M, H:i" }}</div>{% endif %}</td></tr>
+    {% if inj.scenario_dt %}<tr><th>Scenario time</th><td>◷ {{ inj.scenario_dt }}</td></tr>{% endif %}
+    <tr><th>From</th><td>{% if inj.chip %}{{ inj.from_name|default:inj.chip.name }} <span class="muted">({{ inj.sender_local }}{% if inj.chip.addr and channel != 'email' %} · {{ inj.chip.addr }}{% endif %})</span>{% else %}<span class="muted">no sender</span>{% endif %}</td></tr>
+    <tr><th>To</th><td>{{ inj.to_words }}<div class="muted small">{{ delivery_label }} · {% if channel == 'email' %}by email{% else %}in SIMEX Mail{% if inj.also_email %}, and a copy to each participant's personal email{% endif %}{% endif %}</div>
+      {% if inj.recipients_label %}<div class="muted small">In the MEL: {{ inj.recipients_label }}</div>{% endif %}</td></tr>
+    {% if inj.expects_reply %}<tr><th>Reply</th><td>A reply is expected{% if inj.reply_due_minutes %} within {{ inj.reply_due_minutes }} min{% endif %}: it may come to the desk.</td></tr>{% endif %}
+    {% if inj.method %}<tr><th>Method</th><td>{{ inj.method }}</td></tr>{% endif %}
+    {% if atts or inj.supporting_documents %}<tr><th>Files</th><td>
+      {% for a in atts %}<div><a href="/inbox/desk/injects/{{ inj.id }}/files/{{ a.id }}/">{% icon "attach" 16 %} {{ a.filename }}</a> <span class="muted small">{{ a.size|kb }}</span></div>{% endfor %}
+      {% if inj.supporting_documents and not atts %}<div class="muted small">Listed in the MEL: {{ inj.supporting_documents }}</div>{% endif %}</td></tr>{% endif %}
+  </table>
+
+  <h2>What it says{% if versions|length > 1 %} <span class="muted small">({{ versions|length }} versions: the names are filled in for each)</span>{% endif %}</h2>
+  {% for v in versions %}
+  <div class="gm-dinj-msg">
+    <div class="gm-dinj-to small"><b>To</b> {{ v.targets|join:" · " }}</div>
+    <div class="gm-dinj-subjline"><b>{{ v.subject|default:"(no subject)" }}</b> <span class="muted small">from {{ v.from }}</span></div>
+    <div class="gm-dinj-body">{{ v.body|mailbody }}</div>
+    {% if v.footer %}<div class="gm-dinj-footer muted small">--<br>{{ v.footer|linebreaksbr }}</div>{% endif %}
+  </div>
+  {% empty %}
+  <div class="gm-dinj-msg"><div class="gm-dinj-subjline"><b>{{ inj.subject|default:"(no subject)" }}</b></div>
+    <div class="gm-dinj-body">{{ inj.body|mailbody }}</div>
+    <p class="muted small">No team gets it as it stands.</p></div>
+  {% endfor %}
+  {% if inj.status in 'sent partial' %}<p class="muted small">As the inject stands now. What went out is in the desk's Sent: open a delivery below.</p>{% endif %}
+
+  <h2>Where it has gone</h2>
+  <table class="gm-dtable">
+    {% for m in msgs %}<tr class="{% if m.status == 'withdrawn' %}gm-dinj-off{% endif %}">
+      <td class="nowrap">{% if m.sent_at %}{{ m.sent_at|date:"D j M, H:i" }}{% else %}<span class="muted">{{ m.created_at|date:"D j M, H:i" }}</span>{% endif %}</td>
+      <td>{{ m.target|default:m.team.name }}{% if m.team.is_test %} <span class="gm-label">Test</span>{% endif %}</td>
+      <td class="nowrap"><span class="gm-label">{{ m.kind_label }}</span> <span class="muted small">{% if m.status == 'withdrawn' %}withdrawn{% elif m.status == 'sent' %}{% if m.channel == 'email' %}emailed{% else %}delivered{% endif %}{% else %}{{ m.status }}{% endif %}</span></td>
+      <td class="nowrap">{% if m.thread %}<a href="/inbox/desk/t/{{ m.thread }}/">Open the conversation</a>{% endif %}</td>
+    </tr>{% empty %}<tr><td class="muted">Not sent to anyone yet.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

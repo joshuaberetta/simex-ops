@@ -59,7 +59,7 @@ SIMEX Mail is your team's mailbox for the exercise. Everything here is **exercis
 - **Create event** (the calendar icon at the top of a conversation) starts an event from that conversation, with the people in it as guests.
 
 ## What's new
-The **bell** at the top lists what is new in SIMEX Mail. It opens by itself once when there is something new; after that it stays closed until you click it.
+The **bell** at the top lists what is new in SIMEX Mail. A small star on it means there is something new: click the bell to read it.
 
 ## Shortcuts (when you're not typing)
 `c` compose · `/` search · `v` move to · `l` labels · `j` / `k` next / previous · `Enter` open · `r` reply · `a` reply all · `f` forward · `e` archive · `#` delete · `u` back to the list · `Esc` close the compose window (or a popped-out reply).

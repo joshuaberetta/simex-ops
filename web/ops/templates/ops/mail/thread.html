@@ -46,7 +46,7 @@
         <div class="gm-msg-who">
           <span class="gm-msg-name">{{ m.from_name|default:m.from_addr }}</span>
           <span class="gm-msg-addr">&lt;{{ m.from_addr }}&gt;</span>
-          {% if m.desk_chip %}<span class="gm-label gm-persona" style="background: {{ m.desk_chip.colour }}; color: {{ m.desk_chip.fg }}">{% if m.folder == 'inbox' %}to {% endif %}{{ m.desk_chip.name }}</span>{% endif %}{% if m.desk_by %}<span class="gm-desk-by">{{ m.desk_by }}</span>{% endif %}
+          {% if m.desk_chip %}<span class="gm-label gm-persona" style="background: {{ m.desk_chip.colour }}; color: {{ m.desk_chip.fg }}">{% if m.folder == 'inbox' %}to {% endif %}{{ m.desk_chip.name }}</span>{% endif %}{% if m.desk_by %}<span class="gm-desk-by">{% if m.desk_inject %}<a href="/inbox/desk/injects/{{ m.desk_inject }}/" title="The inject: what it says, who gets it, where it went">{{ m.desk_by }} {{ m.message.inject.mel_id }}</a>{% else %}{{ m.desk_by }}{% endif %}</span>{% endif %}
           <div class="gm-msg-to">
             <span class="gm-closed-only gm-msg-snip">{{ m.body|snippet:120 }}</span>
             <span class="gm-open-only">

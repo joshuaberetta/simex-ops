@@ -754,7 +754,8 @@ def desk_tabs(person, current, user=None):
         t.lead = leads.get(t.id)
     return {"current": current, "teams": teams, "unread": _unread(None, None),
             "bell": desk.notice_counts(user) if user else None,
-            "chat": conf.flag("desk_chat")}  # ChatSIMEX, on every desk page
+            "chat": conf.flag("desk_chat"),  # ChatSIMEX, on every desk page
+            "injects": conf.flag("desk_injects")}  # the Injects tab, read-only
 
 
 def apps(v, request):
@@ -793,6 +794,8 @@ def apps(v, request):
                   tile("dashboard", "Dashboard", "/inbox/desk/dashboard/", "dashboard"),
                   tile("network", "Network", "/inbox/desk/network/", "network"),
                   tile("assign", "Assign", "/inbox/desk/assign/", "assign")]
+        if conf.flag("desk_injects"):
+            tiles.append(tile("injects", "Injects", "/inbox/desk/injects/", "injects"))
         if desk_p and roleplay.has_role_plays(desk_p):
             tiles.append(tile("rp", "Role plays", "/inbox/rp/", "roleplay"))
         tiles.append(tile("help", "Help", "/inbox/desk/help/", "help"))
@@ -1066,7 +1069,7 @@ def thread_view(request, v, thread):
     qs = v.mails().filter(thread=thread).exclude(folder="drafts")
     if folder != "trash":
         qs = qs.filter(trashed_at__isnull=True)
-    mails = list(qs.select_related("author", "to_person", "in_reply_to", *(["message"] if v.desk else []))
+    mails = list(qs.select_related("author", "to_person", "in_reply_to", *(["message", "message__inject"] if v.desk else []))
                  .prefetch_related(FILES).order_by("created_at", "id"))
     if not mails:
         raise Http404
@@ -1161,6 +1164,8 @@ def _desk_thread(mails):
         s, _ = rnd.sender_by_local(m.persona) if m.persona else (None, None)
         m.desk_as = f"p:{s.local_part}" if s and f"p:{s.local_part}" in choices else ""
         msg = m.message if m.folder == "sent" and m.message_id else None
+        m.desk_inject = msg.inject_id if msg and msg.kind in ("live", "test", "oneoff", "followup") \
+            and conf.flag("desk_injects") else None
         m.desk_by = "" if not msg else ("Written by the AI persona" if msg.npc else f"Sent by {m.author.name}"
                                         if m.author else "Inject" if msg.kind in ("live", "test", "oneoff")
                                         else "Follow-up (ExCon)" if msg.kind == "followup" else "Sent by ExCon")

@@ -10,7 +10,9 @@
 .wn-title small { color: #5f6368; white-space: nowrap; }
 .wn-body p { margin: 4px 0 0; }
 .wn-body ul { margin: 4px 0 0; padding-left: 18px; }
-.wn-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: #0b57d0; box-shadow: 0 0 0 2px #fff; }
+.wn-dot { position: absolute; top: 2px; right: 2px; width: 12px; height: 12px; line-height: 12px; font-size: 11px; text-align: center;
+  color: #0b57d0; pointer-events: none; }
+.wn-dot::before { content: "\2726"; } /* a small star: something new, unread */
 .wn-dot[hidden] { display: none; }
 /* ExCon's panel and the role players' bell */
 .notices .wn { margin: 0 -2px 8px; border: 1px solid #e3e3e3; border-radius: 8px; max-height: 40vh; }
