@@ -14,7 +14,7 @@ from . import models as m
 FORMAT = "simex-inbox-backup-1"
 # Dependency order for loading; deleted in reverse.
 MODELS = [Group, get_user_model(), m.Setting, m.Team, m.TeamRole, m.Person, m.Sender, m.Inject, m.Attachment, m.TestRun,
-          m.TestRunItem, m.Message, m.MessageAttachment, m.Event, m.Mail, m.MailAttachment, m.MailLabel, m.ThreadLabel, m.Response, m.ResponseAttachment, m.RubricCriterion,
+          m.TestRunItem, m.Message, m.MessageAttachment, m.Event, m.Mail, m.MailAttachment, m.MailNote, m.ThreadReview, m.MailReview, m.MailLabel, m.ThreadLabel, m.Response, m.ResponseAttachment, m.RubricCriterion,
           m.Grade, m.ImportBatch, m.Audit, m.ReplyAnalysis, m.AiGrade, m.AiReport, m.InjectDraft, m.AiCall,
           m.ExerciseReport, m.Report, m.MailAction, m.NpcProfile, m.NpcReply, m.NpcSandbox,
           m.RolePlay, m.RolePlaySlot, m.RolePlayFile, m.RolePlaySeen, m.LoginEvent, m.DocumentAnalysis, m.DeskConversation,

@@ -90,6 +90,7 @@
   {% if lt.peers %}<a href="/inbox/leaders/" class="{% if lt.current == 'peer' %}on{% endif %}">{% icon "eye" 20 %} Team leaders <span class="gm-tab-ro">read-only</span></a>{% endif %}
   {% if lt.npcs %}<a href="/inbox/personas/" class="{% if lt.current == 'npcs' %}on{% endif %}">{% icon "eye" 20 %} AI personas <span class="gm-tab-ro">read-only</span></a>{% endif %}
   <a href="/inbox/dashboard/" class="{% if lt.current == 'dashboard' %}on{% endif %}">{% icon "all" 20 %} Dashboard</a>
+  <a href="/inbox/notes/" class="{% if lt.current == 'notes' %}on{% endif %}" title="Your notes on your team's mail, with SIMEX AI's assessment of each email">{% icon "comment" 20 %} Notes</a>
   <a href="/inbox/calendar/" class="{% if lt.current == 'calendar' %}on{% endif %}">{% icon "event" 20 %} Calendar</a>
   {% if lt.roleplay %}<a href="/inbox/rp/" class="{% if lt.current == 'roleplay' %}on{% endif %}">{% icon "label" 20 %} My role plays</a>{% endif %}
 </nav>
@@ -98,6 +99,7 @@
   <a href="/inbox/desk/" class="{% if dt.current == 'desk' %}on{% endif %}">{% icon "inbox" 20 %} Persona desk<span class="gm-tab-n" data-tab-desk>{% if dt.unread and dt.current != 'desk' %}{{ dt.unread }}{% endif %}</span></a>
   <a href="/inbox/desk/teams/" class="{% if dt.current == 'teams' %}on{% endif %}">{% icon "eye" 20 %} Teams &amp; team leaders <span class="gm-tab-ro">read-only</span></a>
   <a href="/inbox/desk/dashboard/" class="{% if dt.current == 'dashboard' %}on{% endif %}">{% icon "all" 20 %} Dashboard</a>
+  <a href="/inbox/desk/notes/" class="{% if dt.current == 'notes' %}on{% endif %}" title="Every note written on the desk, with SIMEX AI's assessment of each email the teams wrote">{% icon "comment" 20 %} Notes</a>
   <a href="/inbox/desk/network/" class="{% if dt.current == 'network' %}on{% endif %}">{% icon "network" 20 %} Network</a>
   <a href="/inbox/desk/calendar/" class="{% if dt.current == 'calendar' %}on{% endif %}">{% icon "event" 20 %} Calendar</a>
   <a href="/inbox/desk/assign/" class="{% if dt.current == 'assign' %}on{% endif %}">{% icon "person" 20 %} Assign</a>

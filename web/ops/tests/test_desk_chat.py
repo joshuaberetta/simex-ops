@@ -221,7 +221,8 @@ def test_chat_stays_out_of_participant_facing_code():
     import pathlib
     here = pathlib.Path(desk_chat.__file__).parent
     for name in ("views_inbox.py", "views_leader.py", "ai.py", "npc.py", "report.py", "views_ai.py", "views_report.py",
-                 "render.py", "delivery.py", "desk.py", "inbound.py", "desk_ai.py", "suggest_leader.py", "suggest.py"):
+                 "render.py", "delivery.py", "desk.py", "inbound.py", "desk_ai.py", "suggest_leader.py", "suggest.py",
+                 "mail_notes.py", "views_notes.py"):
         src = (here / name).read_text()
         assert not re.search(r"\bdesk_chat\.|import desk_chat|DeskChat|views_desk_chat", src), name
 

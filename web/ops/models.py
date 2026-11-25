@@ -414,6 +414,63 @@ class Mail(models.Model):
         super().save(*args, **kwargs)
 
 
+class MailNote(models.Model):
+    """A person's note on one email of a conversation (ops/mail_notes.py), shown beside it in
+    SIMEX Mail like a comment in a document, never to the mailbox's owner or the teams. scope:
+    "desk" (written on the persona desk, by the desk or ExCon; read there), "leader" (a team
+    leader's, in their own mailbox, the team inbox or a member's; read by that team's leader
+    and ExCon) or "excon" (ExCon's, viewing a team's mailbox; ExCon only). (team, owner) is the
+    mailbox the Mail is in; about_team the team it is about (the desk's: Mail.desk_team)."""
+    scope = models.CharField(max_length=8)
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    owner = models.ForeignKey(Person, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    thread = models.CharField(max_length=40, db_index=True)
+    mail = models.ForeignKey(Mail, on_delete=models.CASCADE, related_name="notes")
+    about_team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    author_name = models.CharField(max_length=150, default="")
+    body = models.TextField()
+    created_at = models.DateTimeField(default=timezone.now)
+    edited_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+
+class ThreadReview(models.Model):
+    """SIMEX AI's reading of one conversation in one mailbox (ops/mail_notes.py): a summary of
+    it to date, read again when a newer Mail lands in it (upto: the last Mail id read), with an
+    assessment of each email the team side wrote (MailReview). box: mail_notes.box_key, the
+    mailbox (team, owner); the persona desk's is "desk". Built from that mailbox's mail only."""
+    box = models.CharField(max_length=24)
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    owner = models.ForeignKey(Person, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    thread = models.CharField(max_length=40)
+    upto = models.IntegerField(default=0)
+    seen = models.IntegerField(default=0)  # how many mails it read (one taken away: read again)
+    status = models.CharField(max_length=10, blank=True, default="")  # "" | queued | done | failed
+    summary = models.TextField(blank=True, default="")
+    open_points = models.JSONField(default=list, blank=True)  # what is still open, a few words each
+    model = models.CharField(max_length=120, blank=True, default="")
+    error = models.TextField(blank=True, default="")
+    attempts = models.IntegerField(default=0)
+    read_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["box", "thread"], name="thread_review_unique")]
+
+
+class MailReview(models.Model):
+    """SIMEX AI's assessment of one email the team side wrote (a ThreadReview's), as a reviewer's
+    comment: good | fair | poor, a sentence or two, and short issues ("No body text")."""
+    mail = models.OneToOneField(Mail, on_delete=models.CASCADE, related_name="review")
+    verdict = models.CharField(max_length=6, default="fair")
+    assessment = models.TextField(blank=True, default="")
+    issues = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+
 class MailLabel(models.Model):
     """A mailbox's own label in SIMEX Mail (Gmail's "folders"): applied to whole conversations, which
     may carry several. "Move to" a label = label it and take it out of the Inbox."""

@@ -41,6 +41,7 @@ DEFAULTS = {
     "tl_suggest": "1",  # team leaders' Suggest a reply in their own mailbox (ops/suggest_leader.py)
     "desk_injects": "1",  # the persona desk's Injects tab, read-only (ops/views_desk_injects.py)
     "desk_chat": "1",  # ChatSIMEX: the persona desk's chat with SIMEX AI (ops/desk_chat.py)
+    "mail_review": "1",  # SIMEX AI's summary of each conversation and assessment of each email the team wrote (ops/mail_notes.py)
     "desk_triage": "1",  # read the persona desk's waiting conversations: needs an answer? (ops/desk_ai.py)
     "ai_daily_usd": "5",  # spend cap per day (Nairobi), estimated
     # AI personas (ops/npc.py): personas whose answers Claude writes. Off, and for the Test team

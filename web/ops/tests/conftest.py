@@ -24,6 +24,9 @@ def _setup(db, settings):
     # Most tests exercise each inject's own channel; the global switch has its own tests.
     from ops import conf
     conf.put("channel_mode", "per_inject")
+    # SIMEX AI's reading of conversations (ops/mail_notes.py) adds model calls to every AI tick:
+    # off here, on in its own tests (test_mail_notes.py).
+    conf.put("mail_review", "0")
 
 
 @pytest.fixture

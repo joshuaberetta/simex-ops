@@ -1,0 +1,15 @@
+{% comment %}The rows of a notes list (mail_notes.entries): rows, who, and whether to show the team.{% endcomment %}
+{% if rows %}<table class="nt-list">
+  <thead><tr><th>When</th><th>By</th>{% if show_team %}<th>Team</th>{% endif %}<th>Email</th><th>Note or assessment</th></tr></thead>
+  <tbody>{% for e in rows %}
+  <tr class="{% if e.kind == 'ai' %}nt-row-ai v-{{ e.verdict }}{% endif %}">
+    <td class="nt-c-when">{{ e.at|date:"D d M H:i" }}</td>
+    <td class="nt-c-by">{% if e.kind == 'ai' %}<span class="nt-ai-badge">SIMEX AI</span>{% else %}{{ e.by }}{% if e.scope and who == 'excon' %}<br><small>{{ e.scope }}</small>{% endif %}{% endif %}</td>
+    {% if show_team %}<td class="nt-c-team">{{ e.team|default:"—" }}</td>{% endif %}
+    <td class="nt-c-mail"><a href="{{ e.url }}"><b>{{ e.subject }}</b></a><br><small>{{ e.from }} · {{ e.mail_at|date:"D H:i" }} · {{ e.box }}</small></td>
+    <td class="nt-c-text">{% if e.kind == 'ai' %}<span class="nt-verdict">{{ e.verdict_name }}</span> {% endif %}{{ e.text|linebreaksbr }}
+      {% if e.issues %}<div class="nt-issues">{% for i in e.issues %}<span>{{ i }}</span>{% endfor %}</div>{% endif %}
+      {% if e.edited %}<small class="nt-muted">edited</small>{% endif %}</td>
+  </tr>{% endfor %}</tbody>
+</table>{% if total > rows|length %}<p class="nt-muted">Showing the latest {{ rows|length }} of {{ total }}: the exports have them all.</p>{% endif %}
+{% else %}<p class="nt-muted">Nothing yet. Open a conversation and use <b>Add a note</b> beside an email{% if ai_on %}; SIMEX AI's assessments appear as the teams write{% endif %}.</p>{% endif %}

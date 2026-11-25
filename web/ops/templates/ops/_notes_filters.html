@@ -1,0 +1,12 @@
+{% comment %}The filters and exports of a notes list.{% endcomment %}
+<form class="nt-filters" method="get">
+  {% if teams %}<select name="team"><option value="">All teams</option>{% for t in teams %}<option value="{{ t.id }}"{% if f.team.id == t.id %} selected{% endif %}>{{ t.name }}</option>{% endfor %}</select>{% endif %}
+  <select name="what"><option value="all">Notes and SIMEX AI</option><option value="notes"{% if f.what == 'notes' %} selected{% endif %}>Notes only</option><option value="ai"{% if f.what == 'ai' %} selected{% endif %}>SIMEX AI only</option></select>
+  <select name="verdict" title="SIMEX AI's verdict (shows assessments only)"><option value="">Any verdict</option><option value="poor"{% if f.verdict == 'poor' %} selected{% endif %}>Poor</option><option value="fair"{% if f.verdict == 'fair' %} selected{% endif %}>Fair</option><option value="good"{% if f.verdict == 'good' %} selected{% endif %}>Good</option></select>
+  {% if scopes %}<select name="scope"><option value="">Every author</option>{% for k, name in scopes.items %}<option value="{{ k }}"{% if f.scope == k %} selected{% endif %}>{{ name }}'s notes</option>{% endfor %}</select>{% endif %}
+  {% if who != 'leader' %}<label><input type="checkbox" name="by" value="me"{% if f.mine %} checked{% endif %}> Mine only</label>{% endif %}
+  <input name="q" value="{{ f.q }}" placeholder="Search notes and subjects">
+  <button class="nt-btn">Filter</button>
+  <span class="nt-exports">Export: <button class="nt-btn" name="format" value="md" title="A Markdown file, by conversation, with each email's text: easy to read or to give to an AI to analyse">Markdown</button>
+    <button class="nt-btn" name="format" value="csv" title="A spreadsheet, one row per note or assessment">CSV</button></span>
+</form>

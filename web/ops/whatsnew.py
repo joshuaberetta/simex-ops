@@ -17,6 +17,14 @@ EVERYONE = {PARTICIPANT, LEADER, DESK, RP, EXCON}
 SHOWN = 8  # notes listed in the drawer (the newest)
 
 ENTRIES = [
+    {"key": "2026-11-mail-notes", "date": date(2026, 11, 25), "who": {LEADER, DESK, EXCON},
+     "title": "Notes beside the mail, and SIMEX AI's reading",
+     "body": "Open a conversation: a **Notes** panel on the right shows SIMEX AI's summary of it so far and, beside "
+             "each email the team wrote, a verdict (Good, Fair, Poor) with a short comment such as *no body text, "
+             "unprofessional subject line*, read again when a new email arrives. Click the comment button on an "
+             "email to add your own note, like a comment in a document; the teams never see them. The **Notes** tab "
+             "lists them all, and **Markdown** or **CSV** downloads them (one conversation with **Export** in its "
+             "panel), to read or to give to an AI to analyse."},
     {"key": "2026-11-desk-received-sent", "date": date(2026, 11, 25), "who": {DESK, EXCON},
      "title": "Received, sent or an inject, at a glance",
      "body": "Click a persona or a team in the side bar: each conversation now says **Received** (a team or "

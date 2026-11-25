@@ -1,5 +1,6 @@
-{% extends "ops/mail/base.html" %}{% load ops %}
+{% extends "ops/mail/base.html" %}{% load ops static %}
 {% block title %}{{ subject|default:"(no subject)" }}{% endblock %}
+{% block head %}{% if notes %}<link rel="stylesheet" href="{% static 'ops/notes.css' %}">{% endif %}{% endblock %}
 {% block main %}
 <div class="gm-toolbar">
   <a class="gm-icon-btn" href="{{ base }}/?folder={{ folder }}{{ fq }}" title="Back to {{ folder }}" aria-label="Back" data-back>{% icon "back" %}</a>
@@ -25,11 +26,13 @@
   {% endif %}
   {% if cal_create %}<a class="gm-icon-btn" href="{{ base }}/calendar/?from={{ thread }}" title="Create event from this conversation" aria-label="Create event" data-cal-from>{% icon "event" %}</a>{% endif %}
   <span class="gm-tb-right">
+    {% if notes %}<button type="button" class="gm-icon-btn nt-toggle" data-nt-toggle title="Notes and SIMEX AI's reading of this conversation" aria-label="Notes" aria-pressed="false">{% icon "comment" %}<span class="nt-badge" data-nt-badge>{% if notes.n_notes or notes.n_ai %}{{ notes.n_notes|add:notes.n_ai }}{% endif %}</span></button>{% endif %}
     {% if total %}<span class="gm-range">{{ pos }} of {{ total }}</span>{% endif %}
     <a class="gm-icon-btn{% if not prev_t %} disabled{% endif %}" href="{% if prev_t %}{{ base }}/t/{{ prev_t }}/?folder={{ folder }}{{ fq }}{% else %}#{% endif %}" aria-label="Newer" data-key-k>{% icon "prev" %}</a>
     <a class="gm-icon-btn{% if not next_t %} disabled{% endif %}" href="{% if next_t %}{{ base }}/t/{{ next_t }}/?folder={{ folder }}{{ fq }}{% else %}#{% endif %}" aria-label="Older" data-key-j>{% icon "next" %}</a>
   </span>
 </div>
+<div class="gm-thread-wrap{% if notes %} has-notes{% endif %}" data-nt-wrap>
 <div class="gm-thread">
   <h2 class="gm-thread-subject">{{ subject|default:"(no subject)" }}
     {% if in_inbox %}<span class="gm-label">Inbox</span>{% endif %}
@@ -42,7 +45,7 @@
   {% if desk_state.last_in %}{% include "ops/suggest/_panel.html" with url="/inbox/desk/suggest/" mode="desk" thread=thread %}{% endif %}{% endif %}
   {% if leader_suggest %}{% include "ops/suggest/_panel.html" with url="/inbox/leader/suggest/" mode="leader" thread=thread %}{% endif %}
   {% for m in mails %}
-  <article class="gm-msg {% if forloop.last %}open{% else %}closed{% endif %}{% if m.desk_chip %} desk-{{ m.folder }}{% endif %}" data-msg="{{ m.id }}"{% if m.desk_chip %} style="--persona: {{ m.desk_chip.colour }}"{% endif %}>
+  <article id="msg-{{ m.id }}" class="gm-msg {% if forloop.last %}open{% else %}closed{% endif %}{% if m.desk_chip %} desk-{{ m.folder }}{% endif %}" data-msg="{{ m.id }}"{% if m.desk_chip %} style="--persona: {{ m.desk_chip.colour }}"{% endif %}>
     <div class="gm-avatar" style="background: {% if m.desk_chip and m.folder == 'sent' %}{{ m.desk_chip.colour }}{% else %}{{ m.from_name|default:m.from_addr|avatar_colour }}{% endif %}">{{ m.from_name|default:m.from_addr|initial }}</div>
     <div class="gm-msg-main">
       <div class="gm-msg-head" data-toggle-msg>
@@ -73,6 +76,7 @@
           {% if m.note.meter %}{% include "ops/mail/_ai_meter.html" with ai=m.note.meter %}{% endif %}
           {% if m.attached %}<span class="gm-att">{% icon "attach" 18 %}</span>{% endif %}
           <span class="gm-msg-date">{% msgdate m %}</span>
+          {% if notes %}<button type="button" class="gm-icon-btn nt-msg-btn{% if m.nt %} has{% endif %}" data-nt-add="{{ m.id }}" title="{% if m.nt %}Notes on this email{% else %}Add a note on this email{% endif %}" aria-label="Notes on this email">{% icon "comment" 18 %}{% if m.nt %}<span>{{ m.nt }}</span>{% endif %}</button>{% endif %}
           <button type="button" class="gm-star sm{% if m.starred %} on{% endif %}" data-star-mail="{{ m.id }}" aria-label="Star" {% if readonly %}disabled{% endif %}>{% if m.starred %}{% icon "star" 20 %}{% else %}{% icon "star_border" 20 %}{% endif %}</button>
           {% if not readonly %}
           {% if can_reply %}<button type="button" class="gm-icon-btn gm-open-only" data-reply="{{ m.id }}" title="Reply" aria-label="Reply">{% icon "reply" %}</button>{% endif %}
@@ -138,5 +142,8 @@
   </div>
   {% endif %}
 </div>
+{% if notes %}<aside class="nt-side" data-nt-side data-url="{{ base }}/t/{{ thread }}/notes/" aria-label="Notes">{% include "ops/mail/_notes.html" with np=notes %}</aside>{% endif %}
+</div>
 {{ thread_js|json_script:"thread-data" }}
 {% endblock %}
+{% block scripts %}{% if notes %}<script src="{% static 'ops/notes.js' %}"></script>{% endif %}{% endblock %}

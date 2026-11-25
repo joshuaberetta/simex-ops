@@ -316,6 +316,7 @@ def test_role_play_material_stays_out_of_participant_facing_code():
     here = pathlib.Path(roleplay.__file__).parent
     for name in ("views_inbox.py", "views_leader.py", "ai.py", "npc.py", "report.py", "views_ai.py",
                  "views_report.py", "importer.py", "render.py", "delivery.py", "desk.py", "inbound.py", "suggest_leader.py",
-                 "calendar.py", "views_calendar.py", "cal_seed.py", "views_cal_seed.py", "debrief.py"):
+                 "calendar.py", "views_calendar.py", "cal_seed.py", "views_cal_seed.py", "debrief.py",
+                 "mail_notes.py", "views_notes.py"):
         src = (here / name).read_text()
         assert not re.search(r"\bRolePlay\b|\.script\b|\.outcomes\b|rp_briefing|rp_faq", src), name

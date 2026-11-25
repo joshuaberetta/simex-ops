@@ -12,6 +12,7 @@ from . import views_desk_npc as dnpc
 from . import views_inbox as p
 from . import views_leader as lead
 from . import views_network as net
+from . import views_notes as nv
 from . import views_npc as npc
 from . import views_report as rp
 from . import views_roleplay as rpx
@@ -26,6 +27,7 @@ from . import views_suggest as sg
 mail_patterns = [
     path("", p.inbox),
     path("t/<str:thread>/", p.thread_view),
+    path("t/<str:thread>/notes/", nv.thread_notes),  # notes beside the conversation (ops/mail_notes.py)
     path("action/", p.action),
     path("star/<int:mid>/", p.star_mail),
     path("draft/", p.draft_save),
@@ -46,10 +48,12 @@ mail_patterns = [
 ]
 # A team leader's read-only view of their team's inbox, of another team leader's mailbox
 # (/inbox/leaders/<team id>/) or of one of their members' own (/inbox/members/<person id>/):
-# no route that changes anything.
+# no route that changes anything but the notes beside a conversation (the leader's own, never
+# the mailbox's: ops/mail_notes.py; none in another leader's).
 team_patterns = [
     path("", p.inbox),
     path("t/<str:thread>/", p.thread_view),
+    path("t/<str:thread>/notes/", nv.thread_notes),
     path("poll/", p.poll),
     path("file/<int:fid>/", p.mail_file),
     path("help/", p.guide),
@@ -76,6 +80,7 @@ urlpatterns = [
     path("inbox/leaders/", lead.peers),
     path("inbox/leaders/<int:as_team>/", include(team_patterns), {"box": "peer"}),
     path("inbox/dashboard/", lead.dashboard),
+    path("inbox/notes/", nv.leader_notes),
     path("inbox/members/", lead.members),
     path("inbox/personas/", lead.npcs),
     path("inbox/leader/suggest/", lead.suggestion),
@@ -96,6 +101,7 @@ urlpatterns = [
     path("inbox/desk/chat/<int:cid>/delete/", chat.delete),
     path("inbox/desk/chat/turn/<int:tid>/", chat.turn),
     path("inbox/desk/dashboard/", p.desk_dashboard),
+    path("inbox/desk/notes/", nv.desk_notes),
     path("inbox/desk/network/", net.desk_network_page),
     path("inbox/desk/network/data/", net.desk_network_data),
     path("inbox/desk/network/poll/", net.desk_network_poll),
@@ -182,6 +188,7 @@ urlpatterns = [
     path("team-roles/<int:rid>/delete/", x.team_role_delete),
     path("inboxes/", x.inboxes),
     path("inboxes/clear/", x.inbox_clear),
+    path("notes/", nv.excon_notes),
     path("meetings/", mt.overview),
     path("meetings/v/", mt.version),
     path("meetings/export/<str:fmt>/", mt.export),

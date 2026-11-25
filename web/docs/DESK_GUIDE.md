@@ -7,6 +7,7 @@ You are on the **persona desk**: part of ExCon, playing the exercise's personas 
 - **Teams & team leaders** (read-only): each team's inbox, its team leader's mailbox and (when members have their own) each member's, exactly as they see them. Opening mail there does **not** mark it read for them. The side bar switches between teams.
 - **Injects** (read-only): what the teams are about to get and have had (below).
 - **Dashboard** and **Assign**: how the desk is keeping up, and who has which conversations (below).
+- **Notes**: every note written on the desk, with SIMEX AI's assessment of each email the teams wrote (below).
 - **ChatSIMEX** (on the right): ask SIMEX AI (below).
 
 ## Filtering the list
@@ -29,6 +30,9 @@ SIMEX AI searches the desk's mailbox, the teams' mailboxes, the injects, the rol
 
 ## The Injects tab
 Every inject by time, day by day, the **next** one highlighted with how long until it goes out: which persona it comes from, who gets it (all teams or some, each team's inbox or each participant, the team leaders too) and how, its files, and whether a reply is expected. **Coming up**, **Sent** and **All**; pick a persona or a team, or search. Open one to read it exactly as each team will (names filled in), download its files and, once it has gone, open each team's conversation on the desk. A delivered inject in a conversation says **Inject** with its number: click it for the inject. Use it to be ready: a persona whose inject is about to go out may soon be asked about it. **Never pass on an inject before it goes out**, nor hint at it.
+
+## Notes beside the mail
+On the right of a conversation, the **Notes** panel (the comment button at the top right shows or hides it): first **SIMEX AI**'s summary of the conversation so far and what is still open, then, level with each email a team wrote, its verdict (Good, Fair, Poor) and a short comment (*no body text, vague subject line*), read again when a new email arrives. Add your own with the comment button on an email (or **Add a note**): everyone on the desk and ExCon read them, the teams never. Edit or delete your own. The **Notes** tab lists them all with links to the emails; **Markdown** or **CSV** exports the list (filters kept), and **Export** in the panel one conversation, to read or to give to an AI to analyse. SIMEX AI's reading is a hint, never a grade.
 
 ## The Dashboard tab
 How the desk is keeping up, refreshed every minute: what needs attention and how many nobody has taken, how long the teams wait, how fast you answer, and an hourly strip of messages in against answers out. **Waiting longest** lists the teams waiting, with who has each. **Requests to the personas** shows what the teams asked each persona, unanswered first; **Decisions and commitments** what they told a persona they will do (a cue for a follow-up), and **Figures and facts** the numbers and places they gave (keep the personas' answers consistent with them). **Teams** shows whether one is being left behind, **Personas** which ones carry the load (time for a second person?), **Who is answering** who is online and what each has taken. **Who has which conversations** lists each of you with what you have: how many, how many need attention, the longest wait, follow-ups, and the conversations themselves (open a name). **Nobody has them** shows the open ones nobody has taken. Requests, commitments and flags are SIMEX AI's reading of the teams' messages: a hint, check the message.

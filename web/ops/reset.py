@@ -59,6 +59,8 @@ def clear_team(team, scope="all", deliveries=False):
             DocumentAnalysis.objects.filter(team=team).delete()  # the readings of the files it sent
             from . import desk
             desk.prune()  # the desk's state of conversations no longer on it
+        from . import mail_notes
+        mail_notes.prune()  # SIMEX AI's readings of conversations no longer there
         if deliveries:
             msgs = Message.objects.filter(Q(team=team) | Q(inbox_team=team)).exclude(kind="login")
             if scope == "members":
@@ -75,8 +77,9 @@ def clear_persona_mail(deliveries=False):
         n = Mail.objects.filter(team=None, message__kind="persona").delete()[0]
         if deliveries:
             Message.objects.filter(kind="persona").delete()
-        from . import desk
+        from . import desk, mail_notes
         desk.prune()
+        mail_notes.prune()
     return n
 
 
@@ -104,6 +107,8 @@ def start_afresh(reschedule=True):
         from . import cal_seed
         cal_seed.clear()  # and the runs of Meetings in the mail
         DeskConversation.objects.all().delete()  # the persona desk's to-answer state
+        from .models import ThreadReview
+        ThreadReview.objects.all().delete()  # SIMEX AI's readings of conversations (notes went with their Mail)
         DeskChat.objects.all().delete()  # ChatSIMEX: the desk's chats with SIMEX AI
         DeskWatch.objects.all().delete()  # who on the desk follows what
         DeskNotice.objects.all().delete()  # and their notices

@@ -1,0 +1,9 @@
+{% extends "ops/base.html" %}{% load static %}
+{% block title %}Notes on the mail · SIMEX ops{% endblock %}
+{% block body %}
+<link rel="stylesheet" href="{% static 'ops/notes.css' %}">
+<h1>Notes on the mail</h1>
+<p class="muted">The notes the persona desk, the team leaders and you wrote beside emails in SIMEX Mail{% if ai_on %}, with SIMEX AI's assessment of each email the teams wrote{% endif %}. Never shown to the teams. Write yours viewing a team's mailbox (<a href="/inboxes/">Team inboxes</a>) or on the <a href="/inbox/desk/">persona desk</a>.</p>
+{% include "ops/_notes_filters.html" with who="excon" %}
+{% include "ops/_notes_rows.html" with who="excon" show_team=True %}
+{% endblock %}

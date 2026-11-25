@@ -828,6 +828,7 @@ def desk_tabs(person, current, user=None):
             "bell": desk.notice_counts(user) if user else None,
             "prefs": desk.prefs_of(user) if user else None,  # the gear: their own settings on the desk
             "chat": conf.flag("desk_chat"),  # ChatSIMEX, on every desk page
+            "notes": True,  # the Notes tab (ops/views_notes.py)
             "injects": conf.flag("desk_injects")}  # the Injects tab, read-only
 
 
@@ -1202,6 +1203,13 @@ def thread_view(request, v, thread):
         mails = one_copy(mails)  # persona mail: its Inbox copy only, not its Sent copy beside it
         last = mails[-1]
     subject = mails[0].subject
+    # Notes beside the conversation, with SIMEX AI's reading (ops/mail_notes.py): the desk,
+    # team leaders and ExCon only; an out-of-date reading is queued as it is opened.
+    from . import mail_notes
+    nacc, notes = mail_notes.access(v), None
+    if nacc:
+        mail_notes.ensure(v.team.id if v.team else None, v.owner.id if v.owner else None, thread, mails)
+        notes = mail_notes.panel(v, nacc, thread, mails)
     desk_state = desk.states([thread], v.user).get(thread) if v.desk else None
     from . import calendar
     cards = calendar.cards(v, mails)  # SIMEX Calendar: the invitation cards
@@ -1224,7 +1232,7 @@ def thread_view(request, v, thread):
                  **desk_js}
     return render(request, "ops/mail/thread.html", _ctx(
         v, folder=folder, fq=flt.qs, mails=mails, subject=subject, thread=thread, prev_t=prev_t, next_t=next_t,
-        pos=i + 1, total=len(keys), last=last, thread_js=thread_js, can_reply=can_reply,
+        pos=i + 1, total=len(keys), last=last, thread_js=thread_js, can_reply=can_reply, notes=notes,
         cal_events=calendar.thread_events(v, mails), cal_create=not v.readonly and not v.peer,
         desk_chips=desk_chips(mails, {}, dict(Team.objects.values_list("id", "name"))) if v.desk else None,
         desk_state=desk_state, desk_npc=_desk_npc(desk_state, v),

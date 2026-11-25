@@ -1,0 +1,45 @@
+{% load ops %}{% comment %}The notes beside a conversation (ops/mail_notes.py panel, np): SIMEX AI's summary, then for
+each email its assessment first and people's notes under it. notes.js places each group beside its email.{% endcomment %}
+<div class="nt-inner" data-nt-inner{% if np.pending %} data-pending{% endif %} data-n="{{ np.n_notes|add:np.n_ai }}">
+  <div class="nt-top" data-nt-top>
+    <div class="nt-title">{% icon "comment" 18 %}<b>Notes</b>
+      <a class="nt-all" href="{{ base }}/t/{{ thread }}/notes/?format=md" title="This conversation with its notes and SIMEX AI's reading, as a Markdown file (to read, or to give to an AI to analyse)" download>Export</a>
+      <a class="nt-all" href="{{ np.list_url }}" title="Every note and SIMEX AI assessment, in a list">All notes</a>
+      <button type="button" class="nt-x" data-nt-toggle title="Hide the notes" aria-label="Hide the notes">{% icon "close" 18 %}</button></div>
+    {% if np.on or np.review %}<section class="nt-card nt-summary">
+      <div class="nt-ai-head"><span class="nt-ai-badge">SIMEX AI</span><span>The conversation so far</span>{% if np.pending %}<span class="nt-spin" title="SIMEX AI is reading it"></span>{% endif %}</div>
+      {% if np.review.summary %}<p>{{ np.review.summary }}</p>
+        {% if np.review.open_points %}<div class="nt-open"><b>Still open</b><ul>{% for o in np.review.open_points %}<li>{{ o }}</li>{% endfor %}</ul></div>{% endif %}
+        <div class="nt-meta">Read at {{ np.review.read_at|date:"H:i" }}{% if np.pending %} · reading the new email…{% elif np.stale %} · a newer email since{% endif %}</div>
+      {% elif np.review.status == 'failed' %}<p class="nt-err">SIMEX AI couldn't read it: {{ np.review.error }}</p>
+      {% elif np.pending %}<p class="nt-muted">SIMEX AI is reading the conversation…</p>
+      {% elif not np.on %}<p class="nt-muted">SIMEX AI's reading of conversations is off.</p>
+      {% else %}<p class="nt-muted">SIMEX AI reads a conversation once the team has written in it.</p>{% endif %}
+      {% if np.on and not np.pending %}<button type="button" class="nt-link" data-nt-review title="Ask SIMEX AI to read the conversation again">Read again</button>{% endif %}
+      <div class="nt-hint">A hint for reviewers, never shown to the teams.</div>
+    </section>{% endif %}
+  </div>
+  {% for g in np.groups %}
+  <section class="nt-group{% if not g.ai and not g.notes %} nt-empty{% endif %}" data-nt-for="{{ g.m.id }}">
+    <button type="button" class="nt-anchor" data-nt-goto="{{ g.m.id }}" title="Show this email"><b>{{ g.m.from_name|default:g.m.from_addr }}</b><span>{% listdate g.m %}</span></button>
+    {% if g.ai %}<div class="nt-card nt-ai v-{{ g.ai.verdict }}">
+      <div class="nt-ai-head"><span class="nt-ai-badge">SIMEX AI</span><span class="nt-verdict">{% if g.ai.verdict == 'good' %}Good{% elif g.ai.verdict == 'poor' %}Poor{% else %}Fair{% endif %}</span></div>
+      <p>{{ g.ai.assessment }}</p>
+      {% if g.ai.issues %}<div class="nt-issues">{% for i in g.ai.issues %}<span>{{ i }}</span>{% endfor %}</div>{% endif %}
+    </div>{% elif g.team_side and np.pending %}<div class="nt-card nt-ai nt-muted">SIMEX AI is assessing this email…</div>{% endif %}
+    {% for n in g.notes %}<div class="nt-card nt-note" data-nt-note="{{ n.id }}">
+      <div class="nt-note-head"><span class="nt-av" style="background: {{ n.author_name|avatar_colour }}">{{ n.author_name|initial }}</span>
+        <span class="nt-who"><b>{{ n.author_name }}</b>{% if n.scope != np.write %} <span class="nt-scope">{{ n.scope_name }}</span>{% endif %}
+        <small title="{{ n.created_at|date:'D d M Y H:i' }}">{{ n.created_at|date:"D H:i" }}{% if n.edited_at %} · edited{% endif %}</small></span>
+        {% if n.editable or n.deletable %}<span class="nt-acts">{% if n.editable %}<button type="button" data-nt-edit title="Change this note">Edit</button>{% endif %}{% if n.deletable %}<button type="button" data-nt-del title="Delete this note">Delete</button>{% endif %}</span>{% endif %}</div>
+      <div class="nt-body" data-nt-body>{{ n.body|linebreaksbr }}</div>
+      <textarea hidden data-nt-raw>{{ n.body }}</textarea>
+    </div>{% endfor %}
+    <form class="nt-add" data-nt-form hidden>
+      <textarea name="body" rows="3" maxlength="4000" placeholder="A note on this email (only {% if np.write == 'desk' %}the persona desk and ExCon{% elif np.write == 'leader' %}you and ExCon{% else %}ExCon{% endif %} can read it)"></textarea>
+      <div class="nt-add-acts"><button type="button" class="nt-btn" data-nt-cancel>Cancel</button><button class="nt-btn primary">Add note</button></div>
+    </form>
+    <button type="button" class="nt-add-btn" data-nt-open>{% icon "add" 16 %} Add a note</button>
+  </section>
+  {% endfor %}
+</div>

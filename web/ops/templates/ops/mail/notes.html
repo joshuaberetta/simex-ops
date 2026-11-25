@@ -1,0 +1,13 @@
+{% extends "ops/mail/base.html" %}{% load ops static %}
+{% block title %}Notes{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'ops/notes.css' %}">{% endblock %}
+{% block search %}<div class="gm-search-space">{% if who == 'desk' %}Persona desk{% else %}{{ team.name }}{% endif %} · Notes</div>{% endblock %}
+{% block side %}{% endblock %}
+{% block main %}
+<div class="gm-dash nt-page">
+  <h2>Notes on the mail</h2>
+  <p class="nt-muted">{% if who == 'desk' %}Every note written on the persona desk{% else %}Your notes on {{ team.name }}'s mail (your mailbox, the team inbox and the members'){% endif %}{% if ai_on %}, with SIMEX AI's assessment of each email the team{% if who == 'desk' %}s{% endif %} wrote{% endif %}. Only {% if who == 'desk' %}the persona desk and ExCon{% else %}you and ExCon{% endif %} can read them; never the teams. Open a conversation to add one beside an email.</p>
+  {% include "ops/_notes_filters.html" %}
+  {% include "ops/_notes_rows.html" with show_team=teams %}
+</div>
+{% endblock %}
