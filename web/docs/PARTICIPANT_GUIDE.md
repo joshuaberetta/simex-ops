@@ -23,6 +23,7 @@ SIMEX Mail is your team's mailbox for the exercise. Everything here is **exercis
 - Click a conversation to open it. Earlier messages are folded: click one to unfold it. Click **to me ▾** to see all the details (from, to, date).
 - **Attachments** are at the bottom of a message: click one to download it.
 - **Search** (top bar) looks through subjects, text and senders.
+- **Filters** (the buttons above the list): **Unread**, **Starred**, **Has files** and **Not replied** (something came in and nothing was sent since) show only those conversations; each says how many there are. Click one again to show everything; you can combine them, and they stay on while you search and move between conversations with `j` / `k`.
 - **Dates and times are the scenario's.** When ExCon runs the simulation clock, the calendar and clock at the top show the date and time in the exercise scenario, and every message is dated in that timeline, not by the real clock.
 - Folders on the left: **Inbox**, **Starred**, **Sent**, **Drafts**, **All mail** (everything, including archived), **Trash**.
 - Tidy up with the icons that appear when you point at a conversation, or tick several and use the toolbar (on a phone, tap the round picture next to a conversation to select it; while some are selected, tapping a conversation selects it too): **archive** (out of the Inbox, still in All mail), **delete** (to Trash, restorable), **mark as read / unread**, **star**.
@@ -65,7 +66,7 @@ The **bell** at the top lists what is new in SIMEX Mail. A small star on it mean
 `c` compose · `/` search · `v` move to · `l` labels · `j` / `k` next / previous · `Enter` open · `r` reply · `a` reply all · `f` forward · `e` archive · `#` delete · `u` back to the list · `Esc` close the compose window (or a popped-out reply).
 
 ## What ExCon sees
-Your team leader and ExCon can read your team inbox and your My mail (read-only: they never mark anything read for you). SIMEX Mail records what your team does in it, for the debrief: who reads and writes what and when, which files you open, and how you organise the mailbox (stars, labels, archive, searches, drafts). Your team's debrief report describes how the team handled its mail, without naming anyone.
+Your team leader and ExCon can read your team inbox and your My mail (read-only: they never mark anything read for you). SIMEX Mail records what your team does in it, for the debrief: who reads and writes what and when, which files you open, and how you organise the mailbox (stars, labels, archive, searches, filters, drafts). Your team's debrief report describes how the team handled its mail, without naming anyone.
 
 ## Problems
 Can't sign in, or something looks wrong? Ask ExCon. They can reset your password. Don't share your login with other teams.

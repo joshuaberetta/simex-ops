@@ -1,6 +1,7 @@
 {% extends "ops/mail/base.html" %}{% load ops %}
 {% block title %}{% if q %}Search results{% else %}{% if folder == 'inbox' and inbox_unread %}({{ inbox_unread }}) {% endif %}{{ folder_name }}{% endif %}{% endblock %}
 {% block main %}
+{% if filters.desk %}<form id="gm-filter" method="get" action="{{ base }}/" hidden></form>{% endif %}
 <form method="post" action="{{ base }}/action/" class="gm-listform" data-bulk>{% csrf_token %}
   <input type="hidden" name="next" value="{{ request.get_full_path }}">
   <div class="gm-toolbar">
@@ -14,7 +15,7 @@
           <a href="{{ base }}/?folder=all">Open All mail</a>
         </div>
       </span>
-      {% if desk_order %}<a class="gm-pill-btn gm-desk-order" href="?folder={{ folder }}&order={% if desk_order == 'newest' %}sections{% else %}newest{% endif %}"
+      {% if desk_order %}<a class="gm-pill-btn gm-desk-order" href="?folder={{ folder }}{{ fq }}&order={% if desk_order == 'newest' %}sections{% else %}newest{% endif %}"
          title="{% if desk_order == 'newest' %}Show what needs attention first, in sections{% else %}Show every conversation newest first, like any email{% endif %}">{% if desk_order == 'newest' %}Newest first · show in sections{% else %}In sections · show newest first{% endif %}</a>{% endif %}
     </span>
     <span class="gm-tb-selected" hidden>
@@ -41,10 +42,11 @@
     </span>
     <span class="gm-tb-right">
       {% if total %}<span class="gm-range">{{ first }}–{{ last }} of {{ total }}</span>{% endif %}
-      <a class="gm-icon-btn{% if not has_prev %} disabled{% endif %}" href="{% if has_prev %}?folder={{ folder }}&q={{ q|urlencode }}&page={{ page|add:'-1' }}{% else %}#{% endif %}" aria-label="Newer">{% icon "prev" %}</a>
-      <a class="gm-icon-btn{% if not has_next %} disabled{% endif %}" href="{% if has_next %}?folder={{ folder }}&q={{ q|urlencode }}&page={{ page|add:'1' }}{% else %}#{% endif %}" aria-label="Older">{% icon "next" %}</a>
+      <a class="gm-icon-btn{% if not has_prev %} disabled{% endif %}" href="{% if has_prev %}?folder={{ folder }}&q={{ q|urlencode }}{{ fq }}&page={{ page|add:'-1' }}{% else %}#{% endif %}" aria-label="Newer">{% icon "prev" %}</a>
+      <a class="gm-icon-btn{% if not has_next %} disabled{% endif %}" href="{% if has_next %}?folder={{ folder }}&q={{ q|urlencode }}{{ fq }}&page={{ page|add:'1' }}{% else %}#{% endif %}" aria-label="Older">{% icon "next" %}</a>
     </span>
   </div>
+  {% include "ops/mail/_filters.html" %}
   {% if q %}<div class="gm-searchnote">Results for <b>{{ q }}</b> in {% if folder == 'inbox' %}all mail{% else %}{{ folder }}{% endif %}</div>{% endif %}
   {% if folder == 'trash' and rows %}<div class="gm-searchnote">Messages in Trash stay here; nothing is deleted for good during the exercise.</div>{% endif %}
   <div class="gm-list" role="list">
@@ -57,7 +59,7 @@
       {% elif st.section == 'later' %}<small>follow-ups not due yet, and conversations an AI persona is about to answer</small>{% endif %}
     </div>{% endwith %}{% endifchanged %}{% endif %}
     <div class="gm-row{% if r.unread %} unread{% endif %}{% if st %} desk-{{ st.section }}{% endif %}{% if st or r.desk %} two-line{% endif %}" role="listitem" tabindex="-1"{% if r.desk.colour %} style="--persona: {{ r.desk.colour }}"{% endif %}
-         {% if r.draft %}data-draft="{{ m.id }}"{% else %}data-href="{{ base }}/t/{{ r.thread }}/?folder={{ folder }}"{% if not readonly and folder != 'trash' %} draggable="true"{% endif %}{% endif %} data-thread="{{ r.thread }}" data-labels="{% for l in r.all_labels %}{{ l }}{% if not forloop.last %},{% endif %}{% endfor %}">
+         {% if r.draft %}data-draft="{{ m.id }}"{% else %}data-href="{{ base }}/t/{{ r.thread }}/?folder={{ folder }}{{ fq }}"{% if not readonly and folder != 'trash' %} draggable="true"{% endif %}{% endif %} data-thread="{{ r.thread }}" data-labels="{% for l in r.all_labels %}{{ l }}{% if not forloop.last %},{% endif %}{% endfor %}">
       <label class="gm-check" onclick="event.stopPropagation()"><input type="checkbox" name="threads" value="{{ r.thread }}"><span></span></label>
       <span class="gm-avatar gm-ravatar" style="background: {{ r.people|avatar_colour }}"{% if not readonly %} role="checkbox" aria-checked="false" aria-label="Select" tabindex="0" data-select-row{% endif %}>{% if r.draft %}D{% else %}{{ r.people|cut:"To: "|initial }}{% endif %}</span>
       <button type="button" class="gm-star{% if r.starred %} on{% endif %}" data-star-thread="{{ r.thread }}" aria-label="Star" {% if readonly %}disabled{% endif %}>{% if r.starred %}{% icon "star" 20 %}{% else %}{% icon "star_border" 20 %}{% endif %}</button>
@@ -80,7 +82,7 @@
       <span class="gm-date">{% listdate m %}</span>
       {% if not readonly or not r.draft %}
       <span class="gm-hover" onclick="event.stopPropagation()">
-        {% if not r.draft %}<a class="gm-icon-btn gm-newtab" href="{{ base }}/t/{{ r.thread }}/?folder={{ folder }}" target="_blank" rel="noopener" title="Open in a new tab" aria-label="Open in a new tab">{% icon "pop_out" %}</a>{% endif %}
+        {% if not r.draft %}<a class="gm-icon-btn gm-newtab" href="{{ base }}/t/{{ r.thread }}/?folder={{ folder }}{{ fq }}" target="_blank" rel="noopener" title="Open in a new tab" aria-label="Open in a new tab">{% icon "pop_out" %}</a>{% endif %}
         {% if readonly %}{% elif folder == 'trash' %}<button type="button" class="gm-icon-btn" data-row-action="restore" title="Move to Inbox">{% icon "restore" %}</button>
         {% elif r.draft %}<button type="button" class="gm-icon-btn" data-row-action="discard" title="Discard">{% icon "trash" %}</button>
         {% else %}
@@ -94,7 +96,7 @@
       {% endif %}
     </div>
     {% endwith %}{% empty %}
-    <div class="gm-empty">{% if q %}No messages matched your search.{% elif folder == 'inbox' %}Your inbox is empty.{% elif folder == 'starred' %}No starred messages. Stars let you give messages a special status to make them easier to find.{% elif folder == 'drafts' %}You don't have any saved drafts.{% elif folder == 'trash' %}No conversations in Trash.{% elif folder|slice:":1" == 'l' %}There are no conversations with this label. Select conversations and use <b>Move to</b> or <b>Labels</b>, or drag them onto the label.{% else %}No conversations.{% endif %}</div>
+    <div class="gm-empty">{% if filters.active %}No conversations match these filters. <a href="{{ filters.clear }}">Clear filters</a>{% elif q %}No messages matched your search.{% elif folder == 'inbox' %}Your inbox is empty.{% elif folder == 'starred' %}No starred messages. Stars let you give messages a special status to make them easier to find.{% elif folder == 'drafts' %}You don't have any saved drafts.{% elif folder == 'trash' %}No conversations in Trash.{% elif folder|slice:":1" == 'l' %}There are no conversations with this label. Select conversations and use <b>Move to</b> or <b>Labels</b>, or drag them onto the label.{% else %}No conversations.{% endif %}</div>
     {% endfor %}
   </div>
 </form>

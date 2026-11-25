@@ -1015,3 +1015,40 @@ body.side-collapsed .cal-side .cal-mini, body.side-collapsed .cal-side .cal-desk
 .gm-dinj-body { font-size: 14px; line-height: 1.5; }
 .gm-dinj-footer { margin-top: 10px; }
 .gm-dd-kind a.on .muted { color: #fff; opacity: .8; }
+
+/* Filter views of a list (ops/mail_filters.py, _filters.html): quick filters everywhere, more on the persona desk. */
+.gm-filterbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 16px 8px; position: relative; }
+.gm-fchip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #c4c7c5; border-radius: 8px; padding: 3px 10px;
+  font-size: 13px; line-height: 20px; color: #444746; background: #fff; text-decoration: none; cursor: pointer; white-space: nowrap; user-select: none; }
+.gm-fchip:hover { background: #f2f2f2; }
+.gm-fchip.on { background: var(--sel, #d3e3fd); border-color: transparent; color: #041e49; }
+.gm-fchip-tick { font-size: 12px; }
+.gm-fchip-n { color: var(--muted); font-size: 12px; }
+.gm-fchip.on .gm-fchip-n { color: inherit; }
+.gm-fchip .ic { fill: currentColor; }
+.gm-fsep { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
+.gm-fclear { font-size: 13px; color: var(--blue, #0b57d0); margin-left: 4px; text-decoration: none; }
+.gm-fclear:hover { text-decoration: underline; }
+.gm-ftag { padding-right: 4px; }
+.gm-ftag-x { color: inherit; text-decoration: none; font-size: 16px; line-height: 1; padding: 0 4px; border-radius: 50%; }
+.gm-ftag-x:hover { background: rgba(0, 0, 0, .08); }
+.gm-fmore { display: inline-block; }
+.gm-fmore > summary { list-style: none; }
+.gm-fmore > summary::-webkit-details-marker { display: none; }
+.gm-fpanel { position: absolute; z-index: 30; left: 16px; right: 16px; max-width: 860px; margin-top: 6px; background: #fff; border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .2); padding: 12px 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 16px; }
+.gm-fpanel fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.gm-fpanel legend { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 0 0 4px; }
+.gm-fopt { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 2px 0; cursor: pointer; }
+.gm-fscroll { max-height: 220px; overflow-y: auto; }
+.gm-fdot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.gm-fsel { display: block; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.gm-fsel select { display: block; width: 100%; margin-top: 2px; font-size: 13px; padding: 4px; }
+.gm-fnone { font-size: 13px; color: var(--muted); }
+.gm-fbtns { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
+.gm-fbtns .gm-pill-btn { padding: 4px 16px; font-size: 13px; text-decoration: none; color: inherit; }
+.gm-fbtns .gm-pill-btn.primary { color: #fff; }
+@media (max-width: 700px) {
+  .gm-filterbar { flex-wrap: nowrap; overflow-x: auto; padding: 4px 8px 8px; }
+  .gm-fpanel { position: fixed; left: 8px; right: 8px; top: 120px; max-height: 70vh; overflow-y: auto; }
+}

@@ -9,6 +9,9 @@ You are on the **persona desk**: part of ExCon, playing the exercise's personas 
 - **Dashboard** and **Assign**: how the desk is keeping up, and who has which conversations (below).
 - **ChatSIMEX** (on the right): ask SIMEX AI (below).
 
+## Filtering the list
+Above every list: **Unread**, **Starred**, **Has files** and **Not replied**, then the desk's own: **Needs attention**, **Urgent** (SIMEX AI's reading), **Mine**, **Nobody has it** and **Waiting 30 min+**. Click one to show only those; click again to undo; they combine. **More filters** opens the rest: where a conversation stands (a team is waiting, probably no reply needed, a follow-up set, an AI persona answering, marked no reply needed), one or more **personas** and **teams**, **who has it** (anyone on the desk or ExCon), a team waiting longer than 15 minutes to 2 hours, the latest message in the last 15 minutes to 12 hours, and live or test traffic. **Apply**; each filter in use shows as a tag with **×** to take it off, and **Clear filters** takes them all off. Filters stay on while you search, page and move from conversation to conversation (`j` / `k`), and work in every folder (Inbox, Assigned to me, a persona or a team in the side bar...). Bookmark a filtered list to come back to it.
+
 ## ChatSIMEX: ask before you answer
 Click **ChatSIMEX** at the right of the tabs to open a chat beside the mail, on any desk page. Ask in your own words, for example:
 - *Who is Salma?* A team is writing to a persona, or about someone, you haven't played. You get a briefing: who they are, how to play them, what they know, what they have told each team so far, what is still to come (don't give it away), and which conversations with them are open now.

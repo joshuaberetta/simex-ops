@@ -1,0 +1,49 @@
+{% load ops %}{% comment %}A list's filter views (ops/mail_filters.py): quick filters in every mailbox; on the persona desk, presets
+and a panel of more (its inputs belong to the GET form #gm-filter outside the list's bulk-action form).{% endcomment %}
+{% if filters %}{% with d=filters.desk %}
+<div class="gm-filterbar" data-filterbar>
+  {% for c in filters.chips %}<a class="gm-fchip{% if c.on %} on{% endif %}" href="{{ c.href }}" aria-pressed="{% if c.on %}true{% else %}false{% endif %}" title="{% if c.on %}Show all again{% else %}Show only these{% endif %}">{% if c.on %}<span class="gm-fchip-tick">✓</span>{% endif %}{{ c.name }}{% if c.n or c.on %} <span class="gm-fchip-n">{{ c.n }}</span>{% endif %}</a>{% endfor %}
+  {% if d %}
+  <span class="gm-fsep"></span>
+  {% for c in d.presets %}<a class="gm-fchip{% if c.on %} on{% endif %}" href="{{ c.href }}" aria-pressed="{% if c.on %}true{% else %}false{% endif %}">{% if c.on %}<span class="gm-fchip-tick">✓</span>{% endif %}{{ c.name }}</a>{% endfor %}
+  <details class="gm-fmore" data-fmore>
+    <summary class="gm-fchip{% if d.on %} on{% endif %}">{% icon "tune" 16 %}More filters{% if d.n_on %} <span class="gm-fchip-n">{{ d.n_on }}</span>{% endif %}</summary>
+    <div class="gm-fpanel" role="group" aria-label="Filters">
+      <input type="hidden" name="folder" value="{{ folder }}" form="gm-filter">
+      {% if q %}<input type="hidden" name="q" value="{{ q }}" form="gm-filter">{% endif %}
+      {% for k in d.general %}<input type="hidden" name="f" value="{{ k }}" form="gm-filter">{% endfor %}
+      <fieldset><legend>Where it stands</legend>
+        {% for s in d.states %}<label class="gm-fopt"><input type="checkbox" name="st" value="{{ s.key }}" form="gm-filter"{% if s.on %} checked{% endif %}> {{ s.name }} <span class="gm-fchip-n">{{ s.n }}</span></label>{% endfor %}
+      </fieldset>
+      <fieldset><legend>Persona</legend>
+        <div class="gm-fscroll">{% for p in d.personas %}<label class="gm-fopt"><input type="checkbox" name="p" value="{{ p.id }}" form="gm-filter"{% if p.on %} checked{% endif %}> <span class="gm-fdot" style="background: {{ p.colour }}"></span>{{ p.name }}</label>{% empty %}<span class="gm-fnone">No personas</span>{% endfor %}</div>
+      </fieldset>
+      <fieldset><legend>Team</legend>
+        <div class="gm-fscroll">{% for t in d.teams %}<label class="gm-fopt"><input type="checkbox" name="t" value="{{ t.id }}" form="gm-filter"{% if t.on %} checked{% endif %}> {{ t.name }}{% if t.test %} <span class="gm-label test">Test</span>{% endif %}</label>{% empty %}<span class="gm-fnone">No teams</span>{% endfor %}</div>
+      </fieldset>
+      <fieldset><legend>More</legend>
+        <label class="gm-fsel">Who has it
+          <select name="own" form="gm-filter"><option value="">Anyone or nobody</option>
+            <option value="me"{% if d.own == 'me' %} selected{% endif %}>Me</option>
+            <option value="none"{% if d.own == 'none' %} selected{% endif %}>Nobody</option>
+            <option value="any"{% if d.own == 'any' %} selected{% endif %}>Someone</option>
+            {% for a in d.people %}<option value="{{ a.id }}"{% if d.own == a.id|stringformat:'s' %} selected{% endif %}>{{ a.name }}{% if a.me %} (me){% elif not a.desk %} (ExCon){% endif %}</option>{% endfor %}
+          </select></label>
+        <label class="gm-fsel">A team waiting longer than
+          <select name="wait" form="gm-filter"><option value="">Any time</option>{% for n, name in d.waits %}<option value="{{ n }}"{% if d.wait == n %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+        <label class="gm-fsel">Latest message in the last
+          <select name="recent" form="gm-filter"><option value="">Any time</option>{% for n, name in d.recents %}<option value="{{ n }}"{% if d.recent == n %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+        <label class="gm-fsel">Live or test
+          <select name="kind" form="gm-filter"><option value="">Both</option>{% for k, name in d.kinds %}<option value="{{ k }}"{% if d.kind == k %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+      </fieldset>
+      <div class="gm-fbtns">
+        <button type="submit" class="gm-pill-btn primary" form="gm-filter">Apply</button>
+        {% if filters.active %}<a class="gm-pill-btn" href="{{ filters.clear }}">Clear all</a>{% endif %}
+      </div>
+    </div>
+  </details>
+  {% for t in d.tags %}<span class="gm-fchip on gm-ftag">{{ t.name }}<a href="{{ t.href }}" class="gm-ftag-x" title="Remove this filter" aria-label="Remove filter {{ t.name }}">×</a></span>{% endfor %}
+  {% endif %}
+  {% if filters.active %}<a class="gm-fclear" href="{{ filters.clear }}">Clear filters</a>{% endif %}
+</div>
+{% endwith %}{% endif %}

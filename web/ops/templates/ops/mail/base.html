@@ -33,7 +33,8 @@
   {% block search %}<form class="gm-search" method="get" action="{{ base }}/" role="search">
     <button class="gm-icon-btn" aria-label="Search">{% icon "search" 24 %}</button>
     <input name="q" value="{{ q|default:'' }}" placeholder="Search {{ box.search|default:'mail' }}" autocomplete="off" data-search>
-    {% if q %}<a class="gm-icon-btn" href="{{ base }}/?folder={{ folder }}" aria-label="Clear search">{% icon "close" 22 %}</a>{% endif %}
+    {% for name, val in fparams %}<input type="hidden" name="{{ name }}" value="{{ val }}">{% endfor %}{% comment %}a filter view stays on (mail_filters){% endcomment %}
+    {% if q %}<a class="gm-icon-btn" href="{{ base }}/?folder={{ folder }}{{ fq }}" aria-label="Clear search">{% icon "close" 22 %}</a>{% endif %}
   </form>{% endblock %}
   <div class="gm-top-right">
     {% if sim.on %}<div class="gm-simclock{% if sim.both %} both{% endif %}" data-simclock title="{% if sim.both %}Simulation date and time (what the teams see), and the real time{% else %}Date and time in the exercise scenario{% endif %}">

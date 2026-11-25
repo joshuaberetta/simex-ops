@@ -56,6 +56,7 @@
       if (!menuBtn || m.previousElementSibling !== menuBtn) m.hidden = true;
     });
     if (menuBtn) menuBtn.nextElementSibling.hidden = !menuBtn.nextElementSibling.hidden;
+    $$("[data-fmore][open]").forEach((d) => { if (!d.contains(e.target)) d.open = false; });  // a list's More filters panel
     const det = e.target.closest("[data-details]");
     if (!e.target.closest(".gm-details")) $$(".gm-details").forEach((d) => { if (!det || d.previousElementSibling !== det) d.hidden = true; });
     if (det) { e.stopPropagation(); det.nextElementSibling.hidden = !det.nextElementSibling.hidden; }
@@ -431,7 +432,7 @@
     const r = await post(`${BASE}/action/`, p);
     if (!r.ok) { snack("Something went wrong. Try again."); return; }
     sessionStorage.setItem("simex-snack", `${convs(threads.length)} moved to "${to === "inbox" ? "Inbox" : labelName(to)}".`);
-    if (threadForm) location.href = `${BASE}/?folder=${encodeURIComponent(CFG.folder)}`; else location.reload();  // as Gmail: back to the list
+    if (threadForm) location.href = $("[data-back]")?.href || `${BASE}/?folder=${encodeURIComponent(CFG.folder)}`; else location.reload();  // as Gmail: back to the list
   }
   $$("[data-label-filter]").forEach((f) => f.addEventListener("input", () => {
     const q = f.value.trim().toLowerCase();
@@ -649,6 +650,7 @@
   document.addEventListener("keydown", (e) => {
     const t = e.target;
     if (e.key === "Escape") {
+      $$("[data-fmore][open]").forEach((d) => { d.open = false; });
       if (win && !win.hidden) { $("[data-compose-close]", win).click(); }
       else if (window.simexReplyPopped && window.simexReplyPopped()) { $("[data-reply-close]").click(); }
       if (t.matches && t.matches("input, textarea, [contenteditable]")) t.blur();

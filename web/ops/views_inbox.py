@@ -40,7 +40,7 @@ from django.utils.http import content_disposition_header
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import (addresses, conf, delivery, desk, desk_ai, inbound, push, render as rnd, richtext, signin, simclock,
+from . import (addresses, conf, delivery, desk, desk_ai, inbound, mail_filters, push, render as rnd, richtext, signin, simclock,
                suggest_leader)
 from .access import desk_of, is_excon, leader_of, login_required_any, participant_of, rp_of
 from .models import (CalendarEvent, Mail, MailAction, MailAttachment, MailLabel, MessageAttachment, Person, PushSubscription, Response,
@@ -415,7 +415,7 @@ member_by_address = addresses.member_by_address
 # What participants do in their mailbox, kept with its time for the end-of-exercise reports
 # (MailAction). Reading and downloading are Events (inbound.record_read).
 TRACKED = {"star", "unstar", "read", "unread", "archive", "unarchive", "trash", "restore", "label_add", "label_remove",
-           "move", "discard", "label_create", "label_delete", "search", "draft", "send",
+           "move", "discard", "label_create", "label_delete", "search", "filter", "draft", "send",
            "cal_create", "cal_update", "cal_cancel", "cal_rsvp"}  # SIMEX Calendar (ops/calendar.py)
 
 
@@ -548,7 +548,7 @@ def persona_locals(sender):
     return [rnd.fill(sender.local_part, rnd.team_ctx(t)).lower() for t in Team.objects.all()]
 
 
-def _folder_qs(v, folder, q=""):
+def _folder_qs(v, folder, q="", filters=None):
     qs = v.mails()
     label = label_of(v, folder)
     flt = desk_filter(v, folder)
@@ -582,6 +582,8 @@ def _folder_qs(v, folder, q=""):
     if q:
         qs = qs.filter(Q(subject__icontains=q) | Q(body__icontains=q) | Q(from_name__icontains=q)
                        | Q(from_addr__icontains=q) | Q(to_label__icontains=q))
+    if filters:  # the desk's persona, team and live/test filters (mail_filters)
+        qs = filters.narrow(qs)
     return qs
 
 
@@ -589,9 +591,10 @@ def _folder_qs(v, folder, q=""):
 FILES = Prefetch("files", MailAttachment.objects.defer("data"))
 
 
-def conversations(v, folder, q=""):
-    """Gmail-style conversation rows: one per thread, newest first."""
-    mails = list(_folder_qs(v, folder, q).prefetch_related(FILES).order_by("-created_at", "-id")[:2000])
+def conversations(v, folder, q="", filters=None):
+    """Gmail-style conversation rows: one per thread, newest first (filters: a
+    mail_filters.Filters narrowing the conversations; its row filters are applied by the caller)."""
+    mails = list(_folder_qs(v, folder, q, filters).prefetch_related(FILES).order_by("-created_at", "-id")[:2000])
     if folder == "drafts":
         return [{"thread": m.thread, "latest": m, "count": 1, "unread": False, "starred": m.starred,
                  "has_files": bool(m.attached), "people": "Draft", "draft": True, "subject": m.subject}
@@ -641,6 +644,7 @@ def conversations(v, folder, q=""):
                      "labels": sorted(on.get(t, []), key=lambda x: x["name"].lower()), "all_labels": ids_on.get(t, []),
                      "desk": desk_chips(conv, memo, team_names) if v.desk else None,
                      "replied": replied and folder != "sent",
+                     "awaiting": got is not None and not replied,  # received, nothing sent since (Not replied)
                      "invite": any(m.event_id for m in threads[t])})  # SIMEX Calendar
     if v.sees_ai:
         flags = ai_flags(v.team, {t: threads[t] for t in order})
@@ -987,7 +991,10 @@ def inbox(request, v):
         request.session["desk_order"] = order
         v.desk_newest = order == "newest"
     q = (request.GET.get("q") or "").strip()
-    rows = conversations(v, "all" if q and folder in ("inbox", "replies") else folder, q)
+    flt = mail_filters.Filters(v, request.GET, folder)
+    rows = conversations(v, "all" if q and folder in ("inbox", "replies") else folder, q, flt)
+    bar = flt.bar(rows, q)  # counts over the unfiltered list
+    rows = flt.apply(rows)
     try:
         page = max(1, int(request.GET.get("page") or 1))
     except ValueError:
@@ -999,12 +1006,17 @@ def inbox(request, v):
         last = MailAction.objects.filter(**v.box, person=v.person, action="search").order_by("-at").first()
         if not (last and last.detail.get("q") == q[:200] and last.at > timezone.now() - timedelta(minutes=2)):
             track(v, "search", q=q[:200], folder=folder, results=total)
+    if flt.active and page == 1 and v.person and not v.readonly and not v.desk:  # a filter view (mail_filters), once per change
+        last = MailAction.objects.filter(**v.box, person=v.person, action="filter").order_by("-at").first()
+        if not (last and last.detail.get("filters") == flt.describe() and last.detail.get("folder") == folder
+                and last.at > timezone.now() - timedelta(minutes=2)):
+            track(v, "filter", filters=flt.describe(), folder=folder, results=total)
     sections = None
     if not q and sectioned(v, folder):  # the persona desk: what needs attention first
         counts = Counter(r["state"]["section"] for r in rows)
         sections = {key: {"name": name, "n": counts.get(key, 0)} for key, name in desk.SECTIONS}
     return render(request, "ops/mail/list.html", _ctx(
-        v, folder=folder, q=q, rows=rows[start:start + PAGE], sections=sections,
+        v, folder=folder, q=q, rows=rows[start:start + PAGE], sections=sections, filters=bar, fq=flt.qs, fparams=flt.params(),
         desk_order=("newest" if v.desk_newest else "sections") if not q and desk_orderable(v, folder) else "", desk_ai=desk_ai.enabled(), total=total, first=start + 1 if total else 0,
         last=min(start + PAGE, total), page=page, has_prev=page > 1, has_next=start + PAGE < total, today=timezone.localdate()))
 
@@ -1081,8 +1093,9 @@ def thread_view(request, v, thread):
     if v.sees_ai:
         _team_notes(mails, v.team)
         _seen(v)
-    # Neighbours in the folder list, for j/k and the arrows.
-    rows = conversations(v, folder)
+    # Neighbours in the folder list (as filtered, mail_filters), for j/k and the arrows.
+    flt = mail_filters.Filters(v, request.GET, folder)
+    rows = flt.apply(conversations(v, folder, filters=flt), keep_thread=thread)
     keys = [r["thread"] for r in rows]
     i = keys.index(thread) if thread in keys else -1
     prev_t = keys[i - 1] if i > 0 else None
@@ -1129,7 +1142,7 @@ def thread_view(request, v, thread):
                                       **({"as": m.desk_as} if v.desk else {})} for m in mails},
                  **desk_js}
     return render(request, "ops/mail/thread.html", _ctx(
-        v, folder=folder, mails=mails, subject=subject, thread=thread, prev_t=prev_t, next_t=next_t,
+        v, folder=folder, fq=flt.qs, mails=mails, subject=subject, thread=thread, prev_t=prev_t, next_t=next_t,
         pos=i + 1, total=len(keys), last=last, thread_js=thread_js, can_reply=can_reply,
         cal_events=calendar.thread_events(v, mails), cal_create=not v.readonly and not v.peer,
         desk_chips=desk_chips(mails, {}, dict(Team.objects.values_list("id", "name"))) if v.desk else None,

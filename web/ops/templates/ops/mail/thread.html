@@ -2,11 +2,11 @@
 {% block title %}{{ subject|default:"(no subject)" }}{% endblock %}
 {% block main %}
 <div class="gm-toolbar">
-  <a class="gm-icon-btn" href="{{ base }}/?folder={{ folder }}" title="Back to {{ folder }}" aria-label="Back" data-back>{% icon "back" %}</a>
+  <a class="gm-icon-btn" href="{{ base }}/?folder={{ folder }}{{ fq }}" title="Back to {{ folder }}" aria-label="Back" data-back>{% icon "back" %}</a>
   {% if not readonly %}
   <form method="post" action="{{ base }}/action/" class="inline" data-thread-actions data-thread="{{ thread }}" data-labels="{% for l in thread_labels %}{{ l.id }}{% if not forloop.last %},{% endif %}{% endfor %}">{% csrf_token %}
     <input type="hidden" name="threads" value="{{ thread }}">
-    <input type="hidden" name="next" value="{{ base }}/?folder={{ folder }}">
+    <input type="hidden" name="next" value="{{ base }}/?folder={{ folder }}{{ fq }}">
     {% if folder == 'trash' %}
     <button class="gm-icon-btn" name="action" value="restore" title="Move to Inbox" aria-label="Move to Inbox">{% icon "restore" %}</button>
     {% else %}
@@ -23,8 +23,8 @@
   {% if cal_create %}<a class="gm-icon-btn" href="{{ base }}/calendar/?from={{ thread }}" title="Create event from this conversation" aria-label="Create event" data-cal-from>{% icon "event" %}</a>{% endif %}
   <span class="gm-tb-right">
     {% if total %}<span class="gm-range">{{ pos }} of {{ total }}</span>{% endif %}
-    <a class="gm-icon-btn{% if not prev_t %} disabled{% endif %}" href="{% if prev_t %}{{ base }}/t/{{ prev_t }}/?folder={{ folder }}{% else %}#{% endif %}" aria-label="Newer" data-key-k>{% icon "prev" %}</a>
-    <a class="gm-icon-btn{% if not next_t %} disabled{% endif %}" href="{% if next_t %}{{ base }}/t/{{ next_t }}/?folder={{ folder }}{% else %}#{% endif %}" aria-label="Older" data-key-j>{% icon "next" %}</a>
+    <a class="gm-icon-btn{% if not prev_t %} disabled{% endif %}" href="{% if prev_t %}{{ base }}/t/{{ prev_t }}/?folder={{ folder }}{{ fq }}{% else %}#{% endif %}" aria-label="Newer" data-key-k>{% icon "prev" %}</a>
+    <a class="gm-icon-btn{% if not next_t %} disabled{% endif %}" href="{% if next_t %}{{ base }}/t/{{ next_t }}/?folder={{ folder }}{{ fq }}{% else %}#{% endif %}" aria-label="Older" data-key-j>{% icon "next" %}</a>
   </span>
 </div>
 <div class="gm-thread">

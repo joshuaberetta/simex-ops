@@ -3,7 +3,7 @@
 You are your team's **team leader**: part of ExCon, not of the team. You play the team leader persona (e.g. *UNDAC Team A TL*) in the exercise, follow how your team works and help it along. Everything here is **exercise material**, not a real emergency.
 
 ## The tabs at the top
-- **My mail**: your own mailbox, used like any webmail (Compose, labels, stars, search, alerts).
+- **My mail**: your own mailbox, used like any webmail (Compose, labels, stars, search, filters such as **Unread**, alerts).
 - **Team inbox** (read-only): exactly what your team has, so you can follow its work. Opening mail here does **not** mark it read for the team. The red number is new mail in the team's inbox since you last looked.
 - **Team members**: who is in your team, with their team role (e.g. Deputy Team Leader, set by ExCon), what each has written and read so far, whether their alerts are on and when they last signed in, and a link to each member's own mailbox, read-only (opening mail there doesn't mark it read for them; the side bar switches between members).
 - **Team leaders** (read-only): the other team leaders' own mailboxes (pick one in the side bar), to see what they are sending their teams and what their teams write to them. Opening mail here doesn't mark it read for them. They can read yours the same way.

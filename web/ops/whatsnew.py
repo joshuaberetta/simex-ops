@@ -17,6 +17,17 @@ EVERYONE = {PARTICIPANT, LEADER, DESK, RP, EXCON}
 SHOWN = 8  # notes listed in the drawer (the newest)
 
 ENTRIES = [
+    {"key": "2026-11-list-filters", "date": date(2026, 11, 25), "who": {PARTICIPANT, LEADER},
+     "title": "Show only unread mail",
+     "body": "Above the list, **Unread**, **Starred**, **Has files** and **Not replied** show only those "
+             "conversations, with how many there are. Click again to see everything. They combine, and stay on "
+             "while you search and move from one conversation to the next."},
+    {"key": "2026-11-desk-filters", "date": date(2026, 11, 25), "who": {DESK, EXCON},
+     "title": "Filter the desk's list",
+     "body": "Above the desk's list: **Unread**, **Needs attention**, **Urgent**, **Mine**, **Nobody has it**, "
+             "**Waiting 30 min+** and more, one click each. **More filters** picks personas, teams, who has a "
+             "conversation, how long a team has waited, how recent it is and live or test traffic. The filters "
+             "in use show as tags you can remove; bookmark a filtered list to come back to it."},
     {"key": "2026-11-desk-injects", "date": date(2026, 11, 25), "who": {DESK, EXCON},
      "title": "See the injects coming up",
      "body": "The persona desk has an **Injects** tab (read-only): every inject by time, the next one "
