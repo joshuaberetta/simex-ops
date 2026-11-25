@@ -14,7 +14,7 @@ from django.views.decorators.http import require_POST
 
 from . import ai, ai_docs, checks, conf, delivery, desk_ai  # noqa: F401 (desk_ai: its instructions)
 from .access import excon_required
-from .models import (AiCall, AiGrade, AiReport, DocumentAnalysis, Event, Grade, Inject, InjectDraft, InjectReview, MailAction, MailAttachment, Message,
+from .models import (AiCall, AiGrade, AiReport, DocumentAnalysis, Event, Grade, Inject, InjectDraft, InjectReview, Mail, MailAction, MailAttachment, Message,
                      Person, ReplyAnalysis, Response, Sender, Team, TeamRole, audit)
 from .views_excon import _int, _u, from_local_input, reply_grid, safe_next
 
@@ -261,7 +261,39 @@ def document_page(request, did):
               .order_by("-sent_at")[:10])
     return render(request, "ops/document.html", {
         "tab": "dashboard", "d": d, "url": f"/files/{src}/{f.id}/" if f else "", "others": others,
-        "on": ai_docs.enabled()})
+        "links": _document_links(d), "on": ai_docs.enabled()})
+
+
+def _document_links(d):
+    """Where the mail that carried a team's file can be read: the sender's mailbox (ExCon's
+    read-only /inbox/as/ view) and, when it went to a persona, the persona desk's conversation."""
+    from .meetings import excon_url
+    sent = d.mail_file.mail if d.mail_file_id and d.mail_file else None
+    if sent is None:  # that copy was cleared: another Sent copy of the same file in this team's mail
+        f = (MailAttachment.objects.filter(sha256=d.sha256, mail__team=d.team, mail__folder="sent", cid="")
+             .select_related("mail").order_by("id").first())
+        sent = f.mail if f else None
+    if sent is None and d.response_id and d.response.mail_id:
+        sent = d.response.mail
+    out = []
+    if sent is not None and sent.team_id == d.team_id:
+        if sent.owner_id is None:
+            where = f"{d.team.name}'s inbox"
+        elif sent.owner.is_leader:
+            where = f"{d.team.name}'s team leader's mailbox"
+        else:
+            where = f"{sent.owner.name}'s own mailbox"
+        out.append({"label": where, "url": excon_url(sent) + f"?folder={sent.folder}"})
+    desk_q = Mail.objects.none()
+    if sent is not None:
+        desk_q = Mail.objects.filter(team__isnull=True, owner__isnull=True, desk_team=d.team, thread=sent.thread)
+    if d.response_id:
+        desk_q = desk_q | Mail.objects.filter(team__isnull=True, owner__isnull=True, desk_response_id=d.response_id)
+    desk_q = desk_q.exclude(folder="drafts").order_by("id")
+    copy = desk_q.filter(folder="inbox").first() or desk_q.first()  # the team's message, else the persona's
+    if copy:
+        out.append({"label": "the persona desk", "url": excon_url(copy) + f"?folder={copy.folder}"})
+    return out
 
 
 @excon_required

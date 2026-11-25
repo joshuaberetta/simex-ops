@@ -237,3 +237,22 @@ def test_a_teams_file_is_its_own(excon, fake):
     ai.tick()
     ai.tick()
     assert sorted(DocumentAnalysis.objects.values_list("team__code", flat=True)) == ["a", "b"]
+
+
+def test_document_page_links_the_conversation(excon, fake):
+    do_import(excon, SAMPLE)
+    arm()
+    deliver_now("3-13")
+    got = Mail.objects.get(owner=None, team__code="a")
+    pa = participant("a", "Jane")
+    pa.post("/inbox/send/", {"to": f"p:{got.persona}", "subject": "Re: Update", "body": "Our plan attached",
+                             "in_reply_to": got.id, "files": SimpleUploadedFile("plan.docx", docx())})
+    ai.tick()
+    d = DocumentAnalysis.objects.get()
+    page = excon.get(f"/documents/{d.id}/").content.decode()
+    sent = d.mail_file.mail
+    assert f'href="/inbox/as/{sent.team_id}/t/{sent.thread}/?folder=sent"' in page
+    desk_copy = Mail.objects.get(team=None, desk_team=sent.team, thread=sent.thread, folder="inbox")
+    assert f'href="/inbox/desk/t/{desk_copy.thread}/?folder=inbox"' in page
+    assert excon.get(f"/inbox/as/{sent.team_id}/t/{sent.thread}/?folder=sent").status_code == 200
+    assert excon.get(f"/inbox/desk/t/{desk_copy.thread}/?folder=inbox").status_code == 200

@@ -12,6 +12,7 @@
   <dl class="hdrs">
     <dt>Team</dt><dd>{{ d.team.name }}{% if d.person %} · sent by {{ d.person.name }}{% if d.person.role == 'tl' %} (team leader){% endif %}{% endif %}</dd>
     <dt>Sent</dt><dd>{{ d.sent_at|date:"D d M H:i" }}{% if d.response %} · with <a href="/replies/{{ d.response_id }}/">{{ d.response.subject|default:"(no subject)" }}</a>{% endif %}</dd>
+    {% if links %}<dt>Conversation</dt><dd>{% for l in links %}{% if not forloop.first %} · {% endif %}<a href="{{ l.url }}">{{ l.label }}</a>{% endfor %}</dd>{% endif %}
     {% if d.inject %}<dt>Inject</dt><dd><a href="/injects/{{ d.inject_id }}/">{{ d.inject.mel_id }}</a> {{ d.inject.subject }}</dd>{% endif %}
     <dt>File</dt><dd>{{ d.size|kb }}{% if d.pages %} · {{ d.pages }} page{{ d.pages|pluralize }}{% endif %}{% if d.words %} · {{ d.words }} words{% endif %}</dd>
   </dl>
