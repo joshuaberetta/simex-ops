@@ -235,10 +235,19 @@ def _on_response(r, personas_):
         subject=r.subject, body=body, html=src.html if src else "", inject_id=r.inject_id, is_test=r.kind == "test" or bool(team and team.is_test),
         created_at=r.received_at, author_id=r.person_id, sim_at=src.sim_at if src else None)
     _files(mail, mail=src) if src else _files(mail, response=r)
-    push.notify_mail(mail)
+    job = ai_answering(r)
+    if job is None:  # an AI persona about to answer it: nobody on the desk needs to, no push
+        push.notify_mail(mail)
     auto_assign(thread)  # before _told_in: the default owner is told the team wrote
-    _told_in(mail)
+    _told_in(mail, job)
     return mail
+
+
+def ai_answering(r):
+    """The AI persona's answer queued (or being written) for a team's message r (npc.on_response,
+    called first), or None: a person on the desk needn't answer it."""
+    return (NpcReply.objects.filter(response=r, status__in=["queued", "writing"])
+            .select_related("npc__sender").order_by("-id").first())
 
 
 def _email_thread(r):
@@ -551,7 +560,8 @@ def states(threads, user=None, now=None):
     """{thread: state} of desk conversations: section (above), waiting (a team waits for an
     answer) since (its first unanswered message's time), last_in (the latest Mail id of a
     team's in it), follow ({at, note, by, due}) if a follow-up is on, owner (who took it; mine:
-    the user did), npc (an AI persona's queued or held answer: {status, due_at}), triage
+    the user did), npc (an AI persona's answer to the waiting message: {status, due_at, who}; queued
+    or writing puts it in LATER, as nobody needs to answer; held, failed or skipped need a person), triage
     (Claude's reading of the waiting message, if current), done_by (marked as needing no reply)."""
     from .models import DeskConversation
     threads = list(dict.fromkeys(threads))
@@ -569,8 +579,8 @@ def states(threads, user=None, now=None):
     convs = {c.thread: c for c in DeskConversation.objects.filter(thread__in=threads)}
     rids = [m[4] for ms in mails.values() for m in ms if m[4]]
     npc = {}
-    for job in (NpcReply.objects.filter(response_id__in=rids, status__in=["queued", "writing", "held", "failed"])
-                .order_by("id")):
+    for job in (NpcReply.objects.filter(response_id__in=rids, status__in=["queued", "writing", "held", "failed", "skipped"])
+                .select_related("npc__sender").order_by("id")):
         npc[job.response_id] = job
     out = {}
     for t in threads:
@@ -603,8 +613,9 @@ def states(threads, user=None, now=None):
             if waiting and c.ai_status == "done" and c.ai_upto >= last_in:
                 st["triage"] = {"need": c.ai_need, "urgency": c.ai_urgency, "ask": c.ai_ask, "reason": c.ai_reason}
         job = npc.get(last_rid) if waiting else None
-        if job:
-            st["npc"] = {"status": job.status, "due_at": job.due_at}
+        if job:  # skipped: its timing drew no answer this time, so a person answers it
+            st["npc"] = {"status": job.status, "due_at": job.due_at,
+                         "who": job.npc.sender.display_name or job.npc.sender.local_part}
         if waiting and job and job.status in ("queued", "writing"):
             st["section"] = LATER  # the AI persona answers it
         elif waiting and st["triage"] and st["triage"]["need"] == "none" and not (st["follow"] and st["follow"]["due"]):
@@ -1125,14 +1136,20 @@ def _about(threads):
     return out
 
 
-def _told_in(mail):
-    """A team wrote in a desk conversation (mail, the desk's Inbox copy): those on it hear. An
+def _told_in(mail, job=None):
+    """A team wrote in a desk conversation (mail, the desk's Inbox copy): those on it hear, and
+    when an AI persona answers it (job, its queued NpcReply), that nobody needs to. An
     invitation, a change or a cancellation has its own notice (calendar._tell_desk)."""
     if mail.invite in ("request", "update", "cancel"):
         return
     who = mail.from_name or mail.from_addr
+    body = f"{who}: {(mail.body or '').strip()[:200]}"
+    if job is not None:
+        name = job.npc.sender.display_name or job.npc.sender.local_part
+        when = f" at {timezone.localtime(job.due_at):%H:%M}" if job.due_at else ""
+        body = f"AI persona {name} answers it{when}: no need to answer. {body}"
     notify(audience(mail.thread), f"in:{mail.id}", "reply", f"{_team_name(mail.desk_team)} wrote: {mail.subject}",
-           f"{who}: {(mail.body or '').strip()[:200]}", mail.thread, f"/inbox/desk/t/{mail.thread}/", mail.is_test)
+           body, mail.thread, f"/inbox/desk/t/{mail.thread}/", mail.is_test)
 
 
 def _told_out(m, desk_mail):

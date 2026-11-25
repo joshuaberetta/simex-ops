@@ -17,6 +17,11 @@ EVERYONE = {PARTICIPANT, LEADER, DESK, RP, EXCON}
 SHOWN = 8  # notes listed in the drawer (the newest)
 
 ENTRIES = [
+    {"key": "2026-11-desk-ai-answers", "date": date(2026, 11, 25), "who": {DESK, EXCON},
+     "title": "Leave it to the AI persona",
+     "body": "When a team writes to an AI persona that is going to answer, the conversation goes to **Later** "
+             "with *AI persona answers at 14:20 · no reply needed*, and your devices aren't pinged. If the AI "
+             "persona isn't answering that one, it stays in **Needs attention** and says so: answer it yourself."},
     {"key": "2026-11-network-filters", "date": date(2026, 11, 25), "who": {DESK, EXCON},
      "title": "Filter the Network map",
      "body": "On **Network**, **All teams** shows only the teams you tick (or one alone), **All messages** which "

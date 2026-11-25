@@ -6,8 +6,8 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from ops import ai, conf, desk, desk_ai
-from ops.models import DeskConversation, Mail, NpcProfile, NpcReply, Sender, Team
+from ops import ai, conf, desk, desk_ai, push
+from ops.models import DeskConversation, DeskNotice, Mail, NpcProfile, NpcReply, PushSubscription, Sender, Team
 from ops.tests.test_ai import FakeClient
 from ops.tests.test_desk import FETCH, desk_client, setup, team_writes
 from ops.tests.test_ops import deliver_now, participant
@@ -127,8 +127,51 @@ def test_ai_persona_about_to_answer_is_later(excon):
     d = desk_client()
     s = rows(d)[1][got.thread]
     assert s["section"] == desk.LATER and s["npc"]["status"] == "queued"
+    page = d.get("/inbox/desk/").content.decode()
+    assert "AI persona answers at" in page and "no reply needed" in page
+    assert "no need to answer it here" in d.get(f"/inbox/desk/t/{got.thread}/").content.decode()
     NpcReply.objects.update(status="held")
     assert rows(d)[1][got.thread]["section"] == desk.ATTENTION
+    # Its timing drew no answer (or ExCon skipped it): a person answers, and the desk says so.
+    NpcReply.objects.update(status="skipped")
+    page, st = rows(d)
+    assert st[got.thread]["section"] == desk.ATTENTION and st[got.thread]["npc"]["status"] == "skipped"
+    assert "AI persona not answering this one" in page.content.decode()
+
+
+def test_ai_persona_about_to_answer_is_no_news_for_the_desk(excon, django_capture_on_commit_callbacks):
+    """A team writing to an AI persona that will answer: no push to the desk's devices, and the
+    bell says nobody needs to answer."""
+    setup(excon)
+    conf.put("npc_enabled", "1")
+    conf.put("npc_scope", "all")
+    NpcProfile.objects.create(sender=Sender.objects.get(local_part="donotreply"), enabled=True, timing="custom",
+                              min_minutes=30, max_minutes=30)
+    deliver_now("3-13")
+    ta, pa = Team.objects.get(code="a"), participant("a")
+    pushed = []
+    push.set_sender(lambda info, data: pushed.append(data) or 201)
+    push.RUN_INLINE = True
+    try:
+        d = desk_client()
+        PushSubscription.objects.create(person=d.person, endpoint="https://fcm.googleapis.com/x", p256dh="k", auth="a")
+        with django_capture_on_commit_callbacks(execute=True):
+            got, _ = team_writes(pa, ta)
+        assert NpcReply.objects.get().status == "queued" and not pushed
+        d.post("/inbox/desk/mark/", {"threads": got.thread, "act": "watch"})
+        with django_capture_on_commit_callbacks(execute=True):
+            team_writes(pa, ta, "And the bridge?")
+        assert NpcReply.objects.count() == 1 and not pushed  # the queued answer answers this one too
+        n = DeskNotice.objects.filter(user=d.person.user, kind="reply").latest("id")
+        assert "AI persona" in n.body and "no need to answer" in n.body
+        # The AI persona off: the desk hears of the team's message as usual.
+        NpcProfile.objects.update(enabled=False)
+        with django_capture_on_commit_callbacks(execute=True):
+            team_writes(pa, ta, "Anyone?")
+        assert pushed
+    finally:
+        push.set_sender(None)
+        push.RUN_INLINE = False
 
 
 def triage_answer(need):
