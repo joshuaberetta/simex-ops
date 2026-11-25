@@ -624,8 +624,11 @@ def conversations(v, folder, q="", filters=None):
     all_in = {}
     for m in (v.mails().filter(thread__in=order).exclude(folder="drafts")
               .only("id", "thread", "folder", "read_at", "from_name", "from_addr", "to_label", "starred", "trashed_at",
-                    "subject", "author__name", "persona", "desk_team", "is_test").select_related("author")):
+                    "subject", "author__name", "persona", "desk_team", "is_test", "message", "team")
+              .select_related("author")):
         all_in.setdefault(m.thread, []).append(m)
+    if v.desk:
+        all_in = {t: one_copy(ms) for t, ms in all_in.items()}
     on, ids_on = {}, {}
     for tl in ThreadLabel.objects.filter(label__in=v.labels(), thread__in=order).select_related("label"):
         ids_on.setdefault(tl.thread, []).append(tl.label_id)
@@ -1145,6 +1148,8 @@ def thread_view(request, v, thread):
                                                             if k != me] + teams))
         can_reply = bool(reply_to)
         desk_js = _desk_thread(mails)
+        mails = one_copy(mails)  # persona mail: its Inbox copy only, not its Sent copy beside it
+        last = mails[-1]
     subject = mails[0].subject
     from . import calendar
     cards = calendar.cards(v, mails)  # SIMEX Calendar: the invitation cards
@@ -1181,6 +1186,14 @@ def thread_view(request, v, thread):
                        .select_related("label").order_by("label__name")]))
 
 
+def one_copy(mails):
+    """The desk's mails of a conversation with persona mail shown once: the desk keeps a Sent
+    copy and an Inbox copy of the same Message (desk._persona_mail, it plays both personas);
+    the Sent one goes when its Inbox one is there (the only pairs sharing a Message)."""
+    got = {m.message_id for m in mails if m.folder == "inbox" and m.message_id and m.team_id is None}
+    return [m for m in mails if not (m.folder == "sent" and m.team_id is None and m.message_id in got)]
+
+
 def _member_ids(team):
     return set(team_members(team).values_list("id", flat=True))
 
@@ -1200,7 +1213,7 @@ def _desk_thread(mails):
         m.desk_chip = desk.describe(m.persona, m.desk_team, memo) if m.persona else None
         s, _ = rnd.sender_by_local(m.persona) if m.persona else (None, None)
         m.desk_as = f"p:{s.local_part}" if s and f"p:{s.local_part}" in choices else ""
-        msg = m.message if m.folder == "sent" and m.message_id else None
+        msg = m.message if m.message_id and (m.folder == "sent" or m.message.kind == desk.PERSONA_KIND) else None
         m.desk_inject = msg.inject_id if msg and msg.kind in ("live", "test", "oneoff", "followup") \
             and conf.flag("desk_injects") else None
         m.desk_by = "" if not msg else ("Written by the AI persona" if msg.npc else f"Sent by {m.author.name}"

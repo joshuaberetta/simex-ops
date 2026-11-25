@@ -180,3 +180,23 @@ def test_persona_mail_goes_to_the_default_owner(excon, fake):
                                         "body": "How many?"}, headers=FETCH).json()["ok"]
     t2 = Mail.objects.get(team=None, folder="inbox", subject="Camps").thread
     assert DeskConversation.objects.get(thread=t2).owner == ben
+
+
+def test_persona_mail_is_shown_once_in_the_desks_conversation(excon, fake):
+    """The desk keeps a Sent and an Inbox copy of persona mail (it plays both personas): the
+    conversation and its row show each message once, the Inbox copy, with who wrote it."""
+    setup(excon)
+    make_npc()
+    d = desk_client()
+    assert d.post("/inbox/desk/send/", {"from": "p:cnn", "to": "p:gov-plaida", "subject": "Road status",
+                                        "body": "Is the coast road open?"}, headers=FETCH).json()["ok"]
+    run_all()
+    t = Mail.objects.get(team=None, folder="inbox", subject="Road status", persona="gov-plaida").thread
+    assert Mail.objects.filter(team=None, thread=t).count() == 4  # both copies of each are kept
+    r = d.get(f"/inbox/desk/t/{t}/")
+    mails = r.context["mails"]
+    assert [m.folder for m in mails] == ["inbox", "inbox"] and len({m.message_id for m in mails}) == 2
+    assert mails[0].desk_by.startswith("Sent by") and mails[1].desk_by == "Written by the AI persona"
+    assert r.context["thread_js"]["reply"] == ["p:gov-plaida"] and r.context["thread_js"]["from"] == "p:cnn"
+    row = next(x for x in d.get("/inbox/desk/").context["rows"] if x["thread"] == t)
+    assert row["count"] == 2
