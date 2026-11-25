@@ -21,8 +21,8 @@ from django.views.decorators.http import require_POST
 
 from . import conf, roleplay, signin
 from .access import excon_required
-from .models import (RP_STATUSES, Person, PushSubscription, RolePlay, RolePlayFile, RolePlaySeen, RolePlaySlot, Team,
-                     audit)
+from .models import (RP_STATUSES, Person, PushSubscription, RolePlay, RolePlayFile, RolePlaySeen, RolePlaySlot, Sender,
+                     Team, audit)
 
 MAX_FILE_MB = 20
 
@@ -171,6 +171,8 @@ def play_page(request, pid):
                 v = P.get(f, "").replace("\r\n", "\n")
                 setattr(play, f, v.strip() if f not in ("script", "outcomes", "notes") else v)
         play.optional = P.get("optional") == "1"
+        if "personas" in P:
+            play.personas = ", ".join(dict.fromkeys(roleplay.persona_list(P.get("personas"))))[:500]
         play.save()
         ids = [i for i in map(_int, P.getlist("players")) if i]
         people = list(Person.objects.filter(pk__in=ids, role__in=("rp", "tl", "desk")))
@@ -180,16 +182,22 @@ def play_page(request, pid):
         roleplay.bump()
         audit("roleplay_edit", play.key, _u(request))
         messages.success(request, "Saved.")
+        unknown = roleplay.personas_of(play)[2]
+        if unknown:
+            messages.warning(request, "No persona with the username " + ", ".join(unknown) + " (Senders).")
         return redirect(f"/roleplay/{play.id}/")
     now = timezone.now()
     slots = _decorate(list(_slots().filter(play=play)), now)
     chosen = {p.id for p in play.players.all()}
+    linked, by_name, _unknown = roleplay.personas_of(play)
     cands = roleplay.candidates()
     for p in cands:
         p.chosen = p.id in chosen
     return render(request, "ops/roleplay/play.html", {
         "tab": "roleplay", "play": play, "slots": slots, "candidates": cands, "teams": Team.objects.filter(active=True),
         "statuses": RP_STATUSES, "files": play.files.all(), "max_mb": MAX_FILE_MB,
+        "linked": linked, "by_name": by_name,
+        "persona_choices": Sender.objects.filter(team_leader=False).order_by("local_part"),
         "checks": [{**c, "label": roleplay.CHECKS[c["kind"]]} for c in roleplay.checks(list(_slots().filter(play=play)))
                    if c["play"].id == play.id],
     })

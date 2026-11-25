@@ -1060,6 +1060,9 @@ class RolePlay(models.Model):
     documents = models.TextField(blank=True, default="")  # to bring / print, one per line
     notes = models.TextField(blank=True, default="")  # ExCon's notes and FAQ for this event
     optional = models.BooleanField(default=False)
+    # The personas (usernames) whose character this role play plays, optional: Suggest a reply and
+    # ChatSIMEX take the persona's voice from its script (roleplay.characters), also found by name.
+    personas = models.CharField(max_length=500, blank=True, default="")
     players = models.ManyToManyField(Person, blank=True, related_name="role_plays")
     imported = models.JSONField(null=True, blank=True)  # last imported values (local edits kept)
     # Made from a persona's meeting on SIMEX Calendar (Meetings → Make a role play, roleplay.from_event):

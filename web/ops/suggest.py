@@ -8,6 +8,8 @@ What it reads, each item marked with where this team stands on it at this moment
 - the injects: delivered to this team, still to come for it (scenario time, send time) or not for it;
 - the role plays (RolePlay: scripts, outcomes, ExCon's notes) and their sittings for this team:
   played already, or still to come.
+- the persona's character as the role plays play it (roleplay.characters: the role plays ExCon
+  linked to the persona or naming it, whoever plays them): their script excerpts, for the voice.
 
 The timeline is the point: the suggested answer may use only what the team has been given or
 told (the documents it has, the injects it received, the role plays it has had, this
@@ -33,7 +35,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from . import ai, inbound, kb, simclock
+from . import ai, inbound, kb, roleplay, simclock
 from .models import Inject, KbDocument, Mail, NpcProfile, ReplySuggestion, RolePlay, RolePlaySlot
 from .render import fill, sender_by_local, team_ctx
 
@@ -64,6 +66,10 @@ from them.
 A persona knows what their own role plays and injects say, but tells the team only what fits the \
 timeline: a role play's script is what the character says in that sitting, so before it has been \
 played with this team its content is NOT YET. ExCon's notes and expected outcomes are for the desk only.
+When the persona's character is played in role plays ("The character as the role plays play it"), \
+write as that same person: their temperament, attitude, agenda, how guarded or helpful they are, how \
+they speak, whether or not the sitting has happened yet and whoever plays it, so the team meets one \
+person in the mail and face to face. Take only the voice from a sitting still to come, never its facts.
 
 How to work:
 - First look things up: search the documents for each place, organisation, person, figure and \
@@ -206,10 +212,12 @@ class Timeline:
 
 # --- context -----------------------------------------------------------------------------------------
 
-def persona_block(r):
+def persona_block(r, tl=None):
     s, ctx = sender_by_local(r.persona or "")
     if not s:
         return f"The persona: {r.persona or 'unknown'} (not in the Senders list)."
+    if r.team and not ctx:
+        ctx = team_ctx(r.team)
     lines = [f"The persona written to: {fill(s.display_name or '', ctx) or s.local_part} <{r.persona}>"
              + (f", category {s.category}" if s.category else "")]
     if s.notes:
@@ -220,7 +228,27 @@ def persona_block(r):
                          ("What they know (participant-facing)", p.knowledge), ("Boundaries", p.boundaries)):
             if v:
                 lines.append(f"{label}: {v}")
+    if tl is not None:
+        chars = character_block(s, ctx, tl, local=r.persona)
+        if chars:
+            lines.append(chars)
     return "\n".join(lines)
+
+
+def character_block(s, ctx, tl, local=None):
+    """The persona's character as the role plays play it: script excerpts for the voice, each with
+    the team's state on it (facts only from what has been played). Empty when none is found."""
+    found = roleplay.characters(s, ctx, local=local)
+    if not found:
+        return ""
+    out = ["The character as the role plays play it (take their voice, temperament and attitude from these "
+           "whether played yet or not; facts only from the ones played with this team):"]
+    for p, why in found:
+        _state, label = tl.play(p.key)
+        out.append(f"--- rp:{p.key} [{label}] {'(ExCon: this persona)' if why == 'linked' else '(found by name)'} "
+                   f"| {p.title[:120]}" + (f" | role: {p.role}" if p.role else "") + (f" | {p.method}" if p.method else ""))
+        out.append(roleplay.character_excerpt(p, s, ctx))
+    return "\n".join(out)
 
 
 def persona_names(r):
@@ -251,11 +279,13 @@ def roleplay_index(r, tl):
     """Every role play, one line each with its state for the team; the persona's likely own
     ones (their name in the role, title or script) first."""
     names = persona_names(r)
+    s, ctx = sender_by_local(r.persona or "")
+    chars = {p.key for p, _ in roleplay.characters(s, ctx or (team_ctx(r.team) if r.team else {}), local=r.persona)} if s else set()
     rows = []
     for key, p in tl.plays.items():
         state, label = tl.play(key)
         text = f"{p.title} {p.role} {p.script[:600]}".lower()
-        mine = bool(names and any(n in text for n in names))
+        mine = key in chars or bool(names and any(n in text for n in names))
         rows.append((not mine, p.seq, f"- rp:{key} [{label}]{' (probably this persona)' if mine else ''} "
                                       f"{p.day} {p.time_text.splitlines()[0] if p.time_text else ''} | {p.title[:120]}"
                                       + (f" | role: {p.role}" if p.role else "") + (f" | {p.method}" if p.method else "")))
@@ -275,7 +305,7 @@ def request_block(s):
     conv = ai.conversation_block(r)
     if not any(k == "team" and o.id == r.id for k, _, o in inbound.conversation(r)):
         conv = (conv + "\n\n---\n\n" if conv else "") + ai.reply_block(r, "TEAM MESSAGE")
-    parts = [clock_block(tl), f"The team: {r.team.name}.", persona_block(r),
+    parts = [clock_block(tl), f"The team: {r.team.name}.", persona_block(r, tl),
              "THE CONVERSATION (the team's latest message last):\n\n" + conv,
              ai.team_block(r.team, None, limit=8),
              "This persona's own injects:\n" + own_injects(r, tl),

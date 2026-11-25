@@ -10,7 +10,8 @@ What it reads, each item marked with where the teams in scope stand on it now (s
 - the teams' internal mail, exactly the mailboxes the desk already reads through /inbox/as/: each
   team's inbox, its team leader's own and (with personal mailboxes) its members' own. Labelled
   team-internal: a persona can't know it, so it is for the desk member's understanding only;
-- the personas (Senders, AI persona profiles, ExCon's notes) for "who is ...?" briefings.
+- the personas (Senders, AI persona profiles, ExCon's notes, their character as the role plays play
+  it: roleplay.characters) for "who is ...?" briefings and drafts in their voice.
 
 Like suggest.py this module reads control-side material, so its output goes only to the chat's
 owner on the desk (views_desk_chat.py), never to participants, leaders, the AI personas or the
@@ -31,7 +32,7 @@ import threading
 from django.db.models import Q
 from django.utils import timezone
 
-from . import ai, conf, desk, kb, suggest
+from . import ai, conf, desk, kb, roleplay, suggest
 from .models import (DeskChat, DeskChatTurn, Inject, KbDocument, Mail, NpcProfile, Person, RolePlay, Sender,
                      Team)
 from .render import fill, team_ctx
@@ -71,6 +72,12 @@ roles, team leader and SIMEX Mail addresses. For who is on a team, who leads it,
 participants, always answer from the roster. Team lists in the exercise documents (stand-by messages, \
 deployment lists) are the scenario's fictional or planned teams: mention them only as that, if at all.
 - The personas tool lists every persona (organisation, category, AI or not); who briefs one.
+Playing a persona:
+- A persona whose character is played in role plays has it in their brief ("The character as the role plays play \
+it"): script excerpts. In a briefing say how to play them from it; in a draft write as that same person (temperament, \
+attitude, agenda, how guarded, how they speak), whether the sitting has happened yet or not and whoever plays it or \
+answers the mail, so the team meets one person in the mail and face to face. Take only the voice from a sitting still \
+to come, never its facts. When drafting as a persona not in scope, read persona:<username> first.
 
 How to work:
 - Look things up before answering: search the documents, injects and role plays, and the mail, for the names, \
@@ -617,11 +624,22 @@ def persona_brief(sc, s):
             m = threads[t]
             lines.append(f"- thread:{t} | {teams.get(m.desk_team_id, '?')} | {m.subject} | since {_hm(x['since'])}"
                          + (f" | {x['owner']} has it" if x.get("owner") else " | nobody has it"))
+    chars = roleplay.characters(s, ctx)
+    if chars:
+        lines.append("The character as the role plays play it (whoever plays them: answer in this voice, temperament and "
+                     "attitude, played yet or not; facts only from the ones a team has had):")
+        for r, why in chars:
+            lines.append(f"--- rp:{r.key} | {r.title[:100]} | role: {r.role or '?'} "
+                         f"{'(ExCon: this persona)' if why == 'linked' else '(found by name)'} "
+                         f"[{sc.label(lambda tl, k=r.key: tl.play(k))}]")
+            lines.append(roleplay.character_excerpt(r, s, ctx, limit=1500))
     words = _words(fill(s.display_name or "", ctx)) or _words(s.local_part)
     words = [w for w in words if w not in {"team", "the", "office", "officer", "from"}]
-    rps = [p_ for p_ in RolePlay.objects.all() if words and any(w in f"{p_.title} {p_.role} {p_.script[:2000]}".lower() for w in words)]
+    have = {r.key for r, _ in chars}
+    rps = [p_ for p_ in RolePlay.objects.all() if p_.key not in have and words
+           and any(w in f"{p_.title} {p_.role} {p_.script[:2000]}".lower() for w in words)]
     if rps:
-        lines.append("Role plays that may be theirs:")
+        lines.append("Other role plays that may be theirs:")
         for r in rps[:8]:
             lines.append(f"- rp:{r.key} | {r.title[:100]} | role: {r.role or '?'} [{sc.label(lambda tl, k=r.key: tl.play(k))}]")
     return "\n".join(lines)

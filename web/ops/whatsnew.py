@@ -17,6 +17,14 @@ EVERYONE = {PARTICIPANT, LEADER, DESK, RP, EXCON}
 SHOWN = 8  # notes listed in the drawer (the newest)
 
 ENTRIES = [
+    {"key": "2026-11-persona-voice-role-play", "date": date(2026, 11, 25), "who": {DESK, EXCON},
+     "title": "Personas sound like their role-play character",
+     "body": "When a persona is also played face to face, by phone or VTC, **Suggest a reply** and "
+             "**ChatSIMEX** now take their temperament, attitude and way of speaking from the role-play script, "
+             "so the team meets the same person in the mail and in the room. It works whoever answers the mail, "
+             "and whether or not anyone is assigned to play the role play yet. Facts still come only from the "
+             "sittings the team has had. ExCon can link a role play to its persona(s) on the role play's page; "
+             "otherwise it is found by the persona's name."},
     {"key": "2026-11-picture-size", "date": date(2026, 11, 24), "who": MAIL | {EXCON},
      "title": "Make a picture in your message smaller or bigger",
      "body": "**Click a picture** in the message you are writing to change its size: choose **Small**, "

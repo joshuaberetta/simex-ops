@@ -795,6 +795,88 @@ def for_event(ev):
     return {"key": rp.key, "title": rp.title, "url": f"/roleplay/{rp.id}/"} if rp else None
 
 
+# --- the characters personas play ----------------------------------------------------------------
+
+# Words too common in persona names and roles to tell one character from another.
+CHAR_STOP = {"team", "undac", "simex", "office", "officer", "officers", "with", "from", "that", "this", "ministry",
+             "department", "national", "director", "head", "manager", "coordinator", "representative", "general",
+             "deputy", "chief", "senior", "local", "government", "public", "news", "media", "community", "leader",
+             "agency", "services", "service", "affairs", "relief", "emergency", "humanitarian", "disaster", "management",
+             "authority", "international", "organisation", "organization", "unit", "staff", "member", "contact",
+             "assistant", "advisor", "adviser", "focal", "point", "desk", "minister", "secretary"}
+CHAR_MAX = 4  # role plays per persona
+EXCERPT = 2500  # characters of script per role play
+
+
+def persona_list(text):
+    """The usernames in RolePlay.personas ("dr-amani, moh-press"; an address is cut at @)."""
+    return [w.split("@")[0].lower() for w in re.split(r"[\s,;]+", text or "") if w.strip()]
+
+
+def _char_words(text):
+    return {w for w in re.findall(r"[a-zà-ÿ]+", (text or "").lower()) if len(w) >= 4} - CHAR_STOP
+
+
+def characters(sender, ctx=None, local=None):
+    """The role plays that play this persona's character, best first: [(play, why)], why "linked"
+    (ExCon named the persona on the role play) or "name" (the persona's name in its role, title or
+    script). Whoever plays it, or whether anyone is assigned, doesn't matter: the desk answers as
+    the persona and should sound like the character met face to face."""
+    from .models import NpcProfile
+    from .render import fill
+    ctx = ctx or {}
+    names = {x.lower() for x in (sender.local_part, local, fill(sender.local_part or "", ctx)) if x}
+    plays = list(RolePlay.objects.all())
+    linked = [p for p in plays if names & set(persona_list(p.personas))]
+    name = _char_words(fill(sender.display_name or "", ctx)) | _char_words((sender.local_part or "").replace("-", " "))
+    prof = NpcProfile.objects.filter(sender=sender).first()
+    role = (_char_words(f"{prof.role} {prof.organisation}") if prof else set()) - name
+    # a word found in many role plays tells none apart
+    seen = Counter(w for p in plays for w in (name | role) & _char_words(f"{p.title} {p.role} {p.script}"))
+    common = {w for w, n in seen.items() if n > max(2, len(plays) * 0.4)}
+    name, role = name - common, role - common
+    scored = []
+    for p in plays:
+        if p in linked or not (name or role):
+            continue
+        head, body = _char_words(f"{p.title} {p.role}"), _char_words(p.script)
+        score = 4 * len(name & head) + 2 * len(name & body) + 2 * len(role & head)
+        if score >= 4:
+            scored.append((-score, p.seq, p.id, p))
+    scored.sort(key=lambda x: x[:3])
+    return ([(p, "linked") for p in linked] + [(x[3], "name") for x in scored])[:CHAR_MAX]
+
+
+def personas_of(play):
+    """For the role play's page: (the personas ExCon linked, those found by name, the linked
+    usernames that are no persona)."""
+    from .models import Sender
+    senders = list(Sender.objects.filter(team_leader=False).order_by("display_name", "local_part"))
+    wanted = set(persona_list(play.personas))
+    linked = [s for s in senders if s.local_part.lower() in wanted]
+    unknown = sorted(wanted - {s.local_part.lower() for s in linked})
+    by_name = [s for s in senders if s not in linked and any(p.id == play.id for p, _ in characters(s))]
+    return linked, by_name, unknown
+
+
+def character_excerpt(play, sender, ctx=None, limit=EXCERPT):
+    """What a role play's script (and ExCon's notes) show of the character: all of a short script,
+    else its start and the passages naming the persona."""
+    from . import kb
+    from .render import fill
+    script = (play.script or "").strip()
+    if len(script) > limit:
+        words = sorted(_char_words(fill(sender.display_name or "", ctx or {})))
+        parts = [script[:limit // 2].rstrip() + " …"]
+        parts += ["… " + snip + " …" for _s, start, snip in kb.passages(script, words, width=limit // 4, limit=2)
+                  if start > limit // 2]
+        script = "\n".join(parts)
+    out = script or "(no script)"
+    if (play.notes or "").strip():
+        out += "\nExCon's notes for the role players: " + play.notes.strip()[:800]
+    return out
+
+
 def bump():
     """Something on the board changed: open boards and phones reload (poll)."""
     conf.put("rp_v", uuid.uuid4().hex[:10])

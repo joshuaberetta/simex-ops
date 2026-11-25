@@ -16,6 +16,11 @@
   </div>
   <label>Title <textarea name="title" rows="2">{{ play.title }}</textarea></label>
   <label>Role (the character) <input name="role" value="{{ play.role }}" maxlength="200" placeholder="Immigration officers x 2"></label>
+  <label>Persona(s) this character is <input name="personas" value="{{ play.personas }}" maxlength="500" list="rp-personas" placeholder="usernames, comma separated: dr-amani, moh-press"></label>
+  <datalist id="rp-personas">{% for s in persona_choices %}<option value="{{ s.local_part }}">{{ s.display_name }}</option>{% endfor %}</datalist>
+  <p class="small muted">Optional. Suggest a reply and ChatSIMEX give the persona's answers this character's voice from the script, whoever answers the mail and whether or not anyone is assigned to play it.
+    {% if linked %}Linked: {% for s in linked %}{{ s.display_name|default:s.local_part }} ({{ s.local_part }}){% if not forloop.last %}, {% endif %}{% endfor %}.{% endif %}
+    {% if by_name %}Also found by name: {% for s in by_name %}{{ s.display_name|default:s.local_part }} ({{ s.local_part }}){% if not forloop.last %}, {% endif %}{% endfor %}.{% elif not linked %}No persona found by name.{% endif %}</p>
   <fieldset><legend>Role players {% if play.players_text %}<span class="small muted">(the sheet says: {{ play.players_text }})</span>{% endif %}</legend>
     <div class="rp-players">{% for p in candidates %}<label class="chk"><input type="checkbox" name="players" value="{{ p.id }}" {% if p.chosen %}checked{% endif %}> {{ p.name }} <span class="small muted">{% if p.role == 'tl' %}{{ p.team.name }} leader{% elif p.role == 'desk' %}desk{% endif %}</span></label>{% empty %}<span class="muted small">No role players yet: add them on <a href="/roleplay/players/">Role players</a>.</span>{% endfor %}</div>
     <p class="small muted">A team leader plays only their own team's sittings (or those for every team).</p>

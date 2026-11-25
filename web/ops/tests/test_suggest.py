@@ -412,3 +412,49 @@ def test_leader_suggestions_read_nothing_control_side():
     code = src.split('"""', 2)[2]  # past the module's docstring
     assert not re.search(r"\bRolePlay\b|\.script\b|\.outcomes\b|\.notes\b|NpcProfile|ReplySuggestion|\bplanned\b"
                          r"|ReplyAnalysis|Grade|\bimport suggest\b|\bsuggest\.|roleplay|rp_briefing|rp_faq", code)
+
+
+def test_persona_voice_comes_from_the_role_plays_that_play_them(excon, loop):
+    """The character a persona is in the role plays (linked by ExCon or found by name) gives Suggest a reply
+    and ChatSIMEX its voice, played yet or not and whether or not anyone is assigned to play it."""
+    from ops import desk_chat
+    from ops.models import Sender
+    setup(excon)
+    ta = Team.objects.get(code="a")
+    s = Sender.objects.get(local_part="donotreply")
+    s.display_name = "Grace Mwangi"
+    s.save()
+    by_name = RolePlay.objects.create(key="4-1", serial="4-1", seq=1, title="Meeting with Ms Mwangi",
+                                      role="Grace Mwangi, district commissioner",
+                                      script="Grace is brisk and impatient; she wants the airport reopened.")
+    RolePlaySlot.objects.create(play=by_name, start=timezone.now() + timedelta(hours=3), minutes=10)  # still to come
+    RolePlay.objects.create(key="4-2", serial="4-2", seq=2, title="Press scrum", role="Spokesperson",
+                            script="Stays calm and speaks in proverbs.", personas="donotreply")
+    RolePlay.objects.create(key="4-3", serial="4-3", seq=3, title="Checkpoint", role="Driver Kofi", script="You are Kofi.")
+    assert [(p.key, why) for p, why in roleplay.characters(s)] == [("4-2", "linked"), ("4-1", "name")]
+    assert not by_name.players.exists()
+
+    deliver_now("3-13")
+    _, r = team_writes(participant("a", "Jane"), ta, "When does the airport reopen?")
+    thread = Mail.objects.get(team=None, owner=None, folder="inbox", desk_response=r).thread
+    desk_client().post("/inbox/desk/suggest/", {"thread": thread}, headers=FETCH)
+    first = loop.calls[0]["messages"][0]["content"][0]["text"]
+    assert "The character as the role plays play it" in first
+    assert "brisk and impatient" in first and "speaks in proverbs" in first
+    assert "rp:4-2 [NOT YET played with the team (not scheduled)] (ExCon: this persona)" in first
+    assert "rp:4-1 [NOT YET played with the team: due" in first and "(found by name)" in first
+    assert "You are Kofi" not in first
+    assert "whoever plays it" in loop.calls[0]["system"][0]["text"]
+
+    brief = desk_chat.persona_brief(desk_chat.Scope(ta), s)
+    assert "The character as the role plays play it" in brief and "brisk and impatient" in brief
+    assert "speaks in proverbs" in brief and "You are Kofi" not in brief
+
+    # ExCon links a persona on the role play's page; one that isn't a persona is flagged
+    kofi = RolePlay.objects.get(key="4-3")
+    page = excon.get(f"/roleplay/{by_name.id}/").content.decode()
+    assert "Also found by name: Grace Mwangi (donotreply)" in page
+    r = excon.post(f"/roleplay/{kofi.id}/", {"personas": "donotreply nobody-here", "title": kofi.title}, follow=True)
+    kofi.refresh_from_db()
+    assert kofi.personas == "donotreply, nobody-here" and "No persona with the username nobody-here" in r.content.decode()
+    assert "4-3" in [p.key for p, _ in roleplay.characters(s)]
