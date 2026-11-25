@@ -140,7 +140,7 @@
       {% if t.lead %}<li><a href="/inbox/as/{{ t.id }}/leader/" class="{% if t.id == team.id and v.leader_box %}on{% endif %}">{% icon "label" %}<span class="gm-flabel">{{ t.name }} · team leader</span></a></li>{% endif %}{% endfor %}
     </ul>
     {% else %}<button class="gm-compose-btn" data-compose {% if readonly %}disabled title="Read-only view"{% endif %}>{% icon "edit" 24 %}<span>{% if v.desk %}Write as a persona{% else %}Compose{% endif %}</span></button>{% endif %}
-    {% if desk_side.attention %}<a class="gm-desk-wait" href="{{ base }}/" title="Conversations a team is waiting on, follow-ups due, AI answers held: at the top of the Inbox">{{ desk_side.attention }} need{% if desk_side.attention == 1 %}s{% endif %} attention</a>{% endif %}
+    {% if desk_side.attention %}<a class="gm-desk-wait" href="{{ base }}/?folder=inbox&amp;st=attention" title="Conversations a team is waiting on, follow-ups due, AI answers held: opens just those">{{ desk_side.attention }} need{% if desk_side.attention == 1 %}s{% endif %} attention</a>{% endif %}
     {% if desk_side %}<ul class="gm-folders gm-desk-mine">
       {% with m=desk_side.mine.mine %}<li><a href="{{ base }}/?folder=mine" class="{% if folder == 'mine' and not q %}on{% endif %}{% if m.attention %} bold{% endif %}" title="Conversations you took or were given: {{ m.n }}{% if m.attention %}, {{ m.attention }} needing attention{% endif %}">
         {% icon "person" %}<span class="gm-flabel">Assigned to me</span><span class="gm-count">{% if m.attention %}{{ m.attention }}{% elif m.n %}<span class="muted">{{ m.n }}</span>{% endif %}</span></a></li>{% endwith %}

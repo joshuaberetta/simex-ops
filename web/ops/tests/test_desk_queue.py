@@ -335,3 +335,36 @@ def test_newest_first_like_any_email(excon):
     assert t.status_code == 200
     page = d.get("/inbox/desk/?order=sections")
     assert page.context["sections"] and page.context["desk_order"] == "sections"
+
+
+def test_attention_count_is_what_needs_attention_lists(excon):
+    """The side bar's "n need attention" counts exactly the Inbox's Needs attention, and opens
+    it: a waiting conversation someone archived and a follow-up due on one with only Sent
+    copies are in the Inbox's Needs attention too; one in the trash is in neither."""
+    setup(excon)
+    deliver_now("3-13")
+    ta, tb, tc = (Team.objects.get(code=c) for c in "abc")
+    got_a, _ = team_writes(participant("a"), ta)
+    got_b, _ = team_writes(participant("b"), tb)
+    d = desk_client()
+    # Archived while Team A still waits.
+    Mail.objects.filter(team=None, owner=None, thread=got_a.thread, folder="inbox").update(archived=True)
+    # Team C never wrote: a follow-up due on the persona's delivery (Sent only).
+    sent_c = Mail.objects.get(team=None, owner=None, folder="sent", desk_team=tc)
+    d.post("/inbox/desk/mark/", {"threads": sent_c.thread, "act": "follow", "minutes": "0", "note": "Chase C"})
+    # A follow-up due on a conversation then trashed: nothing to open, not counted.
+    sent_d = Mail.objects.get(team=None, owner=None, folder="sent", desk_team=Team.objects.get(code="d"))
+    d.post("/inbox/desk/mark/", {"threads": sent_d.thread, "act": "follow", "minutes": "0", "note": "Chase D"})
+    Mail.objects.filter(team=None, owner=None, thread=sent_d.thread).update(trashed_at=timezone.now())
+    page = d.get("/inbox/desk/?folder=inbox&st=attention")
+    listed = {r["thread"] for r in page.context["rows"]}
+    assert listed == {got_a.thread, got_b.thread, sent_c.thread}
+    assert page.context["desk_side"]["attention"] == 3 == page.context["total"]
+    assert b'href="/inbox/desk/?folder=inbox&amp;st=attention"' in page.content and b"3 need attention" in page.content
+    # The preset chip agrees.
+    preset = next(p for p in page.context["filters"]["desk"]["presets"] if p["name"] == "Needs attention")
+    assert preset["on"]
+    # Answered: out of both.
+    answer(d, Mail.objects.get(team=None, folder="inbox", desk_team=tb), tb)
+    page = d.get("/inbox/desk/?folder=inbox&st=attention")
+    assert page.context["desk_side"]["attention"] == 2 == page.context["total"]

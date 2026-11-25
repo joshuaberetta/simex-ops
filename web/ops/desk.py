@@ -870,13 +870,18 @@ def apply_defaults(user, name):
     return len(given)
 
 
-def attention_count():
-    """How many desk conversations need attention now (the desk's tab badge and side bar)."""
-    threads = list(Mail.objects.filter(team=None, owner=None, folder="inbox", trashed_at__isnull=True).order_by()
-                   .values_list("thread", flat=True).distinct())
+def attention_threads():
+    """The desk conversations that need attention now (section ATTENTION), whatever folder their
+    desk copies are in: a team waiting (its message may have been archived) or a follow-up due
+    (it may have only Sent copies). Never one whose desk copies are all in the trash or drafts.
+    The side bar's count and the desk's Inbox (views_inbox._folder_qs) both read this, so the
+    count is what Needs attention lists."""
     from .models import DeskConversation
-    threads += list(DeskConversation.objects.filter(follow_upto__gt=0).values_list("thread", flat=True))
-    return sum(1 for st in states(threads).values() if st["section"] == ATTENTION)
+    live = Mail.objects.filter(team=None, owner=None, trashed_at__isnull=True).exclude(folder="drafts")
+    threads = list(live.filter(folder="inbox").order_by().values_list("thread", flat=True).distinct())
+    follow = DeskConversation.objects.filter(follow_upto__gt=0).values_list("thread", flat=True)
+    threads += list(live.filter(thread__in=follow).order_by().values_list("thread", flat=True).distinct())
+    return [t for t, st in states(threads).items() if st["section"] == ATTENTION]
 
 
 def tick(now=None):

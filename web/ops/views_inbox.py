@@ -582,7 +582,11 @@ def _folder_qs(v, folder, q="", filters=None):
     else:
         qs = qs.filter(trashed_at__isnull=True)
         if folder == "inbox":
-            qs = qs.filter(folder="inbox", archived=False)
+            keep = Q(folder="inbox", archived=False)
+            if v.desk:  # and every conversation that needs attention, archived or only in Sent
+                keep |= Q(thread__in=desk_attention(v))
+                qs = qs.exclude(folder="drafts")
+            qs = qs.filter(keep)
         elif folder == "starred":
             qs = qs.filter(starred=True).exclude(folder="drafts")
         elif folder == "sent":
@@ -605,10 +609,27 @@ def _folder_qs(v, folder, q="", filters=None):
 FILES = Prefetch("files", MailAttachment.objects.defer("data"))
 
 
+MAX_MAILS = 2000  # a list reads at most this many of its newest mails
+
+
+def desk_attention(v):
+    """desk.attention_threads, once per request (the side bar's count and the Inbox)."""
+    if not hasattr(v, "_attention"):
+        v._attention = desk.attention_threads()
+    return v._attention
+
+
 def conversations(v, folder, q="", filters=None):
     """Gmail-style conversation rows: one per thread, newest first (filters: a
     mail_filters.Filters narrowing the conversations; its row filters are applied by the caller)."""
-    mails = list(_folder_qs(v, folder, q, filters).prefetch_related(FILES).order_by("-created_at", "-id")[:2000])
+    qs = _folder_qs(v, folder, q, filters)
+    mails = list(qs.prefetch_related(FILES).order_by("-created_at", "-id")[:MAX_MAILS])
+    if v.desk and len(mails) == MAX_MAILS and folder not in ("drafts", "trash"):
+        # A long desk list never loses a conversation that needs attention to the cap.
+        seen = {m.thread for m in mails}
+        missing = [t for t in desk_attention(v) if t not in seen]
+        if missing:
+            mails += list(qs.filter(thread__in=missing).prefetch_related(FILES).order_by("-created_at", "-id"))
     if folder == "drafts":
         return [{"thread": m.thread, "latest": m, "count": 1, "unread": False, "starred": m.starred,
                  "has_files": bool(m.attached), "people": "Draft", "draft": True, "subject": m.subject}
@@ -751,7 +772,7 @@ def desk_side(v):
                          "unread": len({t for t, p, _ in unread if p in locs})})
     teams = [{"key": f"t{t.id}", "name": t.name, "test": t.is_test,
               "unread": len({th for th, _, tid in unread if tid == t.id})} for t in Team.objects.filter(active=True)]
-    return {"personas": personas, "teams": teams, "attention": desk.attention_count(), "mine": _desk_mine(v)}
+    return {"personas": personas, "teams": teams, "attention": len(desk_attention(v)), "mine": _desk_mine(v)}
 
 
 def _desk_mine(v):
