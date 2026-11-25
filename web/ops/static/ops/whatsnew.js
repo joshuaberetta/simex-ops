@@ -1,8 +1,8 @@
 // What's new (ops/whatsnew.py): the notes in a notifications drawer. With something new the
 // drawer stays closed: a small star on its button (data-wn-dot) says so, and opening the
-// drawer marks the notes seen (POST data-wn-url), which takes the star away. A drawer of its own (data-wn-bell: SIMEX Mail
-// mailboxes without the desk's bell, the role players' pages) opens and closes here; the
-// desk's and ExCon's are their own scripts', opened by clicking their button.
+// drawer marks the notes seen (POST data-wn-url), which takes the star away. A drawer of its own (data-wn-bell: every
+// SIMEX Mail mailbox, the persona desk's beside its notifications bell) opens and closes here; ExCon's is
+// its own script's, opened by clicking its button.
 (function () {
   "use strict";
   const sec = document.querySelector("[data-wn]");
@@ -14,7 +14,7 @@
   const dot = document.querySelector("[data-wn-dot]");
   if (bell && toggle) {
     const open = (on) => { panel.hidden = !on; toggle.setAttribute("aria-expanded", on ? "true" : "false"); };
-    toggle.addEventListener("click", (e) => { e.stopPropagation(); open(panel.hidden); });
+    toggle.addEventListener("click", () => open(panel.hidden));  // the desk bell's panel closes on this click
     document.addEventListener("click", (e) => { if (!panel.hidden && !e.target.closest("[data-wn-bell]")) open(false); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !panel.hidden) open(false); });
   }

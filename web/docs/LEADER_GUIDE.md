@@ -34,7 +34,7 @@ You only ever see your own team's inbox. The other teams are independent of your
 Messages written, injects answered, median time to the first reply, late or missing replies, delivered → read → answered, who in the team is writing (with their team role, e.g. Deputy Team Leader, if ExCon gave them one), the work by team role (messages written and their share, time to reply, messages read, documents opened), replies per hour, and SIMEX AI's reading: tone, quality, possibly AI-written replies with the reasons, flags, what the team asks for and what it commits to. Click a time to open the conversation in the Team inbox. The page refreshes every two minutes.
 
 ## What's new
-The **bell** at the top lists what is new in SIMEX Mail. A small star on it means there is something new: click the bell to read it.
+The **megaphone** at the top lists what is new in SIMEX Mail. A small star on it means there is something new: click it to read it.
 
 ## Alerts
 Scan the QR code on your login slip with your phone: it signs you in and shows how to turn alerts on. As in the team's SIMEX Mail: a chime and a blue bar for new mail in **My mail**, and, once you click **Turn on alerts**, notifications on your computer or phone (on an iPhone, from the home-screen app: **Share → Add to Home Screen**).

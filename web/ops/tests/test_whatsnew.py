@@ -39,8 +39,11 @@ def test_a_star_until_the_drawer_is_opened_then_the_notes_are_seen(excon):
     page = pa.get("/inbox/").content.decode()
     assert 'data-wn-new="0"' in page and "Formatting and pictures" in page  # still listed, no longer new
     assert "data-wn-dot" not in page  # no star
-    # The desk's bell has it too, ExCon's panel, and only signed-in logins may mark.
-    assert 'data-wn-toggle="[data-dn-toggle]"' in desk_client().get("/inbox/desk/").content.decode()
+    # ExCon's panel has it too, and only signed-in logins may mark.
+    desk = desk_client().get("/inbox/desk/").content.decode()
+    # The desk: What's new is its own button, apart from the notifications bell (their marks never overlap).
+    assert 'data-wn-toggle="[data-wn-toggle]"' in desk and "data-wn-bell" in desk and "data-dn-toggle" in desk
+    assert 'data-wn-toggle="[data-dn-toggle]"' not in desk
     assert 'data-wn-toggle="[data-nt-toggle]"' in excon.get("/injects/").content.decode()
     from django.test import Client
     assert Client().post("/whatsnew/seen/", {"key": "2026-11-rich-mail"}).status_code == 302

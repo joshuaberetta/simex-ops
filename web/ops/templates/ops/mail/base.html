@@ -44,17 +44,17 @@
     </div>{{ sim.js|json_script:"simex-clock" }}{% endif %}
     {% if readonly and not leader_tabs and v %}<a class="gm-viewas" href="{{ back_url|default:'/inboxes/' }}" title="{% if desk_tabs %}Back to the teams{% else %}Back to ExCon{% endif %}">{% icon "eye" 18 %} {% if box %}{% if desk_tabs %}Back to the teams{% else %}Back to ExCon{% endif %}{% else %}Viewing {% if v.leader_box %}{{ team.name }}'s team leader{% elif v.member_box %}{{ v.owner.name }} ({{ team.name }}){% else %}as {{ team.name }}{% endif %} · read-only{% endif %}</a>{% endif %}
     {% if desk_tabs.bell %}<div class="gm-dn" data-dn>
-      <button type="button" class="gm-icon-btn" data-dn-toggle title="Your notifications: conversations given to you, follow-ups due, teams writing again" aria-label="Your notifications" aria-expanded="false">{% icon "notices" 22 %}<span class="gm-dn-n" data-dn-n>{% if desk_tabs.bell.unread %}{{ desk_tabs.bell.unread }}{% endif %}</span>{% if whatsnew.new %}<span class="wn-dot" data-wn-dot title="What's new"></span>{% endif %}</button>
+      <button type="button" class="gm-icon-btn" data-dn-toggle title="Your notifications: conversations given to you, follow-ups due, teams writing again" aria-label="Your notifications" aria-expanded="false">{% icon "notices" 22 %}<span class="gm-dn-n" data-dn-n>{% if desk_tabs.bell.unread %}{{ desk_tabs.bell.unread }}{% endif %}</span></button>
       <div class="gm-dn-panel" data-dn-panel hidden>
         <div class="gm-dn-head"><b>Notifications</b><span><button type="button" class="gm-link" data-dn-all>Mark all read</button> · <button type="button" class="gm-link" data-dn-clear>Clear all</button></span></div>
-        {% include "ops/_whatsnew.html" with url="/inbox/whatsnew/seen/" toggle="[data-dn-toggle]" %}
         <ul class="gm-dn-list" data-dn-list><li class="gm-dn-empty">Loading…</li></ul>
         <div class="gm-dn-foot">Conversations given to you or taken from you, your follow-ups when due, teams writing again and others answering in conversations you have or follow, a team waiting on yours, AI persona answers held. <a href="/inbox/desk/?folder=mine" class="gm-link">Assigned to me</a> · <a href="/inbox/desk/?folder=watching" class="gm-link">Following</a></div>
       </div>
-    </div>{{ desk_tabs.bell|json_script:"simex-dn" }}{% elif whatsnew.notes %}<div class="gm-dn" data-wn-bell>
-      <button type="button" class="gm-icon-btn" data-wn-toggle title="Notifications: what's new in SIMEX Mail" aria-label="Notifications" aria-expanded="false">{% icon "notices" 22 %}{% if whatsnew.new %}<span class="wn-dot" data-wn-dot></span>{% endif %}</button>
+    </div>{{ desk_tabs.bell|json_script:"simex-dn" }}{% endif %}
+    {% if whatsnew.notes %}<div class="gm-dn" data-wn-bell>{% comment %}What's new: its own button, apart from the desk's notifications bell{% endcomment %}
+      <button type="button" class="gm-icon-btn" data-wn-toggle title="What's new in SIMEX Mail" aria-label="What's new{% if whatsnew.new %} ({{ whatsnew.new }} new){% endif %}" aria-expanded="false">{% icon "campaign" 22 %}{% if whatsnew.new %}<span class="wn-dot" data-wn-dot></span>{% endif %}</button>
       <div class="gm-dn-panel" data-wn-panel hidden>
-        <div class="gm-dn-head"><b>Notifications</b></div>
+        <div class="gm-dn-head"><b>What's new</b></div>
         {% include "ops/_whatsnew.html" with url="/inbox/whatsnew/seen/" toggle="[data-wn-toggle]" %}
       </div>
     </div>{% endif %}

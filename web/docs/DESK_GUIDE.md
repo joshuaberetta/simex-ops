@@ -64,7 +64,8 @@ Tick several rows in the Inbox for **I'll take these**, **Assign to…**, **No r
 
 ## Your conversations and your notifications
 - On the left, **Assigned to me** has the conversations you took or were given, with what needs attention first; its number is how many of them need attention. **Following** has the ones you answered in, set a follow-up on or follow, but don't have.
-- The **bell** at the top (next to ?) is yours alone. At its top, **What's new** in SIMEX Mail (a small star on the bell means there is something new). It tells you when:
+- **What's new** in SIMEX Mail is the **megaphone** at the top (a small star on it means there is something new), apart from your notifications.
+- The **bell** at the top (next to the megaphone) is yours alone, its number your unread notifications. It tells you when:
   - a conversation is given to you, or someone takes over or reassigns one you had;
   - one of your follow-ups falls due;
   - a team writes again in a conversation you have or follow;

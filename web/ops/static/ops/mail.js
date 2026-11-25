@@ -712,7 +712,7 @@
       return j;
     }
     const open = (on) => { panel.hidden = !on; btn.setAttribute("aria-expanded", on ? "true" : "false"); if (on) load(); };
-    btn.onclick = (e) => { e.stopPropagation(); open(panel.hidden); };
+    btn.onclick = () => open(panel.hidden);  // no stopPropagation: opening it closes the What's new panel
     document.addEventListener("click", (e) => { if (!panel.hidden && !e.target.closest("[data-dn]")) open(false); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !panel.hidden) open(false); });
     list.addEventListener("click", async (e) => {
