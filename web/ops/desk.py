@@ -432,6 +432,7 @@ def _persona_mail(s, copied, thread, subject, body, body_html, files, docs, pers
         NpcReply.objects.filter(npc__sender=s, thread_key=f"pp:{thread}"[:300], status__in=["queued", "held", "failed"]).update(
             status="skipped", note=f"Answered by {person.name if person else user} on the persona desk.",
             updated_at=timezone.now())
+    auto_assign(thread, quiet=True)  # by the default of the persona written to, else the writer's
     audit("desk_persona_mail", f"{s.local_part} -> {', '.join(x.local_part for x in to + cc)}: {subject[:80]}", user)
     npc_.on_persona_mail(inbox, m, s, to, teams)
     return m
@@ -810,6 +811,10 @@ def auto_assign(thread, quiet=False):
             return None
         local, team_id = sides([thread]).get(thread, (None, None))
         to = default_owner(local, team_id)
+        if to is None and team_id is None:  # persona mail: no team; the writer's default then
+            writer = (Mail.objects.filter(team=None, owner=None, thread=thread, message__kind=PERSONA_KIND)
+                      .order_by("id").values_list("recipients", flat=True).first() or {}).get("from", "")
+            to = default_owner(writer[2:], None) if writer.startswith("p:") else None
         if to is None:
             return None
         with transaction.atomic():

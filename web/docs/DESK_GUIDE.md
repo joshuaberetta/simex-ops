@@ -80,7 +80,7 @@ Tick several rows in the Inbox for **I'll take these**, **Assign to…**, **No r
 - Choose a team, a persona, or *and answered, last 4 h* to see answered ones too. **ExCon logins** adds columns for ExCon staff (those with a conversation always show). The board keeps itself up to date.
 
 **Default assignments**: who has each persona's conversations with each team, so nobody has to hand them out. One row per persona: **All teams** covers every team without its own choice, and a team's cell overrides it (CCPRR: All teams to Sam, Team B and Team D to Alex). **Whole row to…** gives every team to one person; **Clear the row** removes the row's choices. Changes save as you make them.
-- A conversation goes to its default person when it starts: when the persona first writes to the team (an inject: quietly, they hear when the team writes) or when the team first writes to the persona. *Yours by the default assignments* shows on its bar, *by default* on its card.
+- A conversation goes to its default person when it starts: when the persona first writes to the team (an inject: quietly, they hear when the team writes) or when the team first writes to the persona. A persona writing to another persona (no team) goes to the **All teams** person of the persona written to, else of the writer. *Yours by the default assignments* shows on its bar, *by default* on its card.
 - Never over someone: a conversation anyone took, was given or released by hand keeps that. **Apply to open conversations nobody has** gives those to their default person now.
 - Someone who leaves the desk is skipped: their conversations go to the **All teams** choice, or nobody.
 

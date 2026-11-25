@@ -153,3 +153,30 @@ def test_network_and_clearing(excon, fake):
     assert not Mail.objects.filter(team=None, message__kind="persona").exists()
     assert not Message.objects.filter(kind="persona").exists() and not NpcReply.objects.exists()
     assert reset.clear_persona_mail() == 0
+
+
+def test_persona_mail_goes_to_the_default_owner(excon, fake):
+    """Persona mail has no team: the "all teams" default of the persona written to gives it, else
+    the writer's; the AI persona's answer stays in the same owner's Assigned to me."""
+    from ops.models import DeskConversation, DeskDefault
+    setup(excon)
+    make_npc()
+    d, e = desk_client(), desk_client("Ben Desk", "ben.desk")
+    anna, ben = d.person.user, e.person.user
+    DeskDefault.objects.create(sender=Sender.objects.get(local_part="gov-plaida"), team=None, user=anna)
+    DeskDefault.objects.create(sender=Sender.objects.get(local_part="cnn"), team=None, user=ben)
+    assert e.post("/inbox/desk/send/", {"from": "p:cnn", "to": "p:gov-plaida", "subject": "Road status",
+                                        "body": "Is the coast road open?"}, headers=FETCH).json()["ok"]
+    t = Mail.objects.get(team=None, folder="inbox", subject="Road status").thread
+    c = DeskConversation.objects.get(thread=t)
+    assert c.owner == anna and c.auto
+    run_all()
+    assert Message.objects.filter(kind="persona", npc=True, thread=t).exists()
+    assert DeskConversation.objects.get(thread=t).owner == anna
+    assert t in [r["thread"] for r in d.get("/inbox/desk/?folder=mine").context["rows"]]
+    # Nobody's default for the persona written to: the writer's.
+    Sender.objects.create(local_part="unhcr", display_name="UNHCR")
+    assert e.post("/inbox/desk/send/", {"from": "p:cnn", "to": "p:unhcr", "subject": "Camps",
+                                        "body": "How many?"}, headers=FETCH).json()["ok"]
+    t2 = Mail.objects.get(team=None, folder="inbox", subject="Camps").thread
+    assert DeskConversation.objects.get(thread=t2).owner == ben
