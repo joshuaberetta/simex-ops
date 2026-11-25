@@ -2,3 +2,6 @@
 *.db
 staticfiles/
 __pycache__/
+# manage.py debrief: participants' mail and reports, never in git
+debrief-out/
+*.dump
