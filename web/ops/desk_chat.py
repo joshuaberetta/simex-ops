@@ -299,7 +299,7 @@ def _names():
 
 
 def _desk_line(m, teams, memo, sc):
-    team = teams.get(m.desk_team_id, "a team")
+    team = teams.get(m.desk_team_id, "a team") if m.desk_team_id else (m.to_label or "another persona")
     persona = desk.describe(m.persona, memo=memo)["name"] if m.persona else "a persona"
     who = f"{team} ({m.from_name or m.from_addr}) → {persona}" if m.folder == "inbox" else f"{persona} → {team}"
     tags = ["desk mail"] + (["test"] if m.is_test else [])

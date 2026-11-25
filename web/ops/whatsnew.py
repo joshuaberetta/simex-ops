@@ -17,6 +17,13 @@ EVERYONE = {PARTICIPANT, LEADER, DESK, RP, EXCON}
 SHOWN = 8  # notes listed in the drawer (the newest)
 
 ENTRIES = [
+    {"key": "2026-11-persona-mail", "date": date(2026, 11, 25), "who": {DESK, EXCON},
+     "title": "Personas can write to each other",
+     "body": "Put another persona in **To**, with or without teams: it lands on the persona desk for them, and an "
+             "**AI persona** in To answers on its own. With no team, no team sees it: try out an AI persona, or play "
+             "partners talking among themselves. With teams in **Cc**, they read the whole exchange as background "
+             "traffic and can join with Reply all. AI personas answering each other stop after 3 answers in a row. "
+             "ExCon's **Compose** has **To other personas** for the same."},
     {"key": "2026-11-suggest-desk-mail", "date": date(2026, 11, 25), "who": {DESK, EXCON},
      "title": "Suggested replies stay consistent across teams",
      "body": "**Suggest a reply** now reads the persona's other conversations with the team, what the other "

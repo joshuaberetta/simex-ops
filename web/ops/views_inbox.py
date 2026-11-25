@@ -1109,6 +1109,12 @@ def thread_view(request, v, thread):
         teams = [f"t:{m.desk_team_id}" for m in mails if m.desk_team_id]
         reply_to = [f"t:{last_in.desk_team_id}"] if last_in and last_in.desk_team_id else teams[-1:]
         reply_all = list(dict.fromkeys(teams))
+        pp = (last_in.recipients or {}) if last_in and not last_in.desk_team_id else {}
+        if pp.get("from"):  # persona mail: back to the persona who wrote, everyone else on it in reply all
+            me = f"p:{last_in.persona}"
+            reply_to = [pp["from"]]
+            reply_all = list(dict.fromkeys([pp["from"]] + [k for k in pp.get("to", []) + pp.get("cc", [])
+                                                            if k != me] + teams))
         can_reply = bool(reply_to)
         desk_js = _desk_thread(mails)
     subject = mails[0].subject
@@ -1123,7 +1129,10 @@ def thread_view(request, v, thread):
                                       "html": shown_html(v, m),
                                       "date": timezone.localtime(m.sim_at or m.created_at).strftime("%a, %b %-d, %Y at %H:%M"),
                                       "to": m.to_label,
-                                      "reply": ([f"t:{m.desk_team_id}"] if m.desk_team_id else []) if v.desk
+                                      "reply": ([f"t:{m.desk_team_id}"] if m.desk_team_id else
+                                                ([(m.recipients or {}).get("from")] if m.folder == "inbox" and
+                                                 (m.recipients or {}).get("from") else list((m.recipients or {}).get("to", []))))
+                                      if v.desk
                                       else [_key_for_sender(m, memo)] if m.folder == "inbox"
                                       else list(m.recipients.get("to", [])),
                                       **({"as": m.desk_as} if v.desk else {})} for m in mails},
@@ -1521,10 +1530,10 @@ def send(request, v):
 
 
 def _send_desk(request, v, P, to, cc, bcc, subject, body, files, parent, fwd, fail, ajax, rich=("", [])):
-    """The persona desk writes as a persona to one or more teams (desk.send). Each team's
+    """The persona desk writes as a persona to teams and other personas (desk.send). Each team's
     message goes on its own: one not armed or not deliverable doesn't stop the others. Other
-    personas in To or Cc are shown on it (desk.send copies); one in Bcc is left out (the
-    desk is every persona's mailbox: it has the message already)."""
+    personas in To or Cc get it as persona mail on the desk and are shown on the teams' copies
+    (desk.send copies); one in Bcc is left out (the desk has the message already)."""
     entries = [e for e in to + cc + bcc if e["kind"] != "persona"]
     copies = {"to": [e for e in to if e["kind"] == "persona"], "cc": [e for e in cc if e["kind"] == "persona"]}
     uploads = [(re.sub(r"[\r\n]+", " ", f.name) or "file", f.content_type or "application/octet-stream", f.read())

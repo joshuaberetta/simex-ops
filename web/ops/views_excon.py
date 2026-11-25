@@ -1235,10 +1235,12 @@ def compose(request):
             files = [(re.sub(r"[\r\n]+", " ", PurePosixPath(f.name.replace("\\", "/")).name) or "file",
                       f.content_type or "application/octet-stream", f.read()) for f in uploads]
             try:
-                cc = set(P.getlist("cc"))
+                cc, pto = set(P.getlist("cc")), set(P.getlist("pto"))
+                book = desk.copy_entries()
                 msgs, errors = desk.send(None, _u(request), P.get("from"), entries,
                                          (P.get("subject") or "").strip() or "(no subject)", body, files,
-                                         copies={"to": [], "cc": [e for e in desk.copy_entries() if e["key"] in cc]})
+                                         copies={"to": [e for e in book if e["key"] in pto],
+                                                 "cc": [e for e in book if e["key"] in cc and e["key"] not in pto]})
             except desk.DeskError as e:
                 messages.error(request, str(e))
             else:
@@ -1247,17 +1249,18 @@ def compose(request):
                 if errors:
                     messages.error(request, f"Not sent to {'; '.join(errors)}")
                 return redirect("/compose/")
-        form = {"from": P.get("from"), "to": keys, "cc": set(P.getlist("cc")), "subject": P.get("subject", ""),
+        form = {"from": P.get("from"), "to": keys, "cc": set(P.getlist("cc")), "pto": set(P.getlist("pto")),
+                "subject": P.get("subject", ""),
                 "body": body}
     else:
-        form = {"from": "", "to": set(), "cc": set(), "subject": "", "body": ""}
+        form = {"from": "", "to": set(), "cc": set(), "pto": set(), "subject": "", "body": ""}
     by_team = [{"team": t, "key": f"t:{t.id}",
                 "leaders": [e for e in members if e["team"] == t.id and e["kind"] == "tl"],
                 "members": [e for e in members if e["team"] == t.id and e["kind"] == "member"]} for t in teams]
-    recent = Message.objects.filter(kind="desk").select_related("author").order_by("-id")[:30]
+    recent = Message.objects.filter(kind__in=["desk", desk.PERSONA_KIND]).select_related("author").order_by("-id")[:30]
     return render(request, "ops/compose.html", {
         "tab": "compose", "personas": desk_from_choices(), "by_team": by_team, "form": form, "recent": recent,
-        "copy_personas": desk.copy_entries(),
+        "copy_personas": desk.copy_entries(), "pp_turns": __import__("ops.npc", fromlist=["PP_AI_TURNS"]).PP_AI_TURNS,
         "modes": __import__("ops.calendar", fromlist=["MODES"]).MODES,
         "max_mb": delivery.EMAIL_FILES_MAX // (1024 * 1024)})
 
@@ -1350,6 +1353,10 @@ def inbox_clear(request):
                   + (f", {n['deliveries']} deliveries" if deliveries else ""))
         audit("inbox_clear", detail, _u(request))
         done.append(detail)
+    if P.get("team") == "all" and scope == "all":
+        n = reset.clear_persona_mail(deliveries)
+        if n:
+            done.append(f"the persona desk's persona mail ({n})")
     messages.success(request, f"Cleared {'; '.join(done)}.")
     return redirect("/inboxes/")
 

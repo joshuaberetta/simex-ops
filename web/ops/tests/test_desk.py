@@ -432,7 +432,13 @@ def test_desk_copies_other_personas(excon):
     assert "<donotreply@" in got.to_label and got.cc_label == ""  # the persona writing isn't copied to itself
     assert got.recipients == {"to": ["p:donotreply"], "cc": []}
     assert "<donotreply@" in Mail.objects.get(team=None, folder="sent", message=m).to_label
-    assert not Mail.objects.filter(team=None, folder="inbox").exists()  # no persona gets a copy of its own
+    # persona mail: the desk's Inbox has it for donotreply (no Sent copy of its own: the team's is it),
+    # in the team's conversation, and nobody waits on it
+    pp = Mail.objects.get(team=None, folder="inbox")
+    assert pp.persona == "donotreply" and pp.message.kind == "persona" and pp.thread == got.thread
+    assert pp.recipients["from"] == "p:cnn" and f"t:{ta.id}" in pp.recipients["cc"]
+    assert not desk.states([pp.thread])[pp.thread]["waiting"]
+    pp.delete()
     # Cc, then the team's reply all reaches both personas: one desk copy.
     d.post("/inbox/desk/send/", {"from": "p:cnn", "to": f"t:{ta.id}", "cc": "p:donotreply", "subject": "Again",
                                  "body": "?"}, headers=FETCH)
@@ -443,9 +449,10 @@ def test_desk_copies_other_personas(excon):
     assert set(t["replyAll"]) == {"p:cnn", "p:donotreply"}
     pa.post("/inbox/send/", {"to": ",".join(t["replyAll"]), "subject": "Re: Again", "body": "Both.", "in_reply_to": got.id})
     assert Mail.objects.filter(team=None, folder="inbox", subject="Re: Again").count() == 1
-    # Personas alone: no team to write to.
-    r = d.post("/inbox/desk/send/", {"from": "p:cnn", "to": "p:donotreply", "body": "x"}, headers=FETCH)
-    assert r.status_code == 400 and "copied" in r.json()["error"]
+    # Personas alone: persona mail, on the desk only.
+    r = d.post("/inbox/desk/send/", {"from": "p:cnn", "to": "p:donotreply", "subject": "Alone", "body": "x"}, headers=FETCH)
+    assert r.json()["ok"], r.json()
+    assert Mail.objects.filter(team=None, subject="Alone").count() == 2 and not Mail.objects.filter(team__isnull=False, subject="Alone").exists()
     # ExCon's Compose: Cc other personas.
     excon.post("/compose/", {"from": "p:cnn", "to": f"t:{ta.id}", "cc": "p:donotreply", "subject": "Compose",
                              "body": "x"})

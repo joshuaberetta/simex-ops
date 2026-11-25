@@ -278,8 +278,11 @@ def skip_ai(response, sender, who):
             .update(status="skipped", note=f"Answered by {who} on the persona desk.", updated_at=timezone.now()))
 
 
+PERSONA_KIND = "persona"  # a Message from one persona to others, on the desk (persona mail)
+
+
 def send(person, user, from_key, entries, subject, body, files=(), docs=(), parent=None, idem=None, extra_files=None,
-         body_html="", copies=None):
+         body_html="", copies=None, npc=False, persona_idem=None):
     """Write as a persona (from_key "p:<username>") to the teams in entries (address-book
     entries), one Message each: in a conversation (parent, a desk Mail), the team's message it
     answers gets its answer, else (or as another persona) a Message of kind desk in the same
@@ -289,7 +292,11 @@ def send(person, user, from_key, entries, subject, body, files=(), docs=(), pare
     change and recipient; one already sent is not sent again); extra_files(team, member, channel):
     more files for that recipient (an invitation's .ics by email).
     copies: {"to": [...], "cc": [...]}, other personas it is also addressed to (copy_entries):
-    shown on each team's message (by email, in its To / Cc), reply all reaching them.
+    shown on each team's message (by email, in its To / Cc), reply all reaching them, and
+    persona mail to them: a Message of kind persona (no team) with the desk's Inbox copy (and,
+    with no team, its Sent copy), in the same conversation as the teams' copies, which an AI
+    persona in To answers (npc.on_persona_mail). With no team it needs no live arming.
+    npc: an AI persona wrote it (Message.npc); persona_idem: the persona Message's key.
     Returns (messages, errors); raises DeskError when nothing could go."""
     s = sender_for_key(from_key)
     if not s:
@@ -311,25 +318,28 @@ def send(person, user, from_key, entries, subject, body, files=(), docs=(), pare
             p = Person.objects.filter(pk=int(e["key"][2:]), role="tl", active=True, team__active=True).select_related("team").first()
             if p and (p.team, p) not in targets:
                 targets.append((p.team, p))
-    if not targets:
-        raise DeskError("Write to one or more teams, team members or team leaders."
-                        + (" Other personas can only be copied on a message to them." if copies and (
-                            copies.get("to") or copies.get("cc")) else ""))
     copied = _copied(copies, s)
+    if not targets and not (copied["to"] or copied["cc"]):
+        raise DeskError("Write to one or more teams, team members, team leaders or other personas.")
     who = person.name if person else user
     actor = person.user if person and person.user_id else get_user_model().objects.filter(username=user).first()
     token = ACTOR.set(actor)  # those on the conversation hear of it, but not the sender (_told_out)
     try:
         return _send(s, targets, subject, body, files, docs, parent, person, user, who, idem, extra_files, body_html,
-                     copied)
+                     copied, npc, persona_idem)
     finally:
         ACTOR.reset(token)
 
 
 def _send(s, targets, subject, body, files, docs, parent, person, user, who, idem=None, extra_files=None, body_html="",
-          copied=None):
+          copied=None, npc=False, persona_idem=None):
     msgs, errors = [], []
     from . import delivery
+    copied = copied or {"to": [], "cc": []}
+    to_personas = [x for x in copied["to"] + copied["cc"] if "{" not in x.local_part]
+    # Persona mail: one conversation on the desk, the teams' copies in it too (their own thread
+    # id is the same), so the personas' answers and the teams' replies all follow it.
+    thread = (parent.thread if parent is not None else uuid.uuid4().hex) if to_personas else ""
     for t, member in targets:
         key = idem(t, member) if idem else None
         done = Message.objects.filter(idem_key=key).first() if key else None
@@ -351,13 +361,14 @@ def _send(s, targets, subject, body, files, docs, parent, person, user, who, ide
             more = list(extra_files(t, member, response.channel)) if extra_files else []
             m = delivery.answer(response, body, user=user, files=list(files) + more, attachments=docs, author=person,
                                 subject=subject if calendar.SENDING.get() else None,  # an invitation's answer
-                                idem_key=key, body_html=body_html, also=by_email)
+                                idem_key=key, body_html=body_html, also=by_email, npc=npc)
         elif not conf.flag("live_armed") and not t.is_test:
             errors.append(f"{label}: live sending is not armed (ExCon, Settings).")
             continue
         else:
             m, err = _new(s, local, ctx, t, subject, body, files, docs, parent, response, person, user, member,
-                          idem_key=key, extra_files=extra_files, body_html=body_html, also=by_email)
+                          idem_key=key, extra_files=extra_files, body_html=body_html, also=by_email,
+                          thread=thread, npc=npc)
             if err:
                 errors.append(f"{label}: {err}")
                 continue
@@ -367,9 +378,63 @@ def _send(s, targets, subject, body, files, docs, parent, person, user, who, ide
         if m.status == "failed":
             errors.append(f"{label}: {m.error or 'not delivered'}")
         msgs.append(m)
+    if to_personas:
+        teams = list(dict.fromkeys(t for t, _ in targets))
+        msgs.append(_persona_mail(s, copied, thread, subject, body, body_html, files, docs, person, user, teams,
+                                  sent_copy=not [m for m in msgs if m.status != "failed"], npc=npc, idem_key=persona_idem))
     if not [m for m in msgs if m.status != "failed"]:
         raise DeskError("; ".join(errors) or "Nothing was sent.")
     return msgs, errors
+
+
+def _persona_label(senders):
+    return ", ".join(f"{(x.display_name or x.local_part)} <{render.persona_address(x, x.local_part, {})}>" for x in senders)
+
+
+def _persona_mail(s, copied, thread, subject, body, body_html, files, docs, person, user, teams, sent_copy=True,
+                  npc=False, idem_key=None):
+    """Persona mail: s writes to other personas (copied: {"to", "cc"} Senders), with teams
+    (their own copies sent already) in copy. One Message (kind persona, no team) and the desk's
+    copies: its Inbox copy for the personas written to, and its Sent copy when no team got it
+    (else the teams' copies are the Sent). An AI persona in To answers (npc.on_persona_mail)."""
+    from . import delivery, npc as npc_
+    key = idem_key or f"pp-{uuid.uuid4().hex}"
+    done = Message.objects.filter(idem_key=key).first()
+    if done is not None:
+        return done
+    to = [x for x in copied["to"] if "{" not in x.local_part]
+    cc = [x for x in copied["cc"] if "{" not in x.local_part]
+    name = (s.display_name or s.local_part).replace('"', "'")
+    addr = render.persona_address(s, s.local_part, {})
+    team_keys = [f"t:{t.id}" for t in teams]
+    rec = {"to": [f"p:{x.local_part}" for x in to], "cc": [f"p:{x.local_part}" for x in cc] + team_keys,
+           "from": f"p:{s.local_part}"}
+    to_label = _persona_label(to)
+    cc_label = ", ".join(x for x in (_persona_label(cc), ", ".join(t.name for t in teams)) if x)
+    now = timezone.now()
+    test = bool(teams) and all(t.is_test for t in teams)
+    m = Message.objects.create(
+        kind=PERSONA_KIND, channel="inapp", target=to_label or cc_label, idem_key=key, from_addr=f'"{name}" <{addr}>',
+        to=rec["to"], cc=rec["cc"], subject=subject, text=body, body=body, body_html=body_html, persona=s.local_part,
+        thread=thread, author=person, npc=npc, status="sent", sent_at=now, attachment_ids=[a.id for a in docs])
+    delivery.save_files(m, files)
+    common = dict(team=None, owner=None, thread=thread, from_name=name, from_addr=addr, to_label=to_label,
+                  cc_label=cc_label, desk_team=None, subject=subject, body=body or "", html=body_html, message=m,
+                  is_test=test, author_id=person.id if person else None, recipients=rec)
+    if sent_copy:
+        out = Mail.objects.create(folder="sent", persona=s.local_part, read_at=now, **common)
+        _files(out, m=m)
+        if ACTOR.get() is not None:
+            watch(thread, ACTOR.get(), "answered")
+    inbox = Mail.objects.create(folder="inbox", persona=(to or cc)[0].local_part, **common)
+    _files(inbox, m=m)
+    if not npc:  # someone answered as s here: its own queued AI answer in this conversation goes
+        NpcReply.objects.filter(npc__sender=s, thread_key=f"pp:{thread}"[:300], status__in=["queued", "held", "failed"]).update(
+            status="skipped", note=f"Answered by {person.name if person else user} on the persona desk.",
+            updated_at=timezone.now())
+    audit("desk_persona_mail", f"{s.local_part} -> {', '.join(x.local_part for x in to + cc)}: {subject[:80]}", user)
+    npc_.on_persona_mail(inbox, m, s, to, teams)
+    return m
 
 
 def _name(person, team):
@@ -380,7 +445,7 @@ def _name(person, team):
 
 
 def _new(s, local, ctx, team, subject, body, files, docs, parent, response, person, user, member=None, idem_key=None,
-         extra_files=None, body_html="", also=None):
+         extra_files=None, body_html="", also=None, thread="", npc=False):
     """A new message from the persona to a team or one of its members (kind desk), delivered
     now. In-app, a member's goes to their own mailbox only (personal mailboxes; else to the team
     inbox, for them). Returns (Message, error)."""
@@ -390,6 +455,7 @@ def _new(s, local, ctx, team, subject, body, files, docs, parent, response, pers
     channel = response.channel if response is not None else (
         "email" if conf.get("channel_mode") == "email" else "inapp")
     label = _name(member, team)
+    forced = thread  # persona mail: the teams' copies in its conversation
     common = dict(target=label, subject=subject, body=body, body_html=body_html, footer=cfg.get("footer", ""),
                   attachment_ids=[a.id for a in docs], team_id=team.id, reply_local=local,
                   person_id=member.id if member else None)
@@ -397,7 +463,9 @@ def _new(s, local, ctx, team, subject, body, files, docs, parent, response, pers
     if channel == "inapp":
         # A member's own mailbox (personal mailboxes), a leader's always.
         own = member if member and (member.is_leader or conf.flag("personal_mailboxes")) else None
-        if parent is not None and Mail.objects.filter(team=team, owner=own, thread=parent.thread).exists():
+        if forced:
+            thread = forced
+        elif parent is not None and Mail.objects.filter(team=team, owner=own, thread=parent.thread).exists():
             thread = parent.thread  # the conversation goes on
         d = render.Draft(**common, from_addr=f'"{name}" <{render.persona_address(s, local, ctx)}>', reply_to=None,
                          to=[], cc=[], bcc=[], channel="inapp", inbox_team_id=team.id, to_label=label,
@@ -413,10 +481,10 @@ def _new(s, local, ctx, team, subject, body, files, docs, parent, response, pers
         also = also or {}
         d = render.Draft(**common, from_addr=f'"{name}" <{local}@{settings.MAIL_DOMAIN}>', reply_to=None,
                          to=to + list(also.get("to", [])), cc=list(also.get("cc", [])), bcc=render.split_addresses(cfg.get("excon_bcc")), channel="email")
-        thread = parent.thread if parent is not None else ""
+        thread = forced or (parent.thread if parent is not None else "")
     files = list(files) + (list(extra_files(team, member, channel)) if extra_files else [])
     m = delivery.new_message(None, d, "desk", idem_key or f"desk-{uuid.uuid4().hex}")
-    m.author, m.thread = person, thread
+    m.author, m.thread, m.npc = person, thread, npc
     if channel == "email" and response is not None and response.message_id_header:
         m.extra_headers = {"In-Reply-To": response.message_id_header, "References": response.message_id_header}
     with transaction.atomic():  # the files are in place before anything can deliver the Message
@@ -490,10 +558,12 @@ def states(threads, user=None, now=None):
     if not threads:
         return {}
     mails = {}
-    for t, mid, folder, team_id, at, rid in (Mail.objects.filter(team=None, owner=None, thread__in=threads,
-                                                               trashed_at__isnull=True).exclude(folder="drafts")
-                                             .order_by("id").values_list("thread", "id", "folder", "desk_team_id",
-                                                                         "created_at", "desk_response_id")):
+    for t, mid, folder, team_id, at, rid, kind in (
+            Mail.objects.filter(team=None, owner=None, thread__in=threads, trashed_at__isnull=True)
+            .exclude(folder="drafts").order_by("id")
+            .values_list("thread", "id", "folder", "desk_team_id", "created_at", "desk_response_id", "message__kind")):
+        if folder == "inbox" and kind == PERSONA_KIND:
+            continue  # persona mail: no team waits on it (an AI persona answers its own; anyone may)
         mails.setdefault(t, []).append((mid, folder, team_id, at, rid))
     convs = {c.thread: c for c in DeskConversation.objects.filter(thread__in=threads)}
     rids = [m[4] for ms in mails.values() for m in ms if m[4]]
@@ -1032,9 +1102,10 @@ def _told_out(m, desk_mail):
 
 def told_npc(job):
     """An AI persona's answer held for ExCon or failed: those on its desk conversation hear."""
-    if job.status not in ("held", "failed") or not job.response_id:
+    if job.status not in ("held", "failed") or not (job.response_id or job.mail_id):
         return
-    mail = Mail.objects.filter(team=None, owner=None, desk_response_id=job.response_id).select_related("desk_team").first()
+    mail = (job.mail if job.mail_id else
+            Mail.objects.filter(team=None, owner=None, desk_response_id=job.response_id).select_related("desk_team").first())
     if not mail:
         return
     who = job.npc.sender.display_name or job.npc.sender.local_part

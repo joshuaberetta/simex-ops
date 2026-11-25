@@ -26,7 +26,7 @@ OPEN = ["queued", "writing", "held", "failed"]
 
 
 def _jobs(qs):
-    return qs.select_related("npc__sender", "team", "response", "message")
+    return qs.select_related("npc__sender", "team", "response", "message", "mail")
 
 
 @excon_required
@@ -201,7 +201,8 @@ def npc_delete(request, pid):
 @require_POST
 def npc_reply_action(request, jid):
     """A queued, held or failed answer: write it now, send it (edited), skip it, or try again."""
-    job = get_object_or_404(NpcReply.objects.select_related("npc__sender", "response", "team"), pk=jid)
+    job = get_object_or_404(NpcReply.objects.select_related("npc__sender", "response", "team", "mail"), pk=jid)
+    to = job.team.name if job.team else (job.mail.from_name if job.mail else "the persona")
     act, now = request.POST.get("action"), timezone.now()
     back = request.POST.get("next") if (request.POST.get("next") or "").startswith("/npcs/") else f"/npcs/{job.npc_id}/"
     if act == "now" and job.status == "queued":
@@ -214,9 +215,9 @@ def npc_reply_action(request, jid):
         else:
             npc.send(job, body, _u(request))
             if job.status == "failed":
-                messages.error(request, f"Not sent to {job.team.name}: {job.error}")
+                messages.error(request, f"Not sent to {to}: {job.error}")
             else:
-                messages.success(request, f"Sent to {job.team.name}.")
+                messages.success(request, f"Sent to {to}.")
     elif act == "skip" and job.status in ("queued", "held", "failed"):
         NpcReply.objects.filter(pk=job.pk).update(status="skipped", note=f"Skipped by {_u(request)}.", updated_at=now)
     elif act == "retry" and job.status in ("failed", "skipped"):
@@ -226,7 +227,7 @@ def npc_reply_action(request, jid):
     else:
         messages.error(request, "That answer has moved on: nothing changed.")
         return redirect(back)
-    audit(f"npc_reply_{act}", f"#{job.id} {job.npc.sender.local_part} -> {job.team.name}", _u(request))
+    audit(f"npc_reply_{act}", f"#{job.id} {job.npc.sender.local_part} -> {to}", _u(request))
     return redirect(back)
 
 

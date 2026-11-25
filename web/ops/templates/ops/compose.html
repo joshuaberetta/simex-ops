@@ -2,7 +2,7 @@
 {% block title %}Compose · SIMEX ops{% endblock %}
 {% block body %}
 <h1>Compose</h1>
-<p class="muted">Write as any persona to teams, team members or team leaders, now, without making an inject: the same as <b>Write as a persona</b> on the <a href="/inbox/desk/">persona desk</a>.
+<p class="muted">Write as any persona to teams, team members, team leaders or other personas, now, without making an inject: the same as <b>Write as a persona</b> on the <a href="/inbox/desk/">persona desk</a>.
 One message per team or member ticked, in SIMEX Mail or by email as the delivery channel is (Settings). It is logged as kind <i>desk</i>: out of the injects' figures, but the teams' replies to it are matched like any other.</p>
 <form method="post" action="/compose/" enctype="multipart/form-data" class="card form live-card" style="max-width:760px">{% csrf_token %}
   <label>From <span class="hint">every active persona but the team leader persona (the leaders play it)</span>
@@ -17,9 +17,13 @@ One message per team or member ticked, in SIMEX Mail or by email as the delivery
     </div>{% empty %}<p class="muted small">No active teams (People &amp; logins).</p>{% endfor %}
     <p class="hint">A member's message goes to their own mailbox only (with personal mailboxes off, to the team inbox, for them; by email, to their own email address). A team leader's goes to their own mailbox only (by email, to their email address); it doesn't reach the team.</p>
   </fieldset>
-  {% if copy_personas %}<fieldset><legend>Cc other personas</legend>
+  {% if copy_personas %}<fieldset><legend>To other personas</legend>
+    {% for e in copy_personas %}<label class="chk"><input type="checkbox" name="pto" value="{{ e.key }}" {% if e.key in form.pto %}checked{% endif %}> {{ e.name }} <span class="muted small">{{ e.addr }}</span></label>{% endfor %}
+    <p class="hint">Persona mail: the message lands in the persona desk's Inbox for them, and an AI persona answers it on its own (AI personas answering each other stop after {{ pp_turns }} in a row). With no team ticked above, no team sees it; with teams, they get it in copy and read the answers too.</p>
+  </fieldset>
+  <fieldset><legend>Cc other personas</legend>
     {% for e in copy_personas %}<label class="chk"><input type="checkbox" name="cc" value="{{ e.key }}" {% if e.key in form.cc %}checked{% endif %}> {{ e.name }} <span class="muted small">{{ e.addr }}</span></label>{% endfor %}
-    <p class="hint">Shown on each team's message (by email, in its Cc), so a team's reply all reaches them too. They get no copy of their own: the persona desk is every persona's mailbox.</p>
+    <p class="hint">Shown on each team's message (by email, in its Cc), so a team's reply all reaches them too, and on the persona desk's copy for them (an AI persona in Cc doesn't answer).</p>
   </fieldset>{% endif %}
   <label>Subject <input name="subject" value="{{ form.subject }}"></label>
   <label>Message <textarea name="body" rows="8">{{ form.body }}</textarea></label>

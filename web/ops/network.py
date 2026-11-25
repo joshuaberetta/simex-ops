@@ -76,18 +76,29 @@ class Ctx:
 
 
 def _messages(ctx, since=None):
-    kinds = TEST_KINDS + LIVE_KINDS if ctx.test else LIVE_KINDS
+    kinds = (TEST_KINDS + LIVE_KINDS if ctx.test else LIVE_KINDS) + ("persona",)
     qs = Message.objects.filter(status="sent", kind__in=kinds)
     if since:
         qs = qs.filter(sent_at__gte=since)
     rows = list(qs.values("id", "kind", "channel", "persona", "author_id", "team_id", "inbox_team_id",
-                          "inbox_owner_id", "person_id", "subject", "sent_at", "created_at"))
+                          "inbox_owner_id", "person_id", "subject", "sent_at", "created_at", "to", "cc"))
     boxes = {}  # message id -> [(team id, owner id)] of the inboxes its Mail landed in
     for mid, tid, oid in (Mail.objects.filter(message__in=qs.values("id"), folder="inbox", team__isnull=False)
                           .values_list("message_id", "team_id", "owner_id")):
         boxes.setdefault(mid, []).append((tid, oid))
     out = []
     for r in rows:
+        if r["kind"] == "persona":  # persona mail (desk._persona_mail): to the personas on it; its teams' copies count on their own
+            keys = [k for k in (r["to"] or []) + (r["cc"] or []) if isinstance(k, str)]
+            teams = [int(k[2:]) for k in keys if k.startswith("t:") and k[2:].isdigit()]
+            if bool(teams and all(ctx.team_is_test(t) for t in teams)) != ctx.test:
+                continue
+            frm = ctx.persona(r["persona"]) or "x"
+            to = sorted({n for n in (ctx.persona(k[2:]) for k in keys if k.startswith("p:")) if n and n != frm})
+            if to:
+                out.append({"id": f"g{r['id']}", "at": _ms(r["sent_at"] or r["created_at"]), "f": frm, "to": to,
+                            "k": "persona", "s": (r["subject"] or "")[:120]})
+            continue
         tid = r["inbox_team_id"] or r["team_id"]
         test = r["kind"] in TEST_KINDS or ctx.team_is_test(tid)
         if test != ctx.test:

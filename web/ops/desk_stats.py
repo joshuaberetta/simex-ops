@@ -154,7 +154,7 @@ def by_assignee(states, by_thread, teams, now, memo):
 def compute(kind="live", now=None):
     now = now or timezone.now()
     qs = Mail.objects.filter(team=None, owner=None, trashed_at__isnull=True).exclude(folder="drafts")
-    qs = qs.filter(is_test=(kind == "test"))
+    qs = qs.filter(is_test=(kind == "test")).exclude(message__kind="persona")  # persona mail: no team waits on it
     mails = list(qs.order_by("id").values("id", "thread", "folder", "desk_team_id", "persona", "created_at",
                                           "author_id", "message__kind", "message__npc"))
     names = dict(Person.objects.filter(id__in={m["author_id"] for m in mails if m["author_id"]})
@@ -284,7 +284,10 @@ def compute(kind="live", now=None):
     assigned = by_assignee(states, by_thread, teams, now, memo)
 
     npc = Counter(NpcReply.objects.filter(status__in=["queued", "writing", "held", "failed"],
-                                          team__is_test=(kind == "test")).values_list("status", flat=True))
+                                          team__is_test=(kind == "test")).values_list("status", flat=True)
+                  if kind == "test" else
+                  NpcReply.objects.filter(status__in=["queued", "writing", "held", "failed"])
+                  .exclude(team__is_test=True).values_list("status", flat=True))
     within = [m for m in timed if target and m <= target]
     received = sum(1 for m in mails if m["folder"] == "inbox")
     return {
