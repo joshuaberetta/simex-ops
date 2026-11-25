@@ -269,6 +269,27 @@ def test_seed_profiles_from_the_injects(excon, fake):
     assert not npc.seedable()
 
 
+def test_existing_persona_without_injects_keeps_its_username_and_address(excon, fake):
+    """From an existing persona, written with AI, for a persona that sends no injects: Claude's
+    username, name and address are never put on it (it used to be renamed into a made-up persona,
+    gone from the Senders list under its own username)."""
+    s = Sender.objects.create(local_part="kobo", display_name="", domain="epeigonia.org", organisation="KoBo")
+    before = s.inapp_address
+    r = excon.post("/npcs/", {"sender": s.id, "ai": "1", "hint": "helpful"})
+    p = NpcProfile.objects.get()
+    s.refresh_from_db()
+    assert r.url == f"/npcs/{p.id}/" and p.sender_id == s.id
+    assert s.local_part == "kobo" and s.inapp_address == before and s.domain == "epeigonia.org"
+    assert Sender.objects.filter(local_part="kobo").count() == 1 and not Sender.objects.filter(local_part="grace-mwangi").exists()
+    assert p.gen_status == "done" and p.personality == "Proud and defensive."
+    text = json.dumps(fake.calls[-1]["messages"])
+    assert "existing persona kobo" in text and "sends no injects yet" in text and "helpful" in text
+    # fill_from never renames an existing persona, even when told to
+    npc.fill_from(p, PROFILE, keep=False)
+    s.refresh_from_db()
+    assert s.local_part == "kobo" and s.inapp_address == before
+
+
 def test_npc_answer_not_delivered_is_failed_and_retry_sends(excon, fake):
     """An answer the mail provider refused is shown failed (not "sent"), and trying again delivers it."""
     from django.conf import settings

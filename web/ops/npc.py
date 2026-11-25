@@ -498,11 +498,21 @@ def run_sandbox(box_id):
 
 # --- Generate with AI ------------------------------------------------------------------------------
 
+NEW_PREFIX, BEING_WRITTEN = "npc-", "(being written)"  # the placeholder Sender of a persona being generated
+
+
+def is_placeholder(sender):
+    """A Sender made by generate() and not yet written: the only one Claude may name and address.
+    Every other Sender is an existing persona (the injects, the Senders tab, the mail use its
+    username), never renamed or readdressed by a profile, whether or not it sends injects."""
+    return sender.local_part.startswith(NEW_PREFIX) and sender.display_name == BEING_WRITTEN
+
+
 def generate(brief, user=""):
     """A new AI persona, filled in by Claude from ExCon's brief in a thread. Off and out of the
     address book until ExCon has read it and saved it."""
-    local = f"npc-{RNG.randrange(16**6):06x}"
-    s = Sender.objects.create(local_part=local, display_name="(being written)", active=False)
+    local = f"{NEW_PREFIX}{RNG.randrange(16**6):06x}"
+    s = Sender.objects.create(local_part=local, display_name=BEING_WRITTEN, active=False)
     p = NpcProfile.objects.create(sender=s, brief=brief.strip()[:4000], gen_status="running")
     audit("npc_generate", f"#{p.id} {brief[:80]}", user)
     _start(run_generate, p.id)
@@ -555,6 +565,13 @@ def persona_injects_block(local, budget=ai.INJECTS_BUDGET // 2):
     return "\n\n".join(out)
 
 
+SEED_REQUEST_NONE = """Write the profile of the existing persona {local} ({name}, address {addr}{org}): it \
+sends no injects yet. Base who they are on its name, address and organisation, and on ExCon's \
+brief if any; a plausible voice for such a person. Keep its username, display_name and address \
+exactly as shown. Knowledge: what they would know of their own remit and what the sent injects \
+tell; list anything you add in new_facts. Timing: as fast as such a person would plausibly answer \
+an email from the UNDAC team."""
+
 SEED_REQUEST = """Write the profile of the existing persona {local} ({name}): the injects it sends are \
 below. Base who they are, their organisation and role, and above all how they write (length, \
 formality, greeting, signature, tone, attitude) on those injects. Keep its username, and its \
@@ -568,17 +585,22 @@ plausibly answer an email from the UNDAC team."""
 def run_generate(pid):
     p = NpcProfile.objects.select_related("sender").get(pk=pid)
     s = p.sender
-    mine = persona_injects_block(s.local_part) if not s.local_part.startswith("npc-") else ""
+    existing = not is_placeholder(s)
+    mine = persona_injects_block(s.local_part) if existing else ""
     parts = [ai.personas_block(), ai.injects_block()]
     if mine:
         parts += [f"The injects {s.local_part} sends:\n\n" + mine,
                   SEED_REQUEST.format(local=s.local_part, name=s.display_name or s.local_part)]
+    elif existing:
+        parts.append(SEED_REQUEST_NONE.format(local=s.local_part, name=s.display_name or s.local_part,
+                                              addr=s.inapp_address,
+                                              org=f", {s.organisation}" if s.organisation else ""))
     if p.brief:
         parts.append("ExCon's brief: " + p.brief)
     try:
         out, used = ai.call("npc_new", f"g{p.id}", "deep", ai.system("npc_new"),
                             [{"type": "text", "text": "\n\n".join(parts)}], NEW_SCHEMA, "medium", 6000)
-        fill_from(p, out, keep=bool(mine))
+        fill_from(p, out, keep=existing)
         p.gen_status, p.gen_error = "done", ""
     except Exception as e:
         if not isinstance(e, ai.AiError):
@@ -591,15 +613,16 @@ def run_generate(pid):
 
 def fill_from(p, out, keep=False):
     """Claude's profile into p and its Sender. keep: an existing persona, whose username (the
-    injects use it) and, where set, name and address stay as they are."""
+    injects and the mail use it) and address stay as they are, and its name where set."""
     s = p.sender
+    keep = keep or not is_placeholder(s)  # an existing persona is never renamed, whatever the caller says
     if not keep:
         local = re.sub(r"[^a-z0-9._-]+", "-", str(out.get("username") or "").strip().lower()).strip("-.")
         if local and rnd.LOCAL.match(local) and not Sender.objects.filter(local_part=local).exclude(pk=s.pk).exists():
             s.local_part = local
     if not (keep and s.display_name):
         s.display_name = str(out.get("display_name") or "").strip()[:200] or s.local_part
-    if not (keep and (s.inapp_local or s.domain)):
+    if not keep:  # an existing persona's address is what the teams know it by: never changed here
         inapp = re.sub(r"[^a-z0-9._-]+", "", str(out.get("inapp_local") or "").strip().lower())
         domain = str(out.get("domain") or "").strip().lower().lstrip("@")
         s.inapp_local = inapp if inapp and inapp != s.local_part and rnd.LOCAL.match(inapp) else ""
