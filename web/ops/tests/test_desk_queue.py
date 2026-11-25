@@ -90,6 +90,32 @@ def test_no_reply_needed_follow_up_and_take(excon):
     assert pa.post("/inbox/desk/mark/", {"threads": got_b.thread, "act": "done"}).status_code == 403
 
 
+def test_no_reply_needed_from_the_toolbars(excon):
+    """No reply needed is a ✓ in the conversation's toolbar (Reopen once marked) and in the
+    list's toolbar for the selected rows, many at once."""
+    setup(excon)
+    deliver_now("3-13")
+    teams = [Team.objects.get(code=c) for c in "abc"]
+    got = [team_writes(participant(t.code), t, "Thanks, noted.")[0] for t in teams]
+    d = desk_client()
+    t = d.get(f"/inbox/desk/t/{got[0].thread}/")
+    bar = t.content.decode().split('class="gm-toolbar"')[1].split("</div>")[0]
+    assert "data-desk-done" in bar and 'name="next_done"' in bar
+    page = d.get("/inbox/desk/")
+    assert b"data-desk-bulk-done" in page.content
+    # The selected rows, at once: back to the list, told how many.
+    r = d.post("/inbox/desk/mark/", {"threads": [g.thread for g in got[:2]], "act": "done", "next": "/inbox/desk/"},
+               follow=True)
+    assert r.redirect_chain[-1][0] == "/inbox/desk/" and b"2 conversations marked as needing no reply." in r.content
+    _, st = rows(d)
+    assert [st[g.thread]["section"] for g in got] == [desk.REST, desk.REST, desk.ATTENTION]
+    # Marked: the toolbar offers Reopen instead.
+    bar = d.get(f"/inbox/desk/t/{got[0].thread}/").content.decode().split('class="gm-toolbar"')[1].split("</div>")[0]
+    assert "data-desk-done" not in bar and 'value="reopen"' in bar
+    # Not on the teams' own mailboxes.
+    assert b"data-desk-bulk-done" not in participant("d").get("/inbox/").content
+
+
 def test_ai_persona_about_to_answer_is_later(excon):
     setup(excon)
     conf.put("npc_enabled", "1")

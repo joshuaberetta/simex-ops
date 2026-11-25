@@ -1816,6 +1816,9 @@ def desk_mark(request):
         return JsonResponse({"ok": True, "n": n})
     if P.get("act") == "assign" and n:
         messages.success(request, f"Assigned to {desk.user_name(get_user_model().objects.get(pk=P.get('assignee')))}.")
+    elif P.get("act") in ("done", "reopen") and n:
+        what = "needing no reply" if P.get("act") == "done" else "reopened"
+        messages.success(request, ("Conversation " if n == 1 else f"{n} conversations ") + ("marked as " if P.get("act") == "done" else "") + what + ".")
     nxt = P.get("next") or ""
     if P.get("act") == "done":  # on to the next conversation waiting, else back to the Inbox
         nxt = P.get("next_done") or ("/inbox/desk/" if "/t/" in nxt else nxt)
