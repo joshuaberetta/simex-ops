@@ -145,8 +145,8 @@ def from_mail(mail, personas):
     audit("inapp_response", f"{mail.team.name} -> {', '.join(personas)}: {mail.subject[:80]}")
     notices.reply(r)
     from . import desk, npc
+    npc.on_response(r)  # first: the desk's copy says when an AI persona answers it (desk._told_in)
     desk.on_response(r, personas)
-    npc.on_response(r)
     return r
 
 

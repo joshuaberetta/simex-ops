@@ -45,7 +45,7 @@ How the desk is keeping up, refreshed every minute: what needs attention and how
 Several of you share the desk, so *read* doesn't mean *answered*. The **Inbox** comes in sections:
 - **Needs attention**: a team is waiting for a persona's answer (*Waiting 12 min*), a follow-up is due, or an AI persona's answer was held. The longest waiting first; **Urgent** ones above. The red box on the left says how many.
 - **Probably no reply needed (SIMEX AI)**: SIMEX AI reads the team's latest message as a thanks or an acknowledgement. Check it, then **No reply needed**.
-- **Later**: follow-ups not due yet, and conversations an AI persona is about to answer.
+- **Later**: follow-ups not due yet, and conversations an AI persona is about to answer (*AI persona answers at 14:20 · no reply needed*). Leave those to it: your devices aren't pinged for them, and the bell says the AI persona answers. If it isn't answering one (*AI persona not answering this one*), it stays in Needs attention for you.
 - **Answered or nothing to answer**: the rest.
 
 Prefer your Inbox like any email, newest at the top? Click **In sections · show newest first** above the list (and **Newest first · show in sections** to go back); your choice stays as you move around.
