@@ -28,6 +28,20 @@ ENTRIES = [
              "**Waiting 30 min+** and more, one click each. **More filters** picks personas, teams, who has a "
              "conversation, how long a team has waited, how recent it is and live or test traffic. The filters "
              "in use show as tags you can remove; bookmark a filtered list to come back to it."},
+    {"key": "2026-11-persona-mail", "date": date(2026, 11, 25), "who": {DESK, EXCON},
+     "title": "Personas can write to each other",
+     "body": "Put another persona in **To**, with or without teams: it lands on the persona desk for them, and an "
+             "**AI persona** in To answers on its own. With no team, no team sees it: try out an AI persona, or play "
+             "partners talking among themselves. With teams in **Cc**, they read the whole exchange as background "
+             "traffic and can join with Reply all. AI personas answering each other stop after 3 answers in a row. "
+             "ExCon's **Compose** has **To other personas** for the same."},
+    {"key": "2026-11-suggest-desk-mail", "date": date(2026, 11, 25), "who": {DESK, EXCON},
+     "title": "Suggested replies stay consistent across teams",
+     "body": "**Suggest a reply** now reads the persona's other conversations with the team, what the other "
+             "personas have been saying to it, and what this persona already told the **other teams**, so a "
+             "persona gives every team the same facts and positions and doesn't contradict itself. What another "
+             "team asked or was told is never passed on: a fact taken from another team's mail is flagged under "
+             "**Check before sending**."},
     {"key": "2026-11-desk-injects", "date": date(2026, 11, 25), "who": {DESK, EXCON},
      "title": "See the injects coming up",
      "body": "The persona desk has an **Injects** tab (read-only): every inject by time, the next one "

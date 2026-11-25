@@ -3,6 +3,10 @@
 
 What it reads, each item marked with where this team stands on it at this moment:
 - the conversation, the team's other recent messages and the persona (Senders, AI persona profile);
+- the desk's mailbox (team <-> persona mail only, never a team's internal mail): this persona's
+  other conversations with the team, the other personas' recent ones with it (the state of play),
+  and what this persona told the other teams, labelled so (consistency across teams, never passed
+  on), with a search_mail tool over all of it (mail_block, tool_search_mail);
 - the library of participant-facing documents (ops/kb.py, KbDocument): the team has it / not yet
   (it comes with a later inject or role play) / not given;
 - the injects: delivered to this team, still to come for it (scenario time, send time) or not for it;
@@ -33,6 +37,7 @@ import re
 import threading
 from datetime import timedelta
 
+from django.db.models import Q
 from django.utils import timezone
 
 from . import ai, inbound, kb, roleplay, simclock
@@ -71,6 +76,19 @@ write as that same person: their temperament, attitude, agenda, how guarded or h
 they speak, whether or not the sitting has happened yet and whoever plays it, so the team meets one \
 person in the mail and face to face. Take only the voice from a sitting still to come, never its facts.
 
+Consistency, with this team and across teams. You see the desk's mail (what the personas and the \
+teams wrote to each other; never a team's internal mail, which no persona knows):
+- This persona's other conversations with this team, and the other personas' recent ones with it: \
+the state of play. Don't contradict what a persona already told this team, don't repeat what it \
+already has, build on what it said it is doing, and refer back where a real person would.
+- What this persona told the OTHER teams: one person tells every team the same facts, figures and \
+positions, in the same voice. Keep the answer consistent with them (and say so in notes if an \
+earlier answer was wrong or the teams were told different things). Never pass on what another team \
+asked, said, decided or was told just for it, never name another team's plans or say what it asked: \
+teams never cross. A fact the persona gave another team may be given here only if this team may \
+have it now (check its source on this team's timeline).
+search_mail finds more in the desk's mail (all teams, labelled); cite mail you rely on as mail:<id>.
+
 How to work:
 - First look things up: search the documents for each place, organisation, person, figure and \
 document the message mentions or asks about (try spelling variants and other names; fictional names \
@@ -90,7 +108,7 @@ exercise's maps are drawn over real geography: never give coordinates.
 - Real organisations keep their real roles. Stay inside the fiction; no notes for the desk in the body.
 
 For the desk: facts lists each fact the answer states with its source ref exactly as shown \
-(doc:..., inject:..., rp:..., or "conversation"; "new" for anything you made up, which should be \
+(doc:..., inject:..., rp:..., mail:<id>, or "conversation"; "new" for anything you made up, which should be \
 rare and harmless); corrections, what the team got wrong; not_available, what was asked that the \
 package doesn't give; hold_back, what is coming that the answer must not pre-empt (what, source \
 ref, when); notes, anything else the desk should know (inconsistencies between sources, a document \
@@ -129,9 +147,17 @@ TOOLS = [
          "query": {"type": "string"},
          "where": {"type": "string", "enum": ["all", "documents", "injects", "role_plays"]}},
          "required": ["query"]}},
+    {"name": "search_mail",
+     "description": "Search the persona desk's mail (what the personas and every team wrote to each other; never a "
+                    "team's internal mail) for words, newest first. Each match says whether it is with THIS team or "
+                    "another team (for consistency only, never passed on). persona: a username, to keep to one.",
+     "input_schema": {"type": "object", "properties": {
+         "query": {"type": "string"}, "persona": {"type": "string"},
+         "team": {"type": "string", "enum": ["this", "others", "all"]}},
+         "required": ["query"]}},
     {"name": "read",
-     "description": "Read one item in full by its ref (doc:<key>, inject:<serial>, rp:<key>); long documents come in "
-                    "parts (part 1, 2...).",
+     "description": "Read one item in full by its ref (doc:<key>, inject:<serial>, rp:<key>, mail:<id>); long "
+                    "documents come in parts (part 1, 2...).",
      "input_schema": {"type": "object", "properties": {
          "ref": {"type": "string"}, "part": {"type": "integer"}},
          "required": ["ref"]}},
@@ -205,9 +231,24 @@ class Timeline:
             return self.inject(key)
         if kind == "rp":
             return self.play(key) if key in self.plays else self.play(next((k for k, p in self.plays.items() if p.serial == key), key))
+        if kind == "mail":
+            return self.mail(key)
         if ref in ("conversation", "new"):
             return "known", ref
         return "not_given", "unknown source"
+
+    def mail(self, key):
+        """(state, label) of a desk Mail: this team's exchange it has; another team's never passed on."""
+        m = desk_mails().filter(pk=int(key) if str(key).isdigit() else 0).select_related("desk_team").first()
+        if not m:
+            return "not_given", "unknown mail"
+        if m.desk_team_id == self.team.id:
+            return "known", "this team's exchange with the personas"
+        other = m.desk_team.name if m.desk_team else "another team"
+        if m.folder == "inbox":
+            return "other_team", f"{other}'s own message: never pass it on"
+        return "other_team", (f"what the persona told {other}: give it here only if this team may have it now "
+                              "(check its source)")
 
 
 # --- context -----------------------------------------------------------------------------------------
@@ -275,6 +316,77 @@ def own_injects(r, tl):
     return "\n".join(out) or "(none)"
 
 
+MAIL_CHARS = 700  # per message in the blocks below
+MAIL_BUDGET = 9000  # per block
+INJECT_KINDS = ("live", "test", "oneoff")
+
+
+def desk_mails():
+    """The persona desk's mailbox (team <-> persona mail only)."""
+    return Mail.objects.filter(team=None, owner=None, trashed_at__isnull=True).exclude(folder="drafts")
+
+
+def _threads_of(r, thread=""):
+    """The desk's conversation(s) a suggestion is about: shown in full already."""
+    out = set(desk_mails().filter(desk_response=r).values_list("thread", flat=True))
+    return out | ({thread} if thread else set())
+
+
+def _persona_name(local, memo):
+    if local not in memo:
+        snd, ctx = sender_by_local(local or "")
+        memo[local] = (fill(snd.display_name or "", ctx) if snd else "") or local or "a persona"
+    return memo[local]
+
+
+def _mail_entry(m, memo, full=True):
+    team = m.desk_team.name if m.desk_team else "a team"
+    who = (f"{team} ({m.from_name or m.from_addr}) -> {_persona_name(m.persona, memo)}" if m.folder == "inbox"
+           else f"{_persona_name(m.persona, memo)} -> {team}")
+    when = _hm(m.created_at) + (f", scenario {timezone.localtime(m.sim_at):%a %d %b %H:%M}" if m.sim_at else "")
+    msg = m.message if m.folder == "sent" else None
+    if msg is not None and msg.kind in INJECT_KINDS and msg.inject_id:
+        return f"- mail:{m.id} {when} | {who} | inject:{msg.inject.mel_id} delivered: {m.subject}"
+    head = f"- mail:{m.id} {when} | {who} | {m.subject}"
+    return head + ("\n  " + _clip(m.body, MAIL_CHARS).replace("\n", "\n  ") if full else
+                   " | " + _clip(" ".join((m.body or "").split()), 200))
+
+
+def _budgeted(entries, budget=MAIL_BUDGET):
+    """The newest entries that fit, shown oldest first."""
+    out, used = [], 0
+    for e in entries:
+        if used + len(e) > budget:
+            break
+        out.append(e)
+        used += len(e)
+    return "\n".join(reversed(out))
+
+
+def mail_block(r, thread=""):
+    """The desk's mail around this conversation: this persona's other exchanges with the team,
+    the other personas' recent ones with it, and what this persona told the other teams (labelled:
+    consistency, never passed on). Never a team's internal mail."""
+    team, local = r.team, (r.persona or "").lower()
+    skip = _threads_of(r, thread)
+    qs = desk_mails().exclude(thread__in=skip).select_related("desk_team", "message", "message__inject").order_by("-id")
+    memo, parts = {}, []
+    mine = [m for m in qs.filter(desk_team=team)[:200] if (m.persona or "").lower() == local]
+    parts.append(f"This persona's other conversations with {team.name} (newest last):\n"
+                 + (_budgeted([_mail_entry(m, memo) for m in mine]) or "(none)"))
+    others = [m for m in qs.filter(desk_team=team)[:200] if (m.persona or "").lower() != local][:30]
+    parts.append(f"The other personas' recent exchanges with {team.name}, one line each (the state of play; newest last):\n"
+                 + (_budgeted([_mail_entry(m, memo, full=False) for m in others], MAIL_BUDGET // 2) or "(none)"))
+    away = qs.exclude(desk_team=team).exclude(desk_team=None).filter(persona__iexact=r.persona or "")
+    if not team.is_test:
+        away = away.exclude(desk_team__is_test=True)
+    told = [m for m in away[:200] if not (m.folder == "sent" and m.message and m.message.kind in INJECT_KINDS)]
+    parts.append("What this persona told the OTHER teams, and what they asked it (for consistency only: never pass "
+                 f"on to {team.name} what another team asked, said or was told just for it; newest last):\n"
+                 + (_budgeted([_mail_entry(m, memo) for m in told]) or "(none)"))
+    return "\n\n".join(parts)
+
+
 def roleplay_index(r, tl):
     """Every role play, one line each with its state for the team; the persona's likely own
     ones (their name in the role, title or script) first."""
@@ -308,6 +420,7 @@ def request_block(s):
     parts = [clock_block(tl), f"The team: {r.team.name}.", persona_block(r, tl),
              "THE CONVERSATION (the team's latest message last):\n\n" + conv,
              ai.team_block(r.team, None, limit=8),
+             mail_block(r, s.thread),
              "This persona's own injects:\n" + own_injects(r, tl),
              "The role plays (rp:<key>), with where this team stands on each:\n" + roleplay_index(r, tl),
              library_line()]
@@ -366,8 +479,43 @@ def tool_search(tl, query, where="all"):
     return "\n\n".join(out) or f"Nothing found for {query!r}. Try other spellings or names."
 
 
+def tool_search_mail(tl, query, persona="", team="all"):
+    words = kb.terms(query)
+    if not words:
+        return "Give some words to search for."
+    qs = desk_mails().select_related("desk_team", "message", "message__inject")
+    if team == "this":
+        qs = qs.filter(desk_team=tl.team)
+    elif team == "others":
+        qs = qs.exclude(desk_team=tl.team)
+    if not tl.team.is_test:
+        qs = qs.exclude(desk_team__is_test=True)
+    if persona:
+        qs = qs.filter(persona__iexact=persona.strip())
+    q = Q()
+    for w in words:
+        q |= Q(subject__icontains=w) | Q(body__icontains=w)
+    hits, memo = [], {}
+    for m in qs.filter(q).order_by("-id")[:400]:
+        ps = kb.passages(f"{m.subject}\n{m.body}", words, width=500, limit=1)
+        if ps:
+            hits.append((ps[0][0], m, ps[0][2]))
+    hits.sort(key=lambda x: (-x[0], -x[1].id))
+    out = []
+    for _score, m, snip in hits[:10]:
+        _state, label = tl.mail(m.id)
+        out.append(_mail_entry(m, memo, full=False).lstrip("- ") + f" [{label}]\n{snip}")
+    return "\n\n".join(out) or f"No desk mail found for {query!r}."
+
+
 def tool_read(tl, ref, part=1):
     kind, _, key = (ref or "").strip().partition(":")
+    if kind == "mail":
+        m = desk_mails().filter(pk=int(key) if key.isdigit() else 0).select_related("desk_team", "message", "message__inject").first()
+        if not m:
+            return f"No desk mail {ref}."
+        head = _mail_entry(m, {}, full=False).lstrip("- ").split(" | ")
+        return f"[{tl.mail(m.id)[1]}]\n" + " | ".join(head[:3]) + "\n\n" + _clip(m.body, RESULT_CHARS)
     if kind == "doc":
         d = KbDocument.objects.filter(key=key).first()
         if not d:
@@ -392,7 +540,7 @@ def tool_read(tl, ref, part=1):
         if p.notes:
             lines += ["", "EXCON'S NOTES:", p.notes]
         return _clip("\n".join(x for x in lines if x is not None), RESULT_CHARS)
-    return f"Unknown ref {ref!r}: use doc:<key>, inject:<serial> or rp:<key>."
+    return f"Unknown ref {ref!r}: use doc:<key>, inject:<serial>, rp:<key> or mail:<id>."
 
 
 class NoSearch:
@@ -410,6 +558,9 @@ def run_tool(tl, name, args):
     try:
         if name == "search":
             return _clip(tool_search(tl, str(args.get("query") or ""), args.get("where")), RESULT_CHARS)
+        if name == "search_mail":
+            return _clip(tool_search_mail(tl, str(args.get("query") or ""), str(args.get("persona") or ""),
+                                          args.get("team") or "all"), RESULT_CHARS)
         if name == "read":
             return _clip(tool_read(tl, str(args.get("ref") or ""), int(args.get("part") or 1)), RESULT_CHARS)
     except Exception as e:  # a tool error goes back to the model, never fails the suggestion
@@ -476,7 +627,9 @@ def check(out, tl):
         src = str(f.get("source") or "").strip()
         state, label = tl.ref(src)
         facts.append({"fact": str(f.get("fact") or ""), "source": src, "state": state, "label": label})
-        if state != "known":
+        if state == "other_team":
+            warnings.append(f"“{f.get('fact')}” comes from another team's exchange ({src}: {label}).")
+        elif state != "known":
             warnings.append(f"“{f.get('fact')}” rests on {src}: {label}.")
         elif src == "new":
             warnings.append(f"“{f.get('fact')}” is made up: check it fits the scenario.")

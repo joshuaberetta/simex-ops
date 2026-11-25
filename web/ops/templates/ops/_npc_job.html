@@ -2,8 +2,9 @@
 <tr id="q{{ j.id }}">
   <td class="nowrap"><span class="status {% if j.status == 'writing' %}sending{% elif j.status == 'held' %}paused{% elif j.status == 'skipped' %}cancelled{% else %}{{ j.status }}{% endif %}">{{ j.status }}</span>
     <div class="small muted">{% if j.status == 'queued' %}due {{ j.due_at|date:"D H:i" }}{% elif j.status == 'sent' %}{{ j.updated_at|date:"D H:i" }}{% else %}{{ j.updated_at|date:"D H:i" }}{% endif %}</div></td>
-  <td>{% if persona %}<a href="/npcs/{{ j.npc_id }}/"><b>{{ j.npc.sender.display_name|default:j.npc.sender.local_part }}</b></a> ← {% endif %}{{ j.team.name }}
-    · <a href="/replies/{{ j.response_id }}/">{{ j.response.subject|default:"(no subject)"|truncatechars:60 }}</a>
+  <td>{% if persona %}<a href="/npcs/{{ j.npc_id }}/"><b>{{ j.npc.sender.display_name|default:j.npc.sender.local_part }}</b></a> ← {% endif %}{% if j.mail_id %}{{ j.mail.from_name }} <span class="muted small">(persona mail)</span>
+    · <a href="/inbox/desk/t/{{ j.mail.thread }}/">{{ j.mail.subject|default:"(no subject)"|truncatechars:60 }}</a>{% else %}{{ j.team.name }}
+    · <a href="/replies/{{ j.response_id }}/">{{ j.response.subject|default:"(no subject)"|truncatechars:60 }}</a>{% endif %}
     {% if j.note %}<div class="small muted">{{ j.note }}</div>{% endif %}
     {% if j.error %}<div class="small err">{{ j.error|truncatechars:200 }}</div>{% endif %}
     {% if j.out.flags %}<div class="flags">{% for f in j.out.flags %}<span class="flag check">{{ f }}</span>{% endfor %}</div>{% endif %}

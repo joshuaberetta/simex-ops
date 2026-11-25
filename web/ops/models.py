@@ -1003,8 +1003,11 @@ class NpcReply(models.Model):
     when due, then sent (or held for ExCon). Messages that arrive while it is queued in the same
     conversation move it on to the latest (one answer to all of them)."""
     npc = models.ForeignKey(NpcProfile, on_delete=models.CASCADE, related_name="replies")
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="+")
-    response = models.ForeignKey(Response, on_delete=models.CASCADE, related_name="npc_replies")  # the latest it answers
+    # A team's conversation: its team and the team's latest message it answers. Persona mail
+    # (another persona wrote to it, on the desk): no team or response, mail = the desk's Inbox copy.
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    response = models.ForeignKey(Response, null=True, blank=True, on_delete=models.CASCADE, related_name="npc_replies")
+    mail = models.ForeignKey("Mail", null=True, blank=True, on_delete=models.CASCADE, related_name="+")
     thread_key = models.CharField(max_length=300, default="")
     status = models.CharField(max_length=10, default="queued")  # queued | writing | held | sent | skipped | failed
     due_at = models.DateTimeField(default=timezone.now)

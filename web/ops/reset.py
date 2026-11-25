@@ -68,6 +68,18 @@ def clear_team(team, scope="all", deliveries=False):
     return n
 
 
+def clear_persona_mail(deliveries=False):
+    """The persona desk's persona mail (personas writing to each other, desk._persona_mail):
+    its desk copies (with their AI persona answers queued) and, with deliveries, its Messages."""
+    with transaction.atomic():
+        n = Mail.objects.filter(team=None, message__kind="persona").delete()[0]
+        if deliveries:
+            Message.objects.filter(kind="persona").delete()
+        from . import desk
+        desk.prune()
+    return n
+
+
 def start_afresh(reschedule=True):
     """Everything that happened in the exercise so far, gone, for every team: every mailbox
     (teams, leaders, members, the persona desk) and calendar, replies, answers, grades, AI analyses (documents' too), the

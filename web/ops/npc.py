@@ -29,7 +29,7 @@ from django.utils import timezone
 
 from . import ai, conf, delivery, inbound, notices
 from . import render as rnd
-from .models import Inject, Message, NpcProfile, NpcReply, NpcSandbox, Response, Sender, audit
+from .models import Inject, Message, NpcProfile, NpcReply, NpcSandbox, Response, Sender, Team, audit
 
 log = logging.getLogger("simex.npc")
 
@@ -186,6 +186,114 @@ def on_response(r):
         return NpcReply.objects.create(npc=p, team_id=r.team_id, response=r, thread_key=key, due_at=due)
 
 
+# --- persona mail: another persona writes to an AI persona (on the persona desk) -------------------
+
+PP_AI_TURNS = 3  # AI personas answering each other: at most this many in a row in one conversation
+
+
+def ai_run(thread):
+    """How many persona mails in a row, newest back, AI personas wrote in this conversation."""
+    from .desk import PERSONA_KIND
+    n = 0
+    for was_ai in Message.objects.filter(kind=PERSONA_KIND, thread=thread).order_by("-id").values_list("npc", flat=True):
+        if not was_ai:
+            break
+        n += 1
+    return n
+
+
+def on_persona_mail(mail, m, sender, to, teams):
+    """Persona mail (desk._persona_mail): sender wrote to the personas in to (Senders), teams in
+    copy; mail is the desk's Inbox copy. Each enabled AI persona in To queues its answer (to the
+    sender, everyone else in copy), with its timing; one already queued in the conversation answers
+    this one too. AI personas answering each other stop after PP_AI_TURNS in a row. With teams in
+    copy, only while the AI personas' scope (Settings) covers them all."""
+    if not active() or (teams and not all(in_scope(t) for t in teams)):
+        return []
+    if m.npc and ai_run(mail.thread) >= PP_AI_TURNS:
+        return []
+    out, key = [], f"pp:{mail.thread}"[:300]
+    for x in to:
+        if x.pk == sender.pk or x.team_leader or "{" in x.local_part:
+            continue
+        p = NpcProfile.objects.filter(sender=x, enabled=True).first()
+        if not p:
+            continue
+        with transaction.atomic():
+            q = NpcReply.objects.select_for_update().filter(npc=p, thread_key=key, status="queued").first()
+            if q:
+                q.mail = mail
+                q.save(update_fields=["mail", "updated_at"])
+                out.append(q)
+                continue
+            minutes = draw_minutes(p)
+            if minutes is None:
+                out.append(NpcReply.objects.create(npc=p, mail=mail, thread_key=key, status="skipped",
+                                                   note="Its timing drew no answer this time."))
+                continue
+            due = office_hours(p, timezone.now() + timedelta(minutes=minutes))
+            out.append(NpcReply.objects.create(npc=p, mail=mail, thread_key=key, due_at=due))
+    return out
+
+
+def persona_conversation(mail):
+    """The desk's conversation of a persona mail, oldest first, each message once."""
+    from .models import Mail
+    seen, lines = set(), []
+    for x in (Mail.objects.filter(team=None, owner=None, thread=mail.thread, trashed_at__isnull=True)
+              .exclude(folder="drafts").order_by("created_at", "id")):
+        key = (x.from_addr, (x.body or "")[:500])  # a persona's message to several teams and personas: once
+        if key in seen:
+            continue
+        seen.add(key)
+        who = f"FROM {x.from_name or x.from_addr}" + (f" ({x.desk_team.name})" if x.folder == "inbox" and x.desk_team_id else "")
+        to = f" TO {x.to_label}" if x.to_label else ""
+        cc = f" CC {x.cc_label}" if x.cc_label else ""
+        lines.append(f"{who}{to}{cc} ({ai._local(x.created_at)}), subject: {x.subject or ''}\n"
+                     + (x.body or "").strip()[:3000])
+    return "\n\n---\n\n".join(lines)
+
+
+def write_persona(job):
+    mail, p = job.mail, job.npc
+    rec = mail.recipients or {}
+    frm, _ = rnd.sender_by_local((rec.get("from") or "p:")[2:])
+    writer = (frm.display_name or frm.local_part) if frm else (mail.from_name or mail.from_addr)
+    teams = [t.name for t in Team.objects.filter(id__in=[int(k[2:]) for k in rec.get("cc", []) + rec.get("to", [])
+                                                        if k.startswith("t:") and k[2:].isdigit()])]
+    who = (f"This time it is not a team: {writer}, another persona (a partner organisation, a colleague or a "
+           "contact), wrote to you. Answer them as your character would answer that person"
+           + (f"; {', '.join(teams)} {'is' if len(teams) == 1 else 'are'} in copy and will read your answer, so "
+              "write knowing the UNDAC team reads it." if teams else ", person to person: no team reads it."))
+    parts = [ai.scenario_clock(), who, "The conversation, oldest first:", persona_conversation(mail),
+             f"Write your answer to {writer}'s latest message, after your last one."]
+    content = [context(p), {"type": "text", "text": "\n\n".join(parts)}]
+    return ai.call("npc", f"n{job.id}", "deep", ai.system("npc"), content, NPC_SCHEMA, "medium", 4000)
+
+
+def send_persona(job, user="npc"):
+    """An AI persona's answer to persona mail: to whoever wrote, the others in copy (personas and
+    teams), in the same conversation on the desk (desk.send)."""
+    from . import desk
+    mail, me = job.mail, f"p:{job.npc.sender.local_part}"
+    rec = mail.recipients or {}
+    frm = rec.get("from") or ""
+    keys = list(dict.fromkeys(rec.get("to", []) + rec.get("cc", [])))
+    copies = {"to": [{"key": frm}] if frm.startswith("p:") else [],
+              "cc": [{"key": k} for k in keys if k.startswith("p:") and k not in (me, frm)]}
+    teams = [{"kind": "team", "key": k} for k in keys if k.startswith("t:")]
+    subject = mail.subject or ""
+    if not subject.lower().startswith("re:"):
+        subject = f"Re: {subject}".strip()
+    key = f"npc-{job.id}"
+    done = Message.objects.filter(idem_key=f"{key}-p").first()
+    if done is not None:
+        return done
+    msgs, errors = desk.send(None, user, me, teams, subject, job.body, parent=mail, copies=copies, npc=True,
+                             idem=lambda t, member: f"{key}-t{t.id}", persona_idem=f"{key}-p")
+    return next((m for m in msgs if m.kind == desk.PERSONA_KIND), msgs[0])
+
+
 def take_over(profiles, now=None):
     """Switching personas on mid-exercise: the desk conversations already waiting for one of
     them (a team's latest message unanswered, nothing queued) get an answer queued, due within
@@ -246,14 +354,14 @@ def tick(limit=LIMIT):
 
 
 def run(job_id):
-    job = NpcReply.objects.select_related("npc__sender", "team", "response").get(pk=job_id)
+    job = NpcReply.objects.select_related("npc__sender", "team", "response", "mail").get(pk=job_id)
     p = job.npc
-    if not p.enabled or not in_scope(job.team):
+    if not p.enabled or not (in_scope(job.team) if not job.mail_id else True):
         job.status, job.note = "skipped", "The persona was turned off before it answered."
         job.save()
         return job
     try:
-        out, used = write(job)
+        out, used = write_persona(job) if job.mail_id else write(job)
         body = (out.get("body") or "").strip()
         if not body:
             raise ai.AiError("The answer was empty.")
@@ -290,6 +398,18 @@ def send(job, body=None, user="npc"):
     """Deliver the answer as the persona, in the conversation it answers."""
     if body is not None:
         job.body = body.strip()
+    if job.mail_id:  # persona mail
+        from .desk import DeskError
+        try:
+            m = send_persona(job, user)
+        except DeskError as e:
+            job.status, job.error = "failed", f"Not sent: {e}"[:500]
+            job.save()
+            return None
+        job.message, job.status, job.error = m, "sent", None
+        job.note = "" if user == "npc" else f"Sent by {user}."
+        job.save()
+        return m
     key = f"npc-{job.id}"
     m = Message.objects.filter(Q(idem_key=key) | Q(idem_key__startswith=f"{key}-r")).order_by("-id").first()
     if m is None or m.status == "failed":  # trying again: a new key, so the provider doesn't replay the failure

@@ -458,3 +458,50 @@ def test_persona_voice_comes_from_the_role_plays_that_play_them(excon, loop):
     kofi.refresh_from_db()
     assert kofi.personas == "donotreply, nobody-here" and "No persona with the username nobody-here" in r.content.decode()
     assert "4-3" in [p.key for p, _ in roleplay.characters(s)]
+
+
+def test_suggestion_reads_the_desk_mail_with_this_team_and_the_others(excon, loop):
+    """The persona's other conversations with the team, the other personas' with it, and what the
+    persona told the other teams (labelled: consistency only, never passed on); a fact cited from
+    another team's exchange is flagged; search_mail finds it all; never a team's internal mail."""
+    setup(excon)
+    ta, tb = Team.objects.get(code="a"), Team.objects.get(code="b")
+    deliver_now("3-13")
+    d = desk_client()
+    pb = participant("b", "Bo")
+    _, rb = team_writes(pb, tb, "Team B plan: we go to Zorba at dawn. Is the bridge open?")
+    box_b = Mail.objects.get(team=None, owner=None, folder="inbox", desk_response=rb)
+    assert d.post("/inbox/desk/send/", {"from": "p:donotreply", "to": f"t:{tb.id}", "subject": "Re: News",
+                                        "body": "The Kibo bridge is closed until Friday.", "in_reply_to": box_b.id},
+                  headers=FETCH).json()["ok"]
+    told_b = Mail.objects.get(team=None, owner=None, folder="sent", desk_team=tb, message__kind="reply")
+    pa = participant("a", "Jane")
+    Mail.objects.create(team=ta, owner=None, folder="sent", thread="internal", subject="Our plan",
+                        body="INTERNAL: we keep the tents for later", from_addr="a@x", from_name="Team A")
+    _, ra = team_writes(pa, ta, "Is the bridge open?")
+    box_a = Mail.objects.get(team=None, owner=None, folder="inbox", desk_response=ra)
+    # an earlier, separate conversation of CNN with Team A
+    assert d.post("/inbox/desk/send/", {"from": "p:cnn", "to": f"t:{ta.id}", "subject": "Interview request",
+                                        "body": "CNN would like ten minutes with your team leader."},
+                  headers=FETCH).json()["ok"]
+    block = suggest.mail_block(ra, box_a.thread)
+    other = block.split("What this persona told the OTHER teams")[1]
+    assert "Kibo bridge is closed until Friday" in other and f"mail:{told_b.id}" in other
+    assert "Team B plan" in other  # what B asked, for the desk's eyes, labelled as another team's
+    assert "Interview request" in block.split("The other personas' recent exchanges")[1]
+    assert "INTERNAL" not in block and "Is the bridge open?" not in block.split("What this persona told")[0].split(
+        "This persona's other conversations")[1]  # the conversation itself isn't repeated
+    tl = suggest.Timeline(ta)
+    assert tl.ref(f"mail:{told_b.id}")[0] == "other_team" and tl.ref(f"mail:{box_a.id}")[0] == "known"
+    found = suggest.tool_search_mail(tl, "bridge", team="others")
+    assert "Kibo bridge" in found and "what the persona told Team B" in found and "Team A" not in found
+    assert "INTERNAL" not in suggest.tool_search_mail(tl, "tents")
+    assert "Kibo bridge is closed" in suggest.tool_read(tl, f"mail:{told_b.id}")
+    facts, warnings = suggest.check({"facts": [{"fact": "The bridge is closed", "source": f"mail:{told_b.id}"}]}, tl)
+    assert facts[0]["state"] == "other_team" and "another team's exchange" in warnings[0]
+    # and it is in what the model is given
+    j = d.post("/inbox/desk/suggest/", {"thread": box_a.thread}, headers=FETCH).json()["suggestion"]
+    assert j["status"] == "done"
+    first = loop.calls[0]["messages"][0]["content"][0]["text"]
+    assert "Kibo bridge is closed until Friday" in first and "never pass" in first
+    assert "search_mail" in json.dumps(loop.calls[0]["tools"])
