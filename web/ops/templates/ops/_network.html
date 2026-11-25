@@ -6,14 +6,37 @@
     <label>Time <select data-net-win>
       <option value="15">Last 15 min</option><option value="60">Last hour</option><option value="today">Today</option><option value="all" selected>Whole exercise</option>
     </select></label>
-    <label class="check"><input type="checkbox" data-net-injects checked> Injects</label>
+    <details class="net-dd" data-net-dd="teams">
+      <summary class="net-pick" data-net-teams-label title="Only the teams ticked, and the personas who write with them">All teams</summary>
+      <div class="net-dd-panel net-dd-list" role="group" aria-label="Teams">
+        <div data-net-teams></div>
+        <div class="row"><button type="button" class="btn small" data-net-teams-all>All teams</button></div>
+      </div>
+    </details>
+    <details class="net-dd" data-net-dd="kinds">
+      <summary class="net-pick" data-net-kinds-label title="Which messages the map counts">All messages</summary>
+      <div class="net-dd-panel net-dd-list" role="group" aria-label="Messages">
+        <label class="check"><input type="checkbox" data-net-kind="inject"> Injects</label>
+        <label class="check"><input type="checkbox" data-net-kind="followup"> Follow-ups</label>
+        <label class="check"><input type="checkbox" data-net-kind="answer"> Personas' answers and desk mail</label>
+        <label class="check"><input type="checkbox" data-net-kind="participant"> Teams' mail</label>
+        <label class="check"><input type="checkbox" data-net-kind="leader"> Team leaders' mail</label>
+        <label class="check"><input type="checkbox" data-net-kind="persona"> Persona to persona</label>
+        <div class="row"><button type="button" class="btn small" data-net-kinds-all>All messages</button></div>
+      </div>
+    </details>
+    <label>Personas <select data-net-personas title="Which personas the map shows">
+      <option value="all">All</option><option value="ai" title="Only the AI personas">AI only</option><option value="people" title="Only the personas people play (and ExCon)">People only</option><option value="none" title="No personas: only mail within and between the teams">None</option>
+    </select></label>
+    <label class="net-find">Find <input type="search" list="net-names" placeholder="A name" data-net-find autocomplete="off"><datalist id="net-names" data-net-names></datalist></label>
+    <button type="button" class="net-clear" data-net-clear hidden title="Show every team, message and persona again">Clear filters</button>
     <label>Lines from <input type="number" min="1" max="50" value="1" data-net-minline> msg</label>
     <label>Personas from <input type="number" min="1" max="50" value="1" data-net-minpersona> msg</label>
     <span class="net-buttons">
       <button type="button" class="btn small" data-net-fit title="Fit the whole map in view">Fit</button>
       <button type="button" class="btn small" data-net-unpin title="Let every dot you dragged move again">Unpin all</button>
       <button type="button" class="btn small" data-net-reset title="Forget the saved positions and lay the map out afresh">New layout</button>
-      <details class="net-style" data-net-style>
+      <details class="net-style net-dd" data-net-style>
         <summary class="btn small" title="The map's look: theme, dots, lines, labels, motion">Style</summary>
         <div class="net-style-panel" role="group" aria-label="Style">
           <label><span>Theme</span><select data-net-s="theme">

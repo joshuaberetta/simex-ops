@@ -17,6 +17,12 @@ EVERYONE = {PARTICIPANT, LEADER, DESK, RP, EXCON}
 SHOWN = 8  # notes listed in the drawer (the newest)
 
 ENTRIES = [
+    {"key": "2026-11-network-filters", "date": date(2026, 11, 25), "who": {DESK, EXCON},
+     "title": "Filter the Network map",
+     "body": "On **Network**, **All teams** shows only the teams you tick (or one alone), **All messages** which "
+             "kinds count (injects, answers, teams' mail, leaders', persona to persona) and **Personas** all, AI "
+             "only, people only or none. **Find** a name to bring its dot to the middle. **Clear filters** shows "
+             "everything again."},
     {"key": "2026-11-desk-only-mine", "date": date(2026, 11, 25), "who": {DESK, EXCON},
      "title": "Hear only of your own conversations",
      "body": "The **gear** at the top (next to the bell) has your own settings. Tick **Only my conversations** to "

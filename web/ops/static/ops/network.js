@@ -17,11 +17,14 @@
   // --- state -------------------------------------------------------------------------------------
   const meta = new Map();     // node id -> {id, type, name, team, slot, role, ai, addr}
   let sends = [];             // [{id, at, f, to[], k, s}], oldest first
+  let shown = [];             // the sends the filters let through (to[] narrowed to what is shown)
   const seen = new Set();
   let cursor = {};
   let clock = null, clockAt = 0;
   const saved = load();
-  const opts = Object.assign({view: "teams", win: "all", injects: true, minLine: 1, minPersona: 1}, saved.opts || {});
+  const opts = Object.assign({view: "teams", win: "all", minLine: 1, minPersona: 1, teams: [], hide: [], personas: "all"}, saved.opts || {});
+  if (opts.injects === false && !opts.hide.includes("inject")) opts.hide.push("inject");  // the old Injects tick box
+  delete opts.injects;
   const STYLE = {theme: "auto", dot: 1, line: 1, lineAlpha: 1, curve: 1, labels: "auto", labelSize: 1, motion: true, legend: true};
   const style = Object.assign({}, STYLE, saved.style || {});
   const expanded = new Set(saved.expanded || []);
@@ -96,15 +99,43 @@
     if (opts.win === "today") { const d = new Date(now); d.setHours(0, 0, 0, 0); return d.getTime(); }
     return now - parseInt(opts.win, 10) * 60000;
   }
-  function counted(e) { return opts.injects || e.k !== "inject"; }
+  // --- filters: teams, kinds of message, personas (kept in this browser with the rest) --------------
+  function filtering() { return opts.teams.length > 0 || opts.hide.length > 0 || opts.personas !== "all"; }
+  function teamOf(id) {
+    const m = meta.get(id);
+    return m && m.type === "team" ? id : m && m.team;
+  }
+  function inScope(id) {
+    const m = meta.get(id);
+    if (!m) return true;  // not known yet: the poll reloads the map
+    if (m.type === "team" || m.type === "member" || m.type === "leader") {
+      return !opts.teams.length || opts.teams.includes(teamOf(id));
+    }
+    if (opts.personas === "none") return false;
+    if (m.type === "excon") return opts.personas !== "ai";
+    if (opts.personas === "ai") return !!m.ai;
+    if (opts.personas === "people") return !m.ai;
+    return true;
+  }
+  function pass(e) {
+    // A send as the filters show it: its writer in view, its recipients narrowed to those in view;
+    // with teams picked, only what one of them wrote or got. Null when nothing of it is left.
+    if (opts.hide.includes(e.k) || !inScope(e.f)) return null;
+    const to = e.to.filter(inScope);
+    if (!to.length) return null;
+    if (opts.teams.length && !opts.teams.includes(teamOf(e.f)) && !to.some((t) => opts.teams.includes(teamOf(t)))) return null;
+    return to.length === e.to.length ? e : Object.assign({}, e, {to});
+  }
+  function refilter() { shown = filtering() ? sends.map(pass).filter(Boolean) : sends; }
 
   function rebuild() {
     const now = Date.now(), t0 = windowStart(now);
     stats = {};
     const st = (id) => (stats[id] = stats[id] || {out: 0, in: 0, self: 0});
     const agg = new Map();
-    for (const e of sends) {
-      if (e.at < t0 || !counted(e)) continue;
+    refilter();
+    for (const e of shown) {
+      if (e.at < t0) continue;
       const f = shownId(e.f);
       st(f).out++;
       const tos = new Set(e.to.map(shownId));
@@ -122,6 +153,7 @@
     meta.forEach((m, id) => {
       if (shownId(id) !== id) return;
       const s = stats[id], total = s ? s.out + s.in : 0;
+      if (!inScope(id) && id !== selected) return;
       if (m.type === "team" || m.type === "leader" || m.type === "member") {
         if (!m.gone || total) visible.add(id);
       } else if (total >= Math.max(1, opts.minPersona) || id === selected) {
@@ -150,7 +182,10 @@
       const base = {team: 11, leader: 7, member: 5, persona: 5, excon: 6}[m.type] || 5;
       n.r = Math.min(52, base + 2.3 * Math.sqrt(total)) * style.dot;
     }
-    $("[data-net-empty]").hidden = sends.length > 0;
+    const empty = $("[data-net-empty]");
+    if (empty.dataset.none == null) empty.dataset.none = empty.textContent;
+    empty.hidden = shown.length > 0;
+    empty.textContent = sends.length ? "Nothing sent that the filters let through." : empty.dataset.none;
     alpha = Math.max(alpha, 0.35);
     dirty = true;
     renderStats(); renderDetail(); renderFeed();
@@ -421,12 +456,12 @@
   }
   function renderStats() {
     const now = Date.now(), t0 = windowStart(now);
-    const n = (from) => sends.filter((e) => e.at >= from && counted(e)).length;
-    const replies = sends.filter((e) => e.at >= now - 3600000 && e.k === "participant").length;
+    const n = (from) => shown.filter((e) => e.at >= from).length;
+    const replies = shown.filter((e) => e.at >= now - 3600000 && e.k === "participant").length;
     const box = $("[data-net-stats]");
     box.replaceChildren();
     for (const [v, lab] of [[n(now - 15 * 60000), "last 15 min"], [replies, "by teams, 1 h"],
-                            [n(t0), opts.win === "all" ? "in all" : "shown"]]) {
+                            [n(t0), opts.win === "all" && !filtering() ? "in all" : "shown"]]) {
       const d = el("div"); d.append(el("b", null, String(v)), el("span", null, lab)); box.append(d);
     }
   }
@@ -465,9 +500,8 @@
     }
     // Its latest messages.
     const mine = [];
-    for (let i = sends.length - 1; i >= 0 && mine.length < 5; i--) {
-      const e = sends[i];
-      if (!counted(e)) continue;
+    for (let i = shown.length - 1; i >= 0 && mine.length < 5; i--) {
+      const e = shown[i];
       const f = shownId(e.f), tos = e.to.map(shownId);
       if (f === id || tos.includes(id)) mine.push(e);
     }
@@ -496,7 +530,7 @@
   }
   function renderFeed() {
     const ol = $("[data-net-feed]"), items = [];
-    for (let i = sends.length - 1; i >= 0 && items.length < 14; i--) if (counted(sends[i])) items.push(sends[i]);
+    for (let i = shown.length - 1; i >= 0 && items.length < 14; i--) items.push(shown[i]);
     ol.replaceChildren();
     for (const e of items) {
       const li = el("li", fresh.has(e.id) ? "fresh" : "");
@@ -522,6 +556,7 @@
     const d = await getJSON(cfg.data);
     meta.clear();
     for (const n of d.nodes) meta.set(n.id, n);
+    renderPickers();
     sends = d.sends; seen.clear(); for (const e of sends) seen.add(e.id);
     cursor = d.cursor; setClock(d.clock);
     rebuild();
@@ -548,8 +583,9 @@
     // The new messages travel along their lines (staggered when many leave at once, as an inject to every team).
     const now = Date.now();
     let i = 0;
-    for (const e of add) {
-      if (!counted(e) || now - e.at > 10 * 60000) continue;
+    for (const e0 of add) {
+      const e = pass(e0);
+      if (!e || now - e.at > 10 * 60000) continue;
       fresh.add(e.id);
       const f = shownId(e.f), start = now + Math.min(i++, 12) * 120;
       flash.set(f, now);
@@ -670,10 +706,9 @@
   const segs = root.querySelectorAll("[data-net-view]");
   const showView = () => segs.forEach((b) => b.classList.toggle("on", b.dataset.netView === opts.view));
   segs.forEach((b) => b.addEventListener("click", () => { opts.view = b.dataset.netView; showView(); rebuild(); save(); }));
-  const win = $("[data-net-win]"), inj = $("[data-net-injects]"), minLine = $("[data-net-minline]"), minPersona = $("[data-net-minpersona]");
-  win.value = opts.win; inj.checked = opts.injects; minLine.value = opts.minLine; minPersona.value = opts.minPersona;
+  const win = $("[data-net-win]"), minLine = $("[data-net-minline]"), minPersona = $("[data-net-minpersona]");
+  win.value = opts.win; minLine.value = opts.minLine; minPersona.value = opts.minPersona;
   win.addEventListener("change", () => { opts.win = win.value; rebuild(); save(); });
-  inj.addEventListener("change", () => { opts.injects = inj.checked; rebuild(); save(); });
   const num = (e, k) => e.addEventListener("input", () => { opts[k] = Math.max(1, parseInt(e.value, 10) || 1); rebuild(); save(); });
   num(minLine, "minLine"); num(minPersona, "minPersona");
   $("[data-net-fit]").addEventListener("click", fit);
@@ -704,10 +739,99 @@
   $("[data-net-style-reset]").addEventListener("click", () => {
     Object.assign(style, STYLE); showStyle(); applyStyle(); rebuild(); save();
   });
-  const stylePanel = $("[data-net-style]");
-  document.addEventListener("pointerdown", (ev) => { if (stylePanel.open && !stylePanel.contains(ev.target)) stylePanel.open = false; });
-  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") stylePanel.open = false; });
+  // Drop-downs (Teams, Messages, Style): one open at a time, closed by a click elsewhere or Escape.
+  const dds = root.querySelectorAll(".net-dd");
+  dds.forEach((d) => d.addEventListener("toggle", () => { if (d.open) dds.forEach((o) => { if (o !== d) o.open = false; }); }));
+  document.addEventListener("pointerdown", (ev) => { dds.forEach((d) => { if (d.open && !d.contains(ev.target)) d.open = false; }); });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") dds.forEach((d) => { d.open = false; }); });
   showStyle();
+
+  // Filters: which teams, which kinds of message, which personas; Find picks a dot by name.
+  const teamBox = $("[data-net-teams]"), kindEls = [...root.querySelectorAll("[data-net-kind]")], personaSel = $("[data-net-personas]");
+  const findEl = $("[data-net-find]"), namesEl = $("[data-net-names]"), clearEl = $("[data-net-clear]");
+  const teamsLabel = $("[data-net-teams-label]"), kindsLabel = $("[data-net-kinds-label]");
+  function teamNodes() {
+    return [...meta.values()].filter((m) => m.type === "team" && !m.gone).sort((a, b) => (a.slot || 0) - (b.slot || 0));
+  }
+  function filtersChanged() {
+    showFilters(); rebuild(); save();
+    if (follow) aim = null;  // the view glides to what is left
+  }
+  function showFilters() {
+    const ts = teamNodes(), picked = opts.teams.filter((id) => meta.has(id));
+    teamsLabel.textContent = !picked.length ? "All teams"
+      : picked.length === 1 ? meta.get(picked[0]).name : `${picked.length} of ${ts.length} teams`;
+    teamBox.querySelectorAll("input").forEach((c) => { c.checked = !opts.teams.length || opts.teams.includes(c.value); });
+    kindEls.forEach((c) => { c.checked = !opts.hide.includes(c.dataset.netKind); });
+    const on = kindEls.filter((c) => c.checked).length;
+    kindsLabel.textContent = on === kindEls.length ? "All messages" : on === 0 ? "No messages" : `${on} of ${kindEls.length} kinds`;
+    personaSel.value = opts.personas;
+    teamsLabel.classList.toggle("set", opts.teams.length > 0);
+    kindsLabel.classList.toggle("set", opts.hide.length > 0);
+    personaSel.classList.toggle("set", opts.personas !== "all");
+    clearEl.hidden = !filtering();
+  }
+  function renderPickers() {
+    // The teams' tick boxes and Find's names come from the map's nodes (reloaded now and then).
+    const ts = teamNodes(), all = ts.map((t) => t.id);
+    opts.teams = opts.teams.filter((id) => all.includes(id));
+    if (opts.teams.length === all.length) opts.teams = [];
+    teamBox.replaceChildren();
+    for (const t of ts) {
+      const lab = el("label", "check"), c = el("input"), sw = el("span", "sw");
+      c.type = "checkbox"; c.value = t.id;
+      sw.style.background = colourOf(t.id);
+      c.addEventListener("change", () => {
+        const set = new Set(opts.teams.length ? opts.teams : all);
+        if (c.checked) set.add(t.id); else set.delete(t.id);
+        if (!set.size) { c.checked = true; return; }  // at least one team
+        opts.teams = set.size === all.length ? [] : all.filter((id) => set.has(id));
+        filtersChanged();
+      });
+      const only = el("button", "net-only", "only");
+      only.type = "button"; only.title = `${t.name} alone`;
+      only.addEventListener("click", (ev) => { ev.preventDefault(); opts.teams = all.length > 1 ? [t.id] : []; filtersChanged(); });
+      lab.append(c, sw, el("span", "nm", t.name), only);
+      teamBox.append(lab);
+    }
+    if (!ts.length) teamBox.append(el("p", "muted", "No teams."));
+    namesEl.replaceChildren();
+    for (const m of [...meta.values()].filter((x) => !x.gone).sort((a, b) => longName(a.id).localeCompare(longName(b.id)))) {
+      const o = el("option"); o.value = longName(m.id); namesEl.append(o);
+    }
+    showFilters();
+  }
+  $("[data-net-teams-all]").addEventListener("click", () => { opts.teams = []; filtersChanged(); });
+  kindEls.forEach((c) => c.addEventListener("change", () => {
+    const k = c.dataset.netKind;
+    opts.hide = opts.hide.filter((x) => x !== k);
+    if (!c.checked) opts.hide.push(k);
+    filtersChanged();
+  }));
+  $("[data-net-kinds-all]").addEventListener("click", () => { opts.hide = []; filtersChanged(); });
+  personaSel.addEventListener("change", () => { opts.personas = personaSel.value; filtersChanged(); });
+  clearEl.addEventListener("click", () => { opts.teams = []; opts.hide = []; opts.personas = "all"; filtersChanged(); });
+  function find() {
+    // Its dot is selected and brought to the middle (its team opened up, if it's a member folded in).
+    const q = findEl.value.trim().toLowerCase();
+    if (!q) return;
+    const ms = [...meta.values()].filter((m) => !m.gone);
+    const m = ms.find((x) => longName(x.id).toLowerCase() === q) || ms.find((x) => x.name.toLowerCase() === q)
+      || ms.find((x) => longName(x.id).toLowerCase().includes(q));
+    if (!m) { status(`No one called “${findEl.value.trim()}” on the map.`); return; }
+    if (m.type === "member" && m.team && opts.view !== "people") expanded.add(m.team);
+    selected = m.id;
+    rebuild(); save();
+    status(inScope(m.id) ? "" : `${longName(m.id)} is outside the filters: shown on its own.`);
+    const n = sim.get(m.id);
+    if (n) {
+      const k = Math.max(view.k, 1);
+      follow = false; view = {k, x: W / 2 - n.x * k, y: H / 2 - n.y * k}; dirty = true;
+    }
+  }
+  findEl.addEventListener("change", find);
+  findEl.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); find(); } });
+  showFilters();
 
   // --- start -----------------------------------------------------------------------------------------
   applyStyle();
