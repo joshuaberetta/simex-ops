@@ -93,7 +93,10 @@
   <a href="/inbox/desk/calendar/" class="{% if dt.current == 'calendar' %}on{% endif %}">{% icon "event" 20 %} Calendar</a>
   <a href="/inbox/desk/assign/" class="{% if dt.current == 'assign' %}on{% endif %}">{% icon "person" 20 %} Assign</a>
   {% if dt.injects %}<a href="/inbox/desk/injects/" class="{% if dt.current == 'injects' %}on{% endif %}">{% icon "send" 20 %} Injects <span class="gm-tab-ro">read-only</span></a>{% endif %}
-  {% if dt.chat %}<button type="button" class="gm-chat-tab" data-chat-toggle aria-expanded="false" title="Ask SIMEX AI what has been said already, who a persona is, how to answer a team">{% icon "edit" 20 %} ChatSIMEX</button>{% endif %}
+  {% if dt.chat %}<button type="button" class="gm-chat-tab" data-chat-toggle aria-expanded="false" title="Ask SIMEX AI what has been said already, who a persona is, how to answer a team"><svg class="gm-chat-spark" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">{% comment %}SIMEX AI's sparkles, each star its own path so they twinkle in turn on hover (desk_chat.css){% endcomment %}
+    <path class="s1" d="M11.5 9.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12z"/>
+    <path class="s2" d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25z"/>
+    <path class="s3" d="M19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25z"/></svg><span>ChatSIMEX</span></button>{% endif %}
 </nav>
 {% endwith %}{% elif member_tabs %}{% with mt=member_tabs %}
 <nav class="gm-tabs" aria-label="Mailboxes">
