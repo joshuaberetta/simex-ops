@@ -325,6 +325,20 @@ def address_book(v):
     return book
 
 
+def desk_groups(v):
+    """The persona desk's composer offers "All teams": picked, it becomes a chip for every
+    active team but the Test team (in the browser, mail.js), so one message goes to each team
+    on its own (desk.send: a Message per team, none naming the others). Never posted itself,
+    so never in address_book."""
+    if not v.desk or v.readonly:
+        return []
+    teams = [f"t:{t.id}" for t in Team.objects.filter(active=True, is_test=False).order_by("name")]
+    if len(teams) < 2:
+        return []
+    return [{"key": "g:teams", "name": "All teams", "addr": f"{len(teams)} teams, each its own message",
+             "kind": "group", "members": teams}]
+
+
 def desk_members(teams):
     """The persona desk writes to members one by one too: every active member of those teams,
     at their own SIMEX Mail address (with personal mailboxes; else their team inbox has it, for
@@ -963,7 +977,7 @@ def _ctx(v, **extra):
                                        else "members" if v.member_box else "mail")
     elif v.person and not v.readonly:
         c["member_tabs"] = member_tabs(v.person, "me" if v.member_box else "team")
-    c["simex_js"] = {"base": v.base, "readonly": v.readonly, "book": contacts(v), "team": c["team"]["name"]
+    c["simex_js"] = {"base": v.base, "readonly": v.readonly, "book": desk_groups(v) + contacts(v), "team": c["team"]["name"]
                      if v.desk else v.team.name, "desk": v.desk,
                      "maxMb": int(conf.get("max_upload_mb") or 10), "folder": c.get("folder", ""),
                      "unread": c["inbox_unread"], "leader": bool(v.leader), "fromDefault": c["from_default"],

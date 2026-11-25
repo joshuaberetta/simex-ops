@@ -17,6 +17,11 @@ EVERYONE = {PARTICIPANT, LEADER, DESK, RP, EXCON}
 SHOWN = 8  # notes listed in the drawer (the newest)
 
 ENTRIES = [
+    {"key": "2026-11-desk-all-teams", "date": date(2026, 11, 25), "who": {DESK, EXCON},
+     "title": "One message to every team",
+     "body": "In **To**, pick **All teams** (or type it): a chip for each team but the Test team. Each team gets "
+             "its own copy, as if written to it alone, and its reply is a conversation of its own. Remove the "
+             "chips of teams it shouldn't go to."},
     {"key": "2026-11-desk-done-toolbar", "date": date(2026, 11, 25), "who": {DESK, EXCON},
      "title": "No reply needed, from the toolbar",
      "body": "In an open conversation, the ✓ next to Delete marks it as needing no reply (and opens the next one "

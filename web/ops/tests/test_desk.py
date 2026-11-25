@@ -472,3 +472,25 @@ def test_desk_email_copies_other_personas(excon):
     m = Message.objects.get(kind="desk")
     assert m.channel == "email" and m.to == ["team-a@kobotoolbox.org"] and m.cc == [f"donotreply@{settings.MAIL_DOMAIN}"]
 
+
+
+def test_desk_all_teams_sends_each_team_its_own(excon):
+    """The composer's "All teams" (desk_groups): a chip for every team but the Test team, and
+    one message each, none naming another team."""
+    import json
+    setup(excon)
+    d = desk_client()
+    teams = list(Team.objects.filter(active=True, is_test=False).order_by("name"))
+    cfg = json.loads(re.search(r'id="simex-config"[^>]*>(.*?)</script>', d.get("/inbox/desk/").content.decode(), re.S)[1])
+    group = cfg["book"][0]
+    assert group["key"] == "g:teams" and group["members"] == [f"t:{t.id}" for t in teams]
+    assert "g:teams" not in json.dumps(participant("a").get("/inbox/").context["simex_js"]["book"])
+    r = d.post("/inbox/desk/send/", {"from": "p:cnn", "to": ",".join(group["members"]), "subject": "Field visit",
+                                     "body": "Hi Team, I hope it went well."}, headers=FETCH)
+    assert r.json()["ok"] and not r.json()["warning"]
+    got = Mail.objects.filter(owner=None, folder="inbox", team__in=teams, subject="Field visit")
+    assert sorted(m.team_id for m in got) == sorted(t.id for t in teams)
+    for m in got:
+        others = [t.name for t in teams if t.id != m.team_id]
+        assert not any(n in (m.to_label or "") + (m.cc_label or "") for n in others)
+    assert Message.objects.filter(kind="desk", subject="Field visit").count() == len(teams)

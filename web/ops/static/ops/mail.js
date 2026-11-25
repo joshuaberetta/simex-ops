@@ -104,7 +104,7 @@
         items = BOOK.filter((b) => !this.keys[field].includes(b.key) && (!q || b.name.toLowerCase().includes(q) || b.addr.toLowerCase().includes(q))).slice(0, 60);  // the list scrolls
         if (!items.length || document.activeElement !== input) { box.hidden = true; return; }
         idx = Math.min(idx, items.length - 1);
-        box.innerHTML = items.map((b, i) => `<div data-i="${i}" class="${i === idx ? "on" : ""}"><span class="gm-avatar" style="background:${colour(b.name)}">${esc((b.name || "?")[0].toUpperCase())}</span><span>${esc(b.name)}<small>${b.org ? esc(b.org) + " · " : ""}${esc(b.addr)}${b.kind === "team" ? " · team" : b.kind === "member" ? " · team member" : b.kind === "tl" ? " · team leader" : ""}</small></span></div>`).join("");
+        box.innerHTML = items.map((b, i) => `<div data-i="${i}" class="${i === idx ? "on" : ""}"><span class="gm-avatar" style="background:${colour(b.name)}">${esc((b.name || "?")[0].toUpperCase())}</span><span>${esc(b.name)}<small>${b.org ? esc(b.org) + " · " : ""}${esc(b.addr)}${b.kind === "team" ? " · team" : b.kind === "group" ? "" : b.kind === "member" ? " · team member" : b.kind === "tl" ? " · team leader" : ""}</small></span></div>`).join("");
         box.hidden = false;
       };
       input.addEventListener("input", () => { idx = 0; input.classList.remove("bad"); input.title = ""; show(); });
@@ -153,6 +153,13 @@
       } catch (e) { /* the key stays shown */ }
     }
     add(field, key) {
+      const group = byKey[key] && byKey[key].kind === "group" ? byKey[key] : null;
+      if (group) {  // the desk's "All teams": a chip for each team, each team its own message
+        const taken = ["to", "cc", "bcc"].flatMap((f) => this.keys[f]);
+        group.members.filter((k) => !taken.includes(k)).forEach((k) => this.keys[field].push(k));
+        this.renderChips(field); this.touch();
+        return;
+      }
       if (!key || this.keys[field].includes(key)) return;
       this.keys[field].push(key);
       if (!byKey[key]) {
