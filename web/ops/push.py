@@ -75,7 +75,8 @@ def notify_mail(mail):
     the persona desk's for the desk."""
     if not (enabled() or _sender) or mail.folder != "inbox":
         return
-    transaction.on_commit(lambda: _start(mail.team_id, payload(mail), mail.author_id, mail.owner_id))
+    transaction.on_commit(lambda: _start(mail.team_id, payload(mail), mail.author_id, mail.owner_id,
+                                         "" if mail.team_id else mail.thread))
 
 
 # A few worker threads per process take the pushes from a queue: an inject landing in every
@@ -95,8 +96,8 @@ def _work():
             log.exception("push failed")
 
 
-def _start(team_id, data, author_id, owner_id=None):
-    _run(send_team, (team_id, data, author_id, owner_id))
+def _start(team_id, data, author_id, owner_id=None, thread=""):
+    _run(send_team, (team_id, data, author_id, owner_id, thread))
 
 
 def _run(fn, args):
@@ -125,12 +126,15 @@ def send_people(person_ids, data):
                                           person__user__is_active=True), data)
 
 
-def send_team(team_id, data, author_id=None, owner_id=None):
+def send_team(team_id, data, author_id=None, owner_id=None, thread=""):
     from .models import PushSubscription
     who = ({"person_id": owner_id} if owner_id else {"person__team_id": team_id, "person__role": "member"}
            if team_id else {"person__role": "desk"})  # no team: the persona desk's mailbox
-    _send(PushSubscription.objects.filter(**who, person__active=True,
-                                          person__user__is_active=True).exclude(person_id=author_id), data)
+    qs = PushSubscription.objects.filter(**who, person__active=True, person__user__is_active=True).exclude(person_id=author_id)
+    if not team_id and not owner_id:  # the desk: not those who hear only of their own conversations, but for theirs
+        from .desk import quiet_people
+        qs = qs.exclude(person_id__in=quiet_people(thread))
+    _send(qs, data)
 
 
 def _send(qs, data):

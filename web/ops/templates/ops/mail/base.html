@@ -48,7 +48,7 @@
       <div class="gm-dn-panel" data-dn-panel hidden>
         <div class="gm-dn-head"><b>Notifications</b><span><button type="button" class="gm-link" data-dn-all>Mark all read</button> · <button type="button" class="gm-link" data-dn-clear>Clear all</button></span></div>
         <ul class="gm-dn-list" data-dn-list><li class="gm-dn-empty">Loading…</li></ul>
-        <div class="gm-dn-foot">Conversations given to you or taken from you, your follow-ups when due, teams writing again and others answering in conversations you have or follow, a team waiting on yours, AI persona answers held. <a href="/inbox/desk/?folder=mine" class="gm-link">Assigned to me</a> · <a href="/inbox/desk/?folder=watching" class="gm-link">Following</a></div>
+        <div class="gm-dn-foot">Conversations given to you or taken from you, your follow-ups when due, teams writing again and others answering in conversations you have or follow, a team waiting on yours, AI persona answers held{% if desk_tabs.prefs.only_mine %} (only your conversations: the gear changes that){% endif %}. <a href="/inbox/desk/?folder=mine" class="gm-link">Assigned to me</a> · <a href="/inbox/desk/?folder=watching" class="gm-link">Following</a></div>
       </div>
     </div>{{ desk_tabs.bell|json_script:"simex-dn" }}{% endif %}
     {% if whatsnew.notes %}<div class="gm-dn" data-wn-bell>{% comment %}What's new: its own button, apart from the desk's notifications bell{% endcomment %}
@@ -56,6 +56,15 @@
       <div class="gm-dn-panel" data-wn-panel hidden>
         <div class="gm-dn-head"><b>What's new</b></div>
         {% include "ops/_whatsnew.html" with url="/inbox/whatsnew/seen/" toggle="[data-wn-toggle]" %}
+      </div>
+    </div>{% endif %}
+    {% if desk_tabs.prefs %}<div class="gm-dn" data-dp>{% comment %}the gear: this login's own settings on the desk (desk.prefs_of){% endcomment %}
+      <button type="button" class="gm-icon-btn" data-dp-toggle title="Your settings on the desk" aria-label="Your settings on the desk" aria-expanded="false">{% icon "settings" 22 %}</button>
+      <div class="gm-dn-panel gm-dp-panel" data-dp-panel hidden>
+        <div class="gm-dn-head"><b>Your settings</b><small class="muted" data-dp-saved hidden>Saved</small></div>
+        <label class="gm-dp-row"><input type="checkbox" data-dp-only-mine{% if desk_tabs.prefs.only_mine %} checked{% endif %}>
+          <span><b>Only my conversations</b><small>Notifications, alerts and pushes only for conversations assigned to you or that you follow, and anything given to you. New conversations nobody has stay quiet: find them in the Inbox and on the Assign board.</small></span></label>
+        <div class="gm-dn-foot">Yours alone, on every device; saved as you change it.</div>
       </div>
     </div>{% endif %}
     {% include "ops/mail/_apps.html" %}

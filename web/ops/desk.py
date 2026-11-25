@@ -1016,17 +1016,70 @@ def audience(thread, exclude=()):
     return [u for uid, u in out.items() if uid not in set(exclude) and u.is_active]
 
 
+def prefs_of(user):
+    """user's own settings on the desk (DeskPref; unsaved defaults if none)."""
+    from .models import DeskPref
+    if not (user and user.is_authenticated):
+        return DeskPref()
+    return DeskPref.objects.filter(user=user).first() or DeskPref(user=user)
+
+
+def set_prefs(user, only_mine=None):
+    """Save user's desk settings (the gear); returns them."""
+    from .models import DeskPref
+    p, _ = DeskPref.objects.get_or_create(user=user)
+    if only_mine is not None:
+        p.only_mine = bool(only_mine)
+    p.save()
+    return p
+
+
+def mine(thread, user_id):
+    """Is this conversation user_id's: they have it, or follow it (DeskWatch, not stopped)?"""
+    from .models import DeskConversation, DeskWatch
+    return bool(thread) and (DeskConversation.objects.filter(thread=thread, owner_id=user_id).exists()
+                             or DeskWatch.objects.filter(thread=thread, user_id=user_id, off=False).exists())
+
+
+def only_mine_users(user_ids):
+    """Of these user ids, those who hear only of their own conversations (DeskPref.only_mine)."""
+    from .models import DeskPref
+    return set(DeskPref.objects.filter(user_id__in=list(user_ids), only_mine=True).values_list("user_id", flat=True))
+
+
+def quiet_people(thread):
+    """Desk members (Person ids) not to push of new mail in thread: those who hear only of their
+    own conversations and for whom it isn't one (push.send_team, the desk's mailbox)."""
+    from .models import DeskConversation, DeskPref, DeskWatch
+    quiet = set(DeskPref.objects.filter(only_mine=True).values_list("user_id", flat=True))
+    if not quiet:
+        return set()
+    if thread:
+        quiet -= set(DeskConversation.objects.filter(thread=thread, owner__isnull=False).values_list("owner_id", flat=True))
+        quiet -= set(DeskWatch.objects.filter(thread=thread, off=False).values_list("user_id", flat=True))
+    return set(Person.objects.filter(user_id__in=quiet, role="desk").values_list("id", flat=True))
+
+
+# Notices about the person themselves, which "only my conversations" never holds back.
+ALWAYS = {"assign", "follow_up"}
+
+
 def notify(users, key, kind, title, body="", thread="", url="", test=False, push_=False):
     """A DeskNotice for each of users (once per key), pushed to their devices (push_; desk
-    members only, ExCon staff have no Person). Never breaks what it reports on. Returns how
-    many were new."""
+    members only, ExCon staff have no Person). Those who hear only of their own conversations
+    (DeskPref.only_mine) get it only if it is one of theirs (mine) or about them (ALWAYS).
+    Never breaks what it reports on. Returns how many were new."""
     from .models import DeskNotice
     seen, new = set(), []
     try:
+        users = [u for u in users if u]
+        quiet = only_mine_users(u.id for u in users) if kind not in ALWAYS else set()
         for u in users:
-            if not u or u.id in seen:
+            if u.id in seen:
                 continue
             seen.add(u.id)
+            if u.id in quiet and not mine(thread, u.id):
+                continue
             _, made = DeskNotice.objects.get_or_create(user=u, key=key[:120], defaults=dict(
                 kind=kind, title=title[:300], body=(body or "")[:500], thread=thread, url=url, test=test))
             if made:

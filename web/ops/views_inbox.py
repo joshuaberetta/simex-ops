@@ -772,6 +772,7 @@ def desk_tabs(person, current, user=None):
         t.lead = leads.get(t.id)
     return {"current": current, "teams": teams, "unread": _unread(None, None),
             "bell": desk.notice_counts(user) if user else None,
+            "prefs": desk.prefs_of(user) if user else None,  # the gear: their own settings on the desk
             "chat": conf.flag("desk_chat"),  # ChatSIMEX, on every desk page
             "injects": conf.flag("desk_injects")}  # the Injects tab, read-only
 
@@ -1868,6 +1869,14 @@ def desk_notices_mark(request):
 
 @_desk_page
 @require_POST
+def desk_prefs(request):
+    """Save the signed-in login's own settings on the desk (the gear at the top)."""
+    p = desk.set_prefs(request.user, only_mine=request.POST.get("only_mine") == "1")
+    return JsonResponse({"ok": True, "only_mine": p.only_mine})
+
+
+@_desk_page
+@require_POST
 def desk_presence(request):
     """A desk member has a conversation open (replying: writing in it): who else has it now."""
     thread = (request.POST.get("thread") or "")[:60]
@@ -1895,6 +1904,8 @@ def poll(request, as_team=None, box="", pid=None):
     new = [{"id": m.id, "from": m.from_name or m.from_addr, "subject": m.subject, "thread": m.thread,
             "url": f"{v.base}/t/{m.thread}/"}
            for m in (qs.filter(id__gt=since).order_by("-id")[:5] if "since" in request.GET else [])]
+    if new and v.desk and desk.prefs_of(request.user).only_mine:  # alerts only for their own conversations
+        new = [m for m in new if desk.mine(m["thread"], request.user.id)]
     latest_id = latest.id if latest else 0
     if v.person and not v.readonly and not v.member_box and not v.leader and not v.desk \
             and conf.flag("personal_mailboxes"):

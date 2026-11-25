@@ -17,6 +17,11 @@ EVERYONE = {PARTICIPANT, LEADER, DESK, RP, EXCON}
 SHOWN = 8  # notes listed in the drawer (the newest)
 
 ENTRIES = [
+    {"key": "2026-11-desk-only-mine", "date": date(2026, 11, 25), "who": {DESK, EXCON},
+     "title": "Hear only of your own conversations",
+     "body": "The **gear** at the top (next to the bell) has your own settings. Tick **Only my conversations** to "
+             "get notifications, alerts and pushes only for conversations assigned to you or that you follow. "
+             "Being given one, and your follow-ups, still come."},
     {"key": "2026-11-desk-all-teams", "date": date(2026, 11, 25), "who": {DESK, EXCON},
      "title": "One message to every team",
      "body": "In **To**, pick **All teams** (or type it): a chip for each team but the Test team. Each team gets "

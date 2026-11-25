@@ -752,6 +752,23 @@
     };
   })();
 
+  // --- the persona desk's gear: this login's own settings (desk.prefs_of), saved as they change -----
+  (() => {
+    const box = $("[data-dp]");
+    if (!box) return;
+    const panel = $("[data-dp-panel]", box), btn = $("[data-dp-toggle]", box), saved = $("[data-dp-saved]", box);
+    const open = (on) => { panel.hidden = !on; btn.setAttribute("aria-expanded", on ? "true" : "false"); };
+    btn.onclick = () => open(panel.hidden);
+    document.addEventListener("click", (e) => { if (!panel.hidden && !e.target.closest("[data-dp]")) open(false); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !panel.hidden) open(false); });
+    const only = $("[data-dp-only-mine]", box);
+    only.onchange = async () => {
+      const r = await post("/inbox/desk/prefs/", { only_mine: only.checked ? "1" : "0" }).catch(() => null);
+      if (!r || !r.ok) { only.checked = !only.checked; snack("Not saved: try again."); return; }
+      saved.hidden = false; setTimeout(() => { saved.hidden = true; }, 1500);
+    };
+  })();
+
   // --- polling: unread count, tab title and icon, chime, desktop notification ----------------------
   const N = window.simexNotify;
   const soundBtn = $("[data-sound]");

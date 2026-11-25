@@ -502,6 +502,16 @@ class DeskWatch(models.Model):
         constraints = [models.UniqueConstraint(fields=["thread", "user"], name="desk_watch_once")]
 
 
+class DeskPref(models.Model):
+    """One login's own settings on the persona desk (the gear at the top of SIMEX Mail on the
+    desk, desk.prefs_of). only_mine: notifications, pushes and new-mail alerts only for the
+    conversations they have or follow (desk.mine), and anything given to them. Setup: kept
+    through Start afresh, in backups."""
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="desk_pref")
+    only_mine = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
 class DeskNotice(models.Model):
     """One update for one person on the persona desk (ops/desk.py notify; the bell in SIMEX
     Mail): a conversation given to them, a follow-up due, a team writing again in a conversation

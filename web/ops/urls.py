@@ -86,6 +86,7 @@ urlpatterns = [
     path("inbox/desk/mark/", p.desk_mark),
     path("inbox/desk/notices/", p.desk_notices),
     path("inbox/desk/notices/mark/", p.desk_notices_mark),
+    path("inbox/desk/prefs/", p.desk_prefs),
     path("inbox/desk/suggest/", sg.suggestion),
     path("inbox/desk/suggest/<int:sid>/", sg.suggestion_get),
     path("inbox/desk/chat/", chat.chats),
