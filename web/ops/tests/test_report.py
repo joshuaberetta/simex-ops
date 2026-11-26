@@ -190,6 +190,22 @@ def test_failed_write_up_keeps_the_figures(excon):
     assert excon.get(f"/reports/part/{rep.id}/").status_code == 200
 
 
+def test_a_cut_off_report_is_asked_again_thinking_less(excon):
+    _exercise(excon)
+
+    def cut_once(kw):
+        if kw["system"].startswith(report.TEAM_SYSTEM) and kw["output_config"]["effort"] == "high":
+            return {}, "max_tokens"
+        return report_answers(kw)
+    fake = on(cut_once)
+    excon.post("/reports/compile/", {"kind": "live"})
+    rep = Report.objects.get(team__code="a")
+    assert rep.status == "done" and rep.sections
+    efforts = [c["output_config"]["effort"] for c in fake.calls if c["system"].startswith(report.TEAM_SYSTEM)]
+    assert efforts[:2] == ["high", "medium"]
+    assert all(c["max_tokens"] == report.MAX_TOKENS for c in fake.calls if c["system"].startswith(report.TEAM_SYSTEM))
+
+
 def test_markdown_is_escaped():
     out = report.markdown_html('**hi** <img src=x onerror=alert(1)> [x](javascript:alert(1))\n\n> quote')
     assert "<strong>hi</strong>" in out and "<img" not in out and "javascript:" not in out and "<blockquote>" in out

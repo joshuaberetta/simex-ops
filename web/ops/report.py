@@ -23,6 +23,9 @@ log = logging.getLogger("simex.report")
 
 DELIVERY_KINDS = {"live": ["live"], "test": ["test", "oneoff"]}
 LIKELY_AI, POSSIBLY_AI = 70, 40  # the AI-written estimate's bands, as on the leader Dashboard
+# Output tokens per report, thinking included (effort high thinks a lot over a busy team's mail;
+# 16k was cut off): a cut-off answer is asked for once more with effort medium.
+MAX_TOKENS = 32000
 TEAM_BUDGET = 400_000  # characters of exercise traffic per team report (~100k tokens)
 INJECT_CHARS, REPLY_CHARS = 3000, 4000
 EXCON_NOTES_BUDGET = 200_000
@@ -838,9 +841,17 @@ def write(report_id):
     try:
         if rep.team_id:
             system = ai.system("report_team") + (WITH_AI_WRITTEN if rep.exercise.include_ai_written else NO_AI_WRITTEN)
-            out, used = ai.call("report", f"r{rep.id}", "deep", system, team_request(rep), TEAM_SCHEMA, "high", 16000)
+            args = (system, team_request(rep), TEAM_SCHEMA)
         else:
-            out, used = ai.call("report", f"r{rep.id}", "deep", ai.system("report_excon"), excon_request(rep), EXCON_SCHEMA, "high", 16000)
+            args = (ai.system("report_excon"), excon_request(rep), EXCON_SCHEMA)
+        try:
+            out, used = ai.call("report", f"r{rep.id}", "deep", *args, "high", MAX_TOKENS)
+        except ai.AiError as e:
+            if "max_tokens" not in str(e):
+                raise
+            # A busy team's mail: the thinking took the room the report needed. Once more, thinking less.
+            log.warning("report %s cut off (max_tokens): again with effort medium", rep.id)
+            out, used = ai.call("report", f"r{rep.id}", "deep", *args, "medium", MAX_TOKENS)
         rep.status, rep.body, rep.model, rep.error = "done", out, used, None
         rep.sections, rep.edited = to_sections(out, bool(rep.team_id)), []
     except ai.AiError as e:
