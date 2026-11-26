@@ -2012,7 +2012,19 @@ def _dump_context():
     for k in ("started_at", "finished_at"):
         if st.get(k):
             st[k] = datetime.fromisoformat(st[k])
-    return {"dump": st, "dump_ok": ok, "dump_why": why, "dump_free": dbdump.free_bytes()}
+    db_size = st.get("db_size") if st.get("state") == "running" else (dbdump.database_size() if ok else None)
+    rate = st.get("rate") or dbdump.DEFAULT_RATE
+    return {"dump": st, "dump_ok": ok, "dump_why": why, "dump_free": dbdump.free_bytes(), "dump_rate": rate,
+            "dump_db_size": db_size, "dump_pct": _dump_pct(st),
+            "dump_rates": [(r, label, round(db_size / (r * 1024 * 1024) / 60) + 1 if db_size else None)
+                           for r, label in dbdump.RATES]}
+
+
+def _dump_pct(st):
+    """How far a running dump has got, against the database's size (the dump is about that)."""
+    if st.get("state") != "running" or not st.get("db_size"):
+        return None
+    return min(99, round(100 * (st.get("size") or 0) / st["db_size"]))
 
 
 def _sim_settings():
@@ -2129,6 +2141,11 @@ def settings_backup(request):
 def settings_dump(request):
     """Settings → Database dump: start a pg_dump (ops/dbdump.py), or delete the last one."""
     from . import dbdump
+    if request.POST.get("action") == "cancel":
+        dbdump.cancel()
+        audit("dbdump_cancel", None, _u(request))
+        messages.success(request, "Database dump cancelled.")
+        return redirect("/settings/#dump")
     if request.POST.get("action") == "delete":
         if dbdump.status().get("state") == "running":
             messages.error(request, "The dump is still running.")
@@ -2138,13 +2155,22 @@ def settings_dump(request):
             messages.success(request, "Database dump deleted.")
         return redirect("/settings/#dump")
     try:
-        dbdump.start(_u(request))
-    except RuntimeError as e:
+        rate = int(request.POST.get("rate") or dbdump.DEFAULT_RATE)
+        dbdump.start(_u(request), rate=rate)
+    except (RuntimeError, ValueError) as e:
         messages.error(request, str(e))
         return redirect("/settings/#dump")
-    audit("dbdump_start", None, _u(request))
+    audit("dbdump_start", f"{rate} MB/s", _u(request))
     messages.success(request, "Database dump started. Notifications will say when it is ready to download.")
     return redirect("/settings/#dump")
+
+
+@excon_required
+def settings_dump_status(request):
+    """The Database dump card's progress, polled while one runs."""
+    from . import dbdump
+    st = dbdump.status()
+    return JsonResponse({"state": st.get("state"), "size": st.get("size") or 0, "pct": _dump_pct(st)})
 
 
 @excon_required

@@ -3,13 +3,18 @@ from django.shortcuts import redirect
 
 
 class HealthCheck:
-    """Answer /healthz before host validation: platform health checks may not send our Host."""
+    """Answer /healthz before host validation: platform health checks may not send our Host.
+    The platform's probe gets an answer without touching the database: a busy database (a
+    large dump, a slow query) must not get the web container restarted, which helps nothing.
+    /healthz?db=1 also reads the scheduler's last tick."""
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         if request.path == "/healthz":
+            if request.GET.get("db") != "1":
+                return JsonResponse({"ok": True})
             from . import conf
             return JsonResponse({"ok": True, "scheduler_tick": conf.get("scheduler_tick") or None})
         return self.get_response(request)

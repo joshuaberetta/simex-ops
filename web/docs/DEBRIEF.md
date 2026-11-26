@@ -10,9 +10,11 @@ personas, not all their mail.
 
 ## 1. Copy the database (after the sim ends)
 
-**From the app (simplest):** Settings → Database dump → **Make a database dump**, wait for the
-notification, **Download database dump**. The app's server runs `pg_dump` (it is already among
-the database's trusted sources), so there is no firewall to open. Then restore it locally, below.
+**From the app (simplest):** Settings → Database dump: pick a speed (Gentle while people still
+use SIMEX Mail, Fast once nobody does), **Make a database dump**, wait for the notification,
+**Download database dump**. The app's server runs `pg_dump` (it is already among the database's
+trusted sources), so there is no firewall to open. Don't deploy while it runs: a restart stops
+it. Then restore it locally, below.
 
 **Or by hand:** `pg_dump` reads the database directly, never through the app:
 
