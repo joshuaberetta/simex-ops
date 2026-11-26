@@ -2008,23 +2008,11 @@ def settings_page(request):
 def _dump_context():
     from . import dbdump
     ok, why = dbdump.available()
-    st = dbdump.status()
-    for k in ("started_at", "finished_at"):
-        if st.get(k):
-            st[k] = datetime.fromisoformat(st[k])
-    db_size = st.get("db_size") if st.get("state") == "running" else (dbdump.database_size() if ok else None)
-    rate = st.get("rate") or dbdump.DEFAULT_RATE
-    return {"dump": st, "dump_ok": ok, "dump_why": why, "dump_free": dbdump.free_bytes(), "dump_rate": rate,
-            "dump_db_size": db_size, "dump_pct": _dump_pct(st),
+    db_size = dbdump.database_size() if ok else None
+    return {"dump_ok": ok, "dump_why": why, "dump_running": dbdump.running() if ok else None,
+            "dump_db_size": db_size, "dump_rate": dbdump.DEFAULT_RATE,
             "dump_rates": [(r, label, round(db_size / (r * 1024 * 1024) / 60) + 1 if db_size else None)
                            for r, label in dbdump.RATES]}
-
-
-def _dump_pct(st):
-    """How far a running dump has got, against the database's size (the dump is about that)."""
-    if st.get("state") != "running" or not st.get("db_size"):
-        return None
-    return min(99, round(100 * (st.get("size") or 0) / st["db_size"]))
 
 
 def _sim_settings():
@@ -2139,49 +2127,27 @@ def settings_backup(request):
 @excon_required
 @require_POST
 def settings_dump(request):
-    """Settings → Database dump: start a pg_dump (ops/dbdump.py), or delete the last one."""
+    """Settings → Database dump: pg_dump streamed to the browser at the chosen rate
+    (ops/dbdump.py). Nothing is kept on the server."""
+    import itertools
     from . import dbdump
-    if request.POST.get("action") == "cancel":
-        dbdump.cancel()
-        audit("dbdump_cancel", None, _u(request))
-        messages.success(request, "Database dump cancelled.")
-        return redirect("/settings/#dump")
-    if request.POST.get("action") == "delete":
-        if dbdump.status().get("state") == "running":
-            messages.error(request, "The dump is still running.")
-        else:
-            dbdump.delete()
-            audit("dbdump_delete", None, _u(request))
-            messages.success(request, "Database dump deleted.")
-        return redirect("/settings/#dump")
     try:
         rate = int(request.POST.get("rate") or dbdump.DEFAULT_RATE)
-        dbdump.start(_u(request), rate=rate)
+        rate = rate if rate in dict(dbdump.RATES) else dbdump.DEFAULT_RATE
+        state = dbdump.begin(_u(request), rate=rate)
     except (RuntimeError, ValueError) as e:
         messages.error(request, str(e))
         return redirect("/settings/#dump")
     audit("dbdump_start", f"{rate} MB/s", _u(request))
-    messages.success(request, "Database dump started. Notifications will say when it is ready to download.")
-    return redirect("/settings/#dump")
-
-
-@excon_required
-def settings_dump_status(request):
-    """The Database dump card's progress, polled while one runs."""
-    from . import dbdump
-    st = dbdump.status()
-    return JsonResponse({"state": st.get("state"), "size": st.get("size") or 0, "pct": _dump_pct(st)})
-
-
-@excon_required
-def settings_dump_download(request):
-    from django.http import FileResponse
-    from . import dbdump
-    p = dbdump.path()
-    if p is None:
-        raise Http404("No database dump ready.")
-    audit("dbdump_download", p.name, _u(request))
-    return FileResponse(open(p, "rb"), as_attachment=True, filename=p.name, content_type="application/octet-stream")
+    gen = dbdump.stream(state)
+    first = next(gen, None)  # pg_dump's header: a dump that can't start is an error page, not an empty file
+    if first is None:
+        messages.error(request, "The database dump failed: " + (state.get("error") or "pg_dump wrote nothing."))
+        return redirect("/settings/#dump")
+    resp = StreamingHttpResponse(itertools.chain([first], gen), content_type="application/octet-stream")
+    resp["Content-Disposition"] = f'attachment; filename="{dbdump.filename()}"'
+    resp["X-Accel-Buffering"] = "no"
+    return resp
 
 
 @excon_required

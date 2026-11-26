@@ -24,6 +24,8 @@ USER simex
 EXPOSE 8080
 # web: migrate, make sure the ExCon login exists, then serve. The scheduler runs as a
 # separate component with: python manage.py run_scheduler
-# --timeout 900: sync workers are killed after it even mid-response, and downloading a large
-# backup or database dump (Settings) can take minutes.
-CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py seed_simex && exec gunicorn simex.wsgi --bind 0.0.0.0:8080 --workers 3 --timeout 900 --access-logfile -"]
+# gthread with one thread and one connection per worker behaves like sync workers (as many
+# requests at once, as many database connections; a busy worker takes no more connections), but
+# its timeout means a hung worker, not a long response: downloading a large backup or database
+# dump (Settings, streamed as it is made) isn't killed partway.
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py seed_simex && exec gunicorn simex.wsgi --bind 0.0.0.0:8080 --workers 3 --worker-class gthread --threads 1 --worker-connections 1 --keep-alive 0 --timeout 120 --access-logfile -"]

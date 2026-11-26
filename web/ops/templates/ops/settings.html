@@ -141,46 +141,20 @@
 <div class="card" id="dump">
   <h3>Database dump</h3>
   <p class="small">The whole PostgreSQL database as a <code>pg_dump</code> file (custom format, compressed), for analysis on your own machine and the offline debrief reports: restore it with <code>pg_restore</code> into a local database (docs/DEBRIEF.md). It holds participants' mail, logins and password hashes: keep it on your machine only.</p>
-  <p class="small">It runs in the background at the speed you choose, so the database (small, and shared with other apps) keeps up with everyone else: <b>Gentle</b> while people are still using SIMEX Mail, <b>Fast</b> only when nobody is. Notifications say when it is ready. Only the last one is kept, for 3 hours; a deploy or a restart of the app removes it (and stops one that is running).</p>
+  <p class="small">It downloads as it is made: nothing is kept on the server, and your browser's downloads show how far it has got. Cancelling the download stops it. Choose the speed so the database (small, and shared with other apps) keeps up with everyone else: <b>Gentle</b> while people are still using SIMEX Mail, <b>Fast</b> only when nobody is. Leave this tab open and don't deploy until it has finished.</p>
   {% if not dump_ok %}
     <p class="small muted">{{ dump_why }}</p>
   {% else %}
-    {% if dump.state == "running" %}
-      <p class="small" data-dump-running><b>Running</b> since {{ dump.started_at|time:"H:i" }}{% if dump.by %} (started by {{ dump.by }}){% endif %}, at {{ dump.rate }} MB/s: <span data-dump-size>{{ dump.size|filesizeformat }}</span> written so far{% if dump_pct is not None %} (about <span data-dump-pct>{{ dump_pct }}</span>%){% endif %}.</p>
-    {% elif dump.state == "ready" %}
-      <p class="small"><b>Ready:</b> {{ dump.name }}, {{ dump.size|filesizeformat }}, finished {{ dump.finished_at|date:"j M H:i" }}{% if dump.by %} (started by {{ dump.by }}){% endif %}.</p>
-      <a class="btn small" href="/settings/dump/download/">Download database dump</a>
-    {% elif dump.state == "failed" %}
-      <p class="small"><b>{% if dump.error == "Cancelled." %}The last dump was cancelled{% else %}The last dump failed{% endif %}</b> ({{ dump.finished_at|date:"j M H:i" }}){% if dump.error != "Cancelled." %}:{% endif %}</p>
-      {% if dump.error != "Cancelled." %}<pre class="small">{{ dump.error }}</pre>{% endif %}
+    {% if dump_running %}
+      <p class="small"><b>Being downloaded now</b>{% if dump_running.by %} by {{ dump_running.by }}{% endif %}, at {{ dump_running.rate }} MB/s: {{ dump_running.size|filesizeformat }} so far. Only one at a time.</p>
     {% endif %}
     <form method="post" action="/settings/dump/" class="form" style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center">{% csrf_token %}
-      {% if dump.state == "running" %}
-        <button class="btn small danger" name="action" value="cancel">Cancel the dump</button>
-      {% else %}
-        <select name="rate" aria-label="Speed">
-          {% for r, label, minutes in dump_rates %}<option value="{{ r }}"{% if r == dump_rate %} selected{% endif %}>{{ label }}{% if minutes %}, about {{ minutes }} min{% endif %}</option>{% endfor %}
-        </select>
-        <button class="btn small" name="action" value="start">{% if dump.state == "none" %}Make a database dump{% else %}Make a new one{% endif %}</button>
-        {% if dump.state == "ready" or dump.state == "failed" %}<button class="btn small danger" name="action" value="delete">Delete it</button>{% endif %}
-      {% endif %}
+      <select name="rate" aria-label="Speed">
+        {% for r, label, minutes in dump_rates %}<option value="{{ r }}"{% if r == dump_rate %} selected{% endif %}>{{ label }}{% if minutes %}, about {{ minutes }} min{% endif %}</option>{% endfor %}
+      </select>
+      <button class="btn small"{% if dump_running %} disabled{% endif %}>Download database dump</button>
     </form>
-    <p class="small muted">{% if dump_db_size %}Database: {{ dump_db_size|filesizeformat }} (the dump is about that size). {% endif %}{% if dump_free is not None %}Free space for it on the server: {{ dump_free|filesizeformat }}.{% endif %}</p>
-    {% if dump.state == "running" %}
-    <script>
-    (function () {
-      var size = document.querySelector("[data-dump-size]"), pct = document.querySelector("[data-dump-pct]");
-      function fmt(n) { return n >= 1e9 ? (n / 1073741824).toFixed(1) + " GB" : (n / 1048576).toFixed(1) + " MB"; }
-      var timer = setInterval(function () {
-        fetch("/settings/dump/status/", {credentials: "same-origin"}).then(function (r) { return r.json(); }).then(function (d) {
-          if (d.state !== "running") { clearInterval(timer); location.hash = "dump"; location.reload(); return; }
-          if (size) size.textContent = fmt(d.size);
-          if (pct && d.pct !== null) pct.textContent = d.pct;
-        }).catch(function () {});
-      }, 5000);
-    })();
-    </script>
-    {% endif %}
+    {% if dump_db_size %}<p class="small muted">Database: {{ dump_db_size|filesizeformat }} (the dump is about that size, a little less).</p>{% endif %}
   {% endif %}
 </div>
 <div class="card danger-zone" id="afresh">

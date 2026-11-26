@@ -267,6 +267,4 @@ urlpatterns = [
     path("settings/afresh/", x.settings_afresh),
     path("settings/restore/", x.settings_restore),
     path("settings/dump/", x.settings_dump),
-    path("settings/dump/download/", x.settings_dump_download),
-    path("settings/dump/status/", x.settings_dump_status),
 ]
