@@ -151,3 +151,21 @@ def test_refuses_a_remote_database(settings):
                                      "HOST": "db.example.com"}
     with pytest.raises(CommandError, match="not production"):
         call_command("debrief", "collect")
+
+
+def test_figures_never_name_participants(excon):
+    """report.for_team numbers the members, but forwards' recipients, searches, asks and
+    commitments carry names and addresses as written: the model gets them as Member n."""
+    from ops import report
+    pa, po, la = _exercise(excon)
+    ta = Team.objects.get(code="a")
+    figures = report.team_figures(ta, debrief.KIND)
+    figs = {**report.for_team(figures, False),
+            "forwards": [{"to": "Team A (Jane Doe) <jane.doe@example.org>, Team A (Omar Ali) <omar@x.org>"}],
+            "asks": [{"ask": "Ask Jane Doe for the list"}]}
+    text = debrief._figures_text(figs, [(ta, figures)])
+    assert "Jane Doe" not in text and "Omar Ali" not in text and "@" not in text
+    assert "Team A (Member " in text and "Ask Member " in text
+    tb = Team.objects.get(code="b")
+    both = debrief._figures_text({"x": "Jane Doe and Bea Smith"}, [(ta, figures), (tb, report.team_figures(tb, debrief.KIND))])
+    assert "Team A Member " in both and "Jane Doe" not in both

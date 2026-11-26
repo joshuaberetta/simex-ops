@@ -760,6 +760,25 @@ def _injects_text(corpus):
     return "\n\n".join(f"{mel}{' (critical)' if v['critical'] else ''}:\n{v['text']}" for mel, v in sorted(corpus["injects"].items()))
 
 
+_ADDRESS = re.compile(r"\s*<[^<>@\s]+@[^<>\s]+>")
+
+
+def _figures_text(obj, team_figs):
+    """Figures as JSON for the model, with participants' full names as Member n (Team X
+    Member n when there are several teams) and email addresses dropped: report.for_team numbers
+    the members, but its other figures (forwards' recipients, searches, asks and commitments
+    read from the mail) carry names as they were written."""
+    text = json.dumps(obj, indent=1, ensure_ascii=False, default=str)
+    pairs = [(t, f) for t, f in team_figs]
+    for team, figures in pairs:
+        n = Names(team, figures)
+        if not n._names:
+            continue
+        prefix = f"{team.name} " if len(pairs) > 1 else ""
+        text = n._names.sub(lambda m: prefix + n._label_of.get(m.group(0).lower(), "[name]"), text)
+    return _ADDRESS.sub("", text)
+
+
 def _write_up(key, kind, schema, parts, ref, model_kind):
     system = ai.system(key) + COMMON + AI_LINE[kind]
     return ai.call("debrief", ref, model_kind, system, [{"type": "text", "text": p} for p in parts if p],
@@ -771,7 +790,7 @@ def team_report(corpus, notes, figures, model_kind="deep", include_ai=False):
     figs = report.for_team(figures, include_ai)
     mine = merged(corpus, notes)
     body, used = _write_up("debrief_team", include_ai, TEAM_SCHEMA, [
-        f"Team: {corpus['team']}\n\nFIGURES:\n{json.dumps(figs, indent=1, ensure_ascii=False, default=str)}",
+        f"Team: {corpus['team']}\n\nFIGURES:\n{_figures_text(figs, [(Team.objects.get(code=corpus['code']), figures)])}",
         f"COMMUNICATION:\n{json.dumps(comms, indent=1, ensure_ascii=False)}",
         "THE INJECTS THE TEAM GOT:\n\n" + _injects_text(corpus)[:120_000],
         _notes_text(corpus, notes, mine, include_ai=include_ai),
@@ -863,7 +882,7 @@ def excon_report(corpora, notes_by, team_reports, model_kind="deep", team_figs=N
                     f"External communication: {b.get('external_communication')}\nInternal coordination: "
                     f"{b.get('internal_coordination')}\nFlags: {b.get('flags')}\nLessons: {b.get('lessons')}")
     body, used = _write_up("debrief_excon", True, EXCON_SCHEMA, [
-        f"FIGURES:\n{json.dumps(figs, indent=1, ensure_ascii=False, default=str)}",
+        f"FIGURES:\n{_figures_text(figs, list(zip(teams(), team_figs)))}",
         f"COMMUNICATION, by team:\n{json.dumps(comms, indent=1, ensure_ascii=False)}",
         f"THE PERSONA DESK:\n{json.dumps(desk, indent=1, ensure_ascii=False, default=str)[:60_000]}" if desk else "",
         "\n\n".join(reps)[:150_000],
