@@ -166,6 +166,9 @@ End the rehearsal as you will end the exercise: grade the Test team's replies, t
 ### 3.8 Take a backup
 **Settings → Download backup.** One file with everything: injects, attachments, mailboxes, logins, grades.
 Late in the exercise it can be several hundred MB (every file participants sent is in it): download it on a good connection. The database also has DigitalOcean's own daily backups.
+**Restore** (same card) replaces everything with a backup's contents, logins included, and leaves live sending disarmed; if anything in the file fails to load, nothing changes. A large backup restores more reliably from a terminal on the server (DigitalOcean console) or against a local copy: `python manage.py restore <file>` (it asks you to type RESTORE; `python manage.py backup <file>` writes one). A backup keeps everything in the app, notifications and ChatSIMEX chats included.
+
+**Settings → Database dump** is the other way out: the whole PostgreSQL database as a `pg_dump` file, compressed (much smaller than the backup), to restore on your own machine with `pg_restore` for analysis and the offline debrief reports (`docs/DEBRIEF.md`). **Make a database dump** runs it in the background; the page shows how far it has got (reload it), Notifications say when it is ready (or why it failed), then **Download database dump**. Only the last one is kept on the server, for 3 hours (a deploy removes it sooner); **Delete it** removes it at once. It holds participants' mail, logins and password hashes: keep it on your own machine and delete it once the reports are done. Starting, downloading and deleting are in the audit trail.
 
 ---
 
@@ -486,7 +489,7 @@ Beside each conversation on the **persona desk**, in a **team leader's** mailbox
 
 ## 6. After the exercise
 In this order:
-1. **Disarm** and wait for the last answers; **Download backup**.
+1. **Disarm** and wait for the last answers; **Pause**, and turn off AI personas and SIMEX AI's readings you no longer need (Settings → AI analysis) so nothing more is sent or read; **Download backup** and make a **Database dump** (3.8) for the analysis.
 2. **Finish grading** every team on every inject with a rubric (the Replies grid has no empty cells left for injects you mean to grade). Check *guess* and *unmatched* replies: a reply on the wrong inject counts as a miss in the reports.
 3. **Compile the reports** (6.1). Read and edit each team's report; ask the team's leader to read it too (they know the team best). Then **Write it again** on the ExCon report so it reads your edited text.
 4. **Print** each team's report to PDF and hand it to that team at the debrief; the ExCon report goes to ExCon and the exercise director.

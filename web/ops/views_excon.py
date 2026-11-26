@@ -2002,7 +2002,17 @@ def settings_page(request):
     from .views_ai import ai_settings_context
     return render(request, "ops/settings.html", {"tab": "settings", "resend_configured": bool(settings.RESEND_API_KEY),
                                                  "mailer_name": mailer.get().name, "MAIL_DOMAIN": settings.MAIL_DOMAIN,
-                                                 **_sim_settings(), **ai_settings_context()})
+                                                 **_sim_settings(), **ai_settings_context(), **_dump_context()})
+
+
+def _dump_context():
+    from . import dbdump
+    ok, why = dbdump.available()
+    st = dbdump.status()
+    for k in ("started_at", "finished_at"):
+        if st.get(k):
+            st[k] = datetime.fromisoformat(st[k])
+    return {"dump": st, "dump_ok": ok, "dump_why": why, "dump_free": dbdump.free_bytes()}
 
 
 def _sim_settings():
@@ -2116,13 +2126,47 @@ def settings_backup(request):
 
 @excon_required
 @require_POST
+def settings_dump(request):
+    """Settings → Database dump: start a pg_dump (ops/dbdump.py), or delete the last one."""
+    from . import dbdump
+    if request.POST.get("action") == "delete":
+        if dbdump.status().get("state") == "running":
+            messages.error(request, "The dump is still running.")
+        else:
+            dbdump.delete()
+            audit("dbdump_delete", None, _u(request))
+            messages.success(request, "Database dump deleted.")
+        return redirect("/settings/#dump")
+    try:
+        dbdump.start(_u(request))
+    except RuntimeError as e:
+        messages.error(request, str(e))
+        return redirect("/settings/#dump")
+    audit("dbdump_start", None, _u(request))
+    messages.success(request, "Database dump started. Notifications will say when it is ready to download.")
+    return redirect("/settings/#dump")
+
+
+@excon_required
+def settings_dump_download(request):
+    from django.http import FileResponse
+    from . import dbdump
+    p = dbdump.path()
+    if p is None:
+        raise Http404("No database dump ready.")
+    audit("dbdump_download", p.name, _u(request))
+    return FileResponse(open(p, "rb"), as_attachment=True, filename=p.name, content_type="application/octet-stream")
+
+
+@excon_required
+@require_POST
 def settings_restore(request):
     up = request.FILES.get("file")
     if request.POST.get("confirm") != "RESTORE" or not up:
         messages.error(request, "Choose a backup file and type RESTORE.")
         return redirect("/settings/")
     try:
-        data = json.loads(up.read().decode("utf-8"))
+        data = json.load(up)  # bytes, parsed once: backup.restore frees rows as it saves them
         if data.get("format") == legacy_import.FORMAT:
             counts = legacy_import.import_backup(data)  # a backup from the first (email-only) app
         else:

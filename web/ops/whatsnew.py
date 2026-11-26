@@ -17,6 +17,12 @@ EVERYONE = {PARTICIPANT, LEADER, DESK, RP, EXCON}
 SHOWN = 8  # notes listed in the drawer (the newest)
 
 ENTRIES = [
+    {"key": "2026-11-db-dump", "date": date(2026, 11, 26), "who": {EXCON},
+     "title": "The whole database in one download",
+     "body": "**Settings → Database dump** makes a `pg_dump` of the database in the background and tells you in "
+             "Notifications when it is ready to download, to restore on your own machine for analysis and the "
+             "debrief reports. **Download backup** now keeps everything, notifications and ChatSIMEX chats "
+             "included, and a large backup can be restored from a terminal with `manage.py restore`."},
     {"key": "2026-11-mail-notes", "date": date(2026, 11, 25), "who": {LEADER, DESK, EXCON},
      "title": "Notes beside the mail, and SIMEX AI's reading",
      "body": "Open a conversation: a **Notes** panel on the right shows SIMEX AI's summary of it so far and, beside "

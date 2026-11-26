@@ -136,6 +136,29 @@
     <label>Type <b>RESTORE</b> <input name="confirm" autocomplete="off"></label>
     <button class="btn small danger">Restore</button>
   </form>
+  <p class="small">A large backup restores more reliably from a terminal: <code>python manage.py restore &lt;file&gt;</code> (and <code>python manage.py backup &lt;file&gt;</code> writes one).</p>
+</div>
+<div class="card" id="dump">
+  <h3>Database dump</h3>
+  <p class="small">The whole PostgreSQL database as a <code>pg_dump</code> file (custom format, compressed), for analysis on your own machine and the offline debrief reports: restore it with <code>pg_restore</code> into a local database (docs/DEBRIEF.md). It holds participants' mail, logins and password hashes: keep it on your machine only. The dump runs in the background; Notifications say when it is ready. Only the last one is kept, for 3 hours (a deploy removes it too).</p>
+  {% if not dump_ok %}
+    <p class="small muted">{{ dump_why }}</p>
+  {% else %}
+    {% if dump.state == "running" %}
+      <p class="small"><b>Running</b> since {{ dump.started_at|time:"H:i" }}{% if dump.by %} (started by {{ dump.by }}){% endif %}: {{ dump.size|filesizeformat }} written so far. Reload this page to see how it is going.</p>
+    {% elif dump.state == "ready" %}
+      <p class="small"><b>Ready:</b> {{ dump.name }}, {{ dump.size|filesizeformat }}, finished {{ dump.finished_at|date:"j M H:i" }}{% if dump.by %} (started by {{ dump.by }}){% endif %}.</p>
+      <a class="btn small" href="/settings/dump/download/">Download database dump</a>
+    {% elif dump.state == "failed" %}
+      <p class="small"><b>The last dump failed</b> ({{ dump.finished_at|date:"j M H:i" }}):</p>
+      <pre class="small">{{ dump.error }}</pre>
+    {% endif %}
+    <form method="post" action="/settings/dump/" class="form" style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap">{% csrf_token %}
+      {% if dump.state != "running" %}<button class="btn small" name="action" value="start">{% if dump.state == "none" %}Make a database dump{% else %}Make a new one{% endif %}</button>{% endif %}
+      {% if dump.state == "ready" or dump.state == "failed" %}<button class="btn small danger" name="action" value="delete">Delete it</button>{% endif %}
+    </form>
+    {% if dump_free is not None %}<p class="small muted">Free space for it on the server: {{ dump_free|filesizeformat }}.</p>{% endif %}
+  {% endif %}
 </div>
 <div class="card danger-zone" id="afresh">
   <h3>Start afresh before going live</h3>

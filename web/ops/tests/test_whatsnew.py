@@ -55,7 +55,7 @@ def test_participants_never_get_the_desk_or_excon_notes(excon):
     for e in whatsnew.ENTRIES:
         if not e["who"] & {whatsnew.PARTICIPANT}:
             assert e["key"] not in mine, e["key"]
-    desk_only = next(e["title"] for e in whatsnew.ENTRIES if e["who"] <= {whatsnew.DESK, whatsnew.EXCON})
+    desk_only = next(e["title"] for e in whatsnew.ENTRIES if whatsnew.DESK in e["who"] <= {whatsnew.DESK, whatsnew.EXCON})
     page = pa.get("/inbox/").content.decode()
     assert desk_only not in page and "See the injects coming up" not in page and "Copy other personas" not in page
     assert desk_only in desk_client().get("/inbox/desk/").content.decode()

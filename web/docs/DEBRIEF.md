@@ -10,7 +10,11 @@ personas, not all their mail.
 
 ## 1. Copy the database (after the sim ends)
 
-`pg_dump` reads the database directly, never through the app:
+**From the app (simplest):** Settings → Database dump → **Make a database dump**, wait for the
+notification, **Download database dump**. The app's server runs `pg_dump` (it is already among
+the database's trusted sources), so there is no firewall to open. Then restore it locally, below.
+
+**Or by hand:** `pg_dump` reads the database directly, never through the app:
 
 ```sh
 doctl databases list                                    # the cluster id of risa-dash-db
