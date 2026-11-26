@@ -41,7 +41,7 @@ Run from `web/`, against the copy only. The command refuses a database host that
 
 ```sh
 export DATABASE_URL=postgres:///simex_local
-export AI_PROVIDER=bedrock AI_REGION=us-east-1          # and your AWS credentials / AWS_PROFILE
+export AI_PROVIDER=bedrock AWS_REGION=us-east-1         # and your AWS credentials / AWS_PROFILE
 export AI_MODEL_DEEP=us.anthropic.claude-opus-5-5       # optional: the default deep model is Sonnet
 unset RESEND_API_KEY VAPID_PRIVATE_KEY                  # nothing can email or push from the copy
 ```
