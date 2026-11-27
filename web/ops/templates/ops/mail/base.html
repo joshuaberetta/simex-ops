@@ -91,6 +91,7 @@
   {% if lt.npcs %}<a href="/inbox/personas/" class="{% if lt.current == 'npcs' %}on{% endif %}">{% icon "eye" 20 %} AI personas <span class="gm-tab-ro">read-only</span></a>{% endif %}
   <a href="/inbox/dashboard/" class="{% if lt.current == 'dashboard' %}on{% endif %}">{% icon "all" 20 %} Dashboard</a>
   <a href="/inbox/notes/" class="{% if lt.current == 'notes' %}on{% endif %}" title="Your notes on your team's mail, with SIMEX AI's assessment of each email">{% icon "comment" 20 %} Notes</a>
+  <a href="/inbox/files/" class="{% if lt.current == 'files' %}on{% endif %}" title="Every file sent in your team's mail and chats">{% icon "attach" 20 %} Files</a>
   <a href="/inbox/calendar/" class="{% if lt.current == 'calendar' %}on{% endif %}">{% icon "event" 20 %} Calendar</a>
   {% if lt.roleplay %}<a href="/inbox/rp/" class="{% if lt.current == 'roleplay' %}on{% endif %}">{% icon "label" 20 %} My role plays</a>{% endif %}
 </nav>
@@ -100,9 +101,11 @@
   <a href="/inbox/desk/teams/" class="{% if dt.current == 'teams' %}on{% endif %}">{% icon "eye" 20 %} Teams &amp; team leaders <span class="gm-tab-ro">read-only</span></a>
   <a href="/inbox/desk/dashboard/" class="{% if dt.current == 'dashboard' %}on{% endif %}">{% icon "all" 20 %} Dashboard</a>
   <a href="/inbox/desk/notes/" class="{% if dt.current == 'notes' %}on{% endif %}" title="Every note written on the desk, with SIMEX AI's assessment of each email the teams wrote">{% icon "comment" 20 %} Notes</a>
+  <a href="/inbox/desk/files/" class="{% if dt.current == 'files' %}on{% endif %}" title="Every file sent in the exercise: email, SIMEX Mail and Messenger">{% icon "attach" 20 %} Files</a>
   <a href="/inbox/desk/network/" class="{% if dt.current == 'network' %}on{% endif %}">{% icon "network" 20 %} Network</a>
   <a href="/inbox/desk/calendar/" class="{% if dt.current == 'calendar' %}on{% endif %}">{% icon "event" 20 %} Calendar</a>
   <a href="/inbox/desk/assign/" class="{% if dt.current == 'assign' %}on{% endif %}">{% icon "person" 20 %} Assign</a>
+  {% if dt.messenger %}<a href="/chat/desk/" title="The chats the personas are in (SIMEX Messenger)">{% icon "comment" 20 %} Messenger</a>{% endif %}
   {% if dt.injects %}<a href="/inbox/desk/injects/" class="{% if dt.current == 'injects' %}on{% endif %}">{% icon "send" 20 %} Injects <span class="gm-tab-ro">read-only</span></a>{% endif %}
   {% if dt.chat %}<button type="button" class="gm-chat-tab" data-chat-toggle aria-expanded="false" title="Ask SIMEX AI what has been said already, who a persona is, how to answer a team"><svg class="gm-chat-spark" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">{% comment %}SIMEX AI's sparkles, each star its own path so they twinkle in turn on hover (desk_chat.css){% endcomment %}
     <path class="s1" d="M11.5 9.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12z"/>

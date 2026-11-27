@@ -26,6 +26,7 @@ def clear_team(team, scope="all", deliveries=False):
     "members": the members' own mailboxes only (the replies, whose copy is in the team inbox,
     stay). deliveries: also the team's deliveries in the Log, with their read and download
     events, so its delivery and reading figures on the Dashboard start from zero.
+    Its chats in SIMEX Messenger go too (scope "members": its members' direct chats).
     Returns a dict of counts."""
     n = {"mails": 0, "replies": 0, "answers": 0, "grades": 0, "deliveries": 0}
     with transaction.atomic():
@@ -38,7 +39,8 @@ def clear_team(team, scope="all", deliveries=False):
             MailAction.objects.filter(team=team, owner__in=owners).delete()
             from . import calendar
             calendar.clear(team, owners)  # their own calendars
-            from . import ai_docs
+            from . import ai_docs, messenger
+            messenger.clear(team, direct_only=True)  # their direct chats in SIMEX Messenger
             ai_docs.prune(team)  # readings of files no longer in any mailbox
         else:
             reps = Response.objects.filter(team=team)
@@ -57,6 +59,8 @@ def clear_team(team, scope="all", deliveries=False):
             cal_seed.clear(team)  # the meetings found in its mail, not applied
             n["grades"] = Grade.objects.filter(team=team).delete()[0] + AiGrade.objects.filter(team=team).delete()[0]
             DocumentAnalysis.objects.filter(team=team).delete()  # the readings of the files it sent
+            from . import messenger
+            messenger.clear(team)  # its chats in SIMEX Messenger
             from . import desk
             desk.prune()  # the desk's state of conversations no longer on it
         from . import mail_notes
@@ -110,6 +114,8 @@ def start_afresh(reschedule=True):
         from .models import ThreadReview
         ThreadReview.objects.all().delete()  # SIMEX AI's readings of conversations (notes went with their Mail)
         DeskChat.objects.all().delete()  # ChatSIMEX: the desk's chats with SIMEX AI
+        from . import messenger
+        messenger.clear()  # every chat in SIMEX Messenger
         DeskWatch.objects.all().delete()  # who on the desk follows what
         DeskNotice.objects.all().delete()  # and their notices
         Message.objects.exclude(kind="login").delete()  # with their Events

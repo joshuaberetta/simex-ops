@@ -14,6 +14,14 @@
   <label class="chk"><input type="checkbox" name="team_to_team" value="1" {% if cfg.team_to_team == '1' %}checked{% endif %}> teams may write to other teams (otherwise only to personas)</label>
   <label class="chk"><input type="checkbox" name="personal_mailboxes" value="1" {% if cfg.personal_mailboxes == '1' %}checked{% endif %}> each team member also has their own mailbox ("My mail", besides the team inbox): a copy of everything sent to the team, and personal mail between teammates and with their team leader, who can read it (read-only)</label>
   <label>Max attachments per message (MB) <input type="number" name="max_upload_mb" value="{{ cfg.max_upload_mb }}" min="1" class="narrow"></label>
+  <h3>SIMEX Messenger</h3>
+  <label class="chk"><input type="checkbox" name="chat_enabled" value="1" {% if cfg.chat_enabled == '1' %}checked{% endif %}> turn on SIMEX Messenger: chat for the teams, their leaders and the personas, an app of its own beside SIMEX Mail (<a href="/chats/">every chat</a>, read-only)</label>
+  <label class="chk"><input type="checkbox" name="chat_direct" value="1" {% if cfg.chat_direct == '1' %}checked{% endif %}> members may chat directly with each other (their team leader can read it)</label>
+  <label class="chk"><input type="checkbox" name="chat_groups" value="1" {% if cfg.chat_groups == '1' %}checked{% endif %}> members may start groups</label>
+  <label class="chk"><input type="checkbox" name="chat_personas" value="1" {% if cfg.chat_personas == '1' %}checked{% endif %}> members may start chats with the personas</label>
+  <label class="chk"><input type="checkbox" name="chat_push_preview" value="1" {% if cfg.chat_push_preview == '1' %}checked{% endif %}> show the start of a message in its notification (otherwise who wrote and where only)</label>
+  <label>Messages can be edited for (minutes) <input type="number" name="chat_edit_minutes" value="{{ cfg.chat_edit_minutes }}" min="0" max="1440" class="narrow">
+    <span class="hint">ExCon still sees the text before each edit, and deleted messages.</span></label>
   <h3>Persona desk</h3>
   <label>Notify ExCon after (minutes) <input type="number" name="desk_wait_minutes" value="{{ cfg.desk_wait_minutes }}" min="0" class="narrow">
     <span class="hint">A notification when a team has waited this long for a persona's answer on the persona desk (once per message waiting; 0: never).</span></label>

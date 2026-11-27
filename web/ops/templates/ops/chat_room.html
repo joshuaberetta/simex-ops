@@ -1,0 +1,35 @@
+{% extends "ops/base.html" %}{% load static %}
+{% block title %}{{ title }} · Messenger · SIMEX ops{% endblock %}
+{% block body %}
+<link rel="stylesheet" href="{% static 'ops/messenger.css' %}">
+<p><a href="/chats/">← Messenger</a></p>
+<h1>{{ title }}</h1>
+<p class="muted">{{ room.kind|capfirst }} chat · {% for m in members %}{{ m.name }}{% if m.admin %} (admin){% endif %}{% if m.left %} (left){% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+<p>
+  <form method="post" action="/chats/{{ room.id }}/freeze/" style="display:inline">{% csrf_token %}<input type="hidden" name="on" value="{% if room.frozen %}0{% else %}1{% endif %}"><button class="btn small">{% if room.frozen %}Open again{% else %}Freeze: nobody can write{% endif %}</button></form>
+  <a class="btn small" href="?format=md">Export (Markdown)</a>
+</p>
+<div class="mx-room mx-excon">
+  <div class="mx-posts">
+  {% for p in posts %}
+    {% ifchanged p.day %}<div class="mx-day">{{ p.day }}</div>{% endifchanged %}
+    {% if p.kind == 'system' %}<div class="mx-sys" id="p{{ p.id }}">{{ p.body }} · {{ p.t }}</div>
+    {% else %}<div class="mx-post{% if p.deleted %} deleted{% endif %}" id="p{{ p.id }}">
+      <span class="mx-av sm" style="background: {{ p.colour }}">{{ p.name|slice:":1" }}</span>
+      <div class="mx-bubble">
+        <div class="mx-pname" style="color: {{ p.colour }}">{{ p.name }}</div>
+        {% if p.reply %}<div class="mx-quote"><b>{{ p.reply.name }}</b><span>{{ p.reply.body }}</span></div>{% endif %}
+        {% if p.deleted %}<div class="mx-gone-tag">Deleted by {{ p.deleted_by }} · {{ p.deleted_at }}</div>{% endif %}
+        <div class="mx-text">{{ p.body }}</div>
+        {% for f in p.files %}<a class="mx-file" href="{{ f.url }}" download><span class="mx-file-ic">FILE</span><span><b>{{ f.name }}</b><small>{{ f.size|filesizeformat }}</small></span></a>{% endfor %}
+        {% for e in p.edits %}<div class="mx-edit-was">Before the edit ({{ e.at }}): {{ e.body }}</div>{% endfor %}
+        {% if p.reactions %}<div class="mx-reacts">{% for emo, who in p.reactions.items %}<span class="mx-react" title="{{ who|join:', ' }}">{{ emo }} {{ who|length }}</span>{% endfor %}</div>{% endif %}
+        <div class="mx-meta">{% if p.npc %}<span class="mx-ai">AI persona</span>{% endif %}{% if p.edited %}<span>edited</span>{% endif %}<span>{{ p.t }}</span>{% if p.sim %}<span class="mx-sim">◷ {{ p.sim }}</span>{% endif %}
+          {% if not p.deleted %}<form method="post" action="/chats/p/{{ p.id }}/delete/" onsubmit="return confirm('Delete this message for everyone? The text stays here.')" style="display:inline">{% csrf_token %}<button class="link small">delete for everyone</button></form>{% endif %}</div>
+      </div>
+    </div>{% endif %}
+  {% empty %}<p class="muted">No messages yet.</p>{% endfor %}
+  </div>
+</div>
+<style>.mx-excon { border-radius: 10px; max-height: none; } .mx-excon .mx-posts { overflow: visible; padding: 14px 4%; } .mx-excon .mx-post { max-width: 85%; }</style>
+{% endblock %}

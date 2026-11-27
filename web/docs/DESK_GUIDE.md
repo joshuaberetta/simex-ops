@@ -102,6 +102,15 @@ Open the **Calendar** tab (or the **grid of nine dots** at the top right (the ap
 - **New event:** choose the persona's calendar each time (it starts empty); from a conversation (**Create event**), it is that conversation's persona. Guests show with their organisation.
 - The bell tells you when a team invites a persona, or changes or cancels a meeting with one. The teams' calendars are under **Teams & team leaders**, read-only (their mailbox's **Calendar** in the app drawer).
 
+## Messenger
+The **Messenger** tab is every chat a persona is in, in sections:
+- **Needs attention:** a team asked a persona. It is a direct chat with the persona, mentions it, replies to one of its messages, or the persona is the only one in the group. The timer is how long they have waited.
+- **Chatter:** the team wrote with a persona present but asked nobody. Read it; answer only if the persona would.
+- **Later:** an AI persona is answering.
+- **Answered.**
+
+Write with the **persona selector** beside the box (it starts on the persona asked). Keep it short, as in a chat. **Take it**, **No reply needed** and **Follow** work as for mail, and the bell tells you of the chats you have or follow. The **pencil** opens a chat between a persona and a team, a member or a team leader. You only see what was said after the persona joined a group.
+
 ## What you can't do here
 - Write as the **team leader persona**: each team's leader plays it themselves.
 - Change anything in a team's mailbox or an inject, or reach ExCon's screens (grading, settings).

@@ -37,6 +37,9 @@ In your mailbox, the team inbox and your members' mailboxes, a **Notes** panel s
 - **Your notes**: click the comment button on an email (or **Add a note**) to write one, also in the read-only team inbox. Only you and ExCon read them; your team never does. Edit or delete them on the note.
 - The **Notes** tab lists them all, newest first, with links to the emails, filters (SIMEX AI only, *Poor* only, search), and **Markdown** or **CSV** to download them. **Export** in a conversation's panel downloads that conversation with its notes as Markdown: easy to read again, or to give to an AI for a debrief.
 
+## Messenger
+If ExCon has turned it on, the app drawer has **Messenger** (your own chats: your team's room, your members, groups you start) and **Team A chats**: every chat of your team, read-only, the members' direct chats with each other and with the personas included. Reading them marks nothing read for anyone.
+
 ## Dashboard
 Messages written, injects answered, median time to the first reply, late or missing replies, delivered → read → answered, who in the team is writing (with their team role, e.g. Deputy Team Leader, if ExCon gave them one), the work by team role (messages written and their share, time to reply, messages read, documents opened), replies per hour, and SIMEX AI's reading: tone, quality, possibly AI-written replies with the reasons, flags, what the team asks for and what it commits to. Click a time to open the conversation in the Team inbox. The page refreshes every two minutes.
 

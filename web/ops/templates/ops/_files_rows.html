@@ -1,0 +1,27 @@
+{% load ops %}{% comment %}The rows of a Files list, in groups (file_index.grouped).{% endcomment %}
+<p class="fx-muted">{{ total }} file{{ total|pluralize }} · {{ total_size|filesizeformat }}</p>
+{% for title, rows, sums in groups %}
+<section class="fx-group">
+  {% if title %}<h3 class="fx-gtitle">{{ title }} <small>{{ sums.n }} file{{ sums.n|pluralize }} · {{ sums.size|filesizeformat }}</small></h3>{% endif %}
+  <table class="fx-list">
+    <thead><tr><th>File</th><th>Sent</th>{% if teams %}<th>Team</th>{% endif %}<th>From → to</th><th>Conversation</th>{% if sees_ai %}<th>SIMEX AI</th>{% endif %}</tr></thead>
+    <tbody>{% for r in rows %}
+    <tr class="fx-d-{{ r.direction }}">
+      <td class="fx-c-file"><span class="fx-type fx-t-{{ r.type }}">{{ r.type|upper|slice:":4" }}</span>
+        <span><a href="{{ file_base }}/{{ r.src }}/{{ r.fid }}/" download>{{ r.filename }}</a>{% if r.type == 'image' %} · <a href="{{ file_base }}/{{ r.src }}/{{ r.fid }}/?inline=1" target="_blank" rel="noopener">view</a>{% endif %}
+        <small>{{ r.size|filesizeformat }} · {{ r.source_name }}{% if r.inject %} · inject {{ r.inject }}{% endif %}{% if r.copies > 1 %} · <span class="fx-again" title="The team sent the same file in {{ r.copies }} conversations">sent {{ r.copies }}×</span>{% endif %}</small></span></td>
+      <td class="fx-c-when">{{ r.at|date:"D d M H:i" }}{% if r.sim_at %}<small title="Scenario time">◷ {{ r.sim_at|date:"D d M H:i" }}</small>{% endif %}</td>
+      {% if teams %}<td>{{ r.team.name|default:"—" }}</td>{% endif %}
+      <td class="fx-c-who"><span class="fx-dir">{{ r.direction_name }}</span><br>{% if r.colour %}<span class="fx-pdot" style="background: {{ r.colour }}"></span>{% endif %}{{ r.sender }}{% if r.to %} → <small>{{ r.to|truncatechars:60 }}</small>{% endif %}</td>
+      <td class="fx-c-conv">{% if r.url %}<a href="{{ r.url }}">{{ r.subject|default:"(no subject)" }}</a>{% else %}{{ r.subject|default:"(no subject)" }}{% endif %}
+        <small>{{ r.boxes|join:", " }}{% if r.boxes|length > 1 %} ({{ r.boxes|length }} mailboxes){% endif %}</small></td>
+      {% if sees_ai %}<td class="fx-c-ai">{% if r.ai and r.ai.status == 'done' %}<b>{{ r.ai.doc_type|default:"Document" }}</b>{% if r.band == 'likely' %} <span class="fx-band likely">Likely AI-assisted</span>{% elif r.band == 'possibly' %} <span class="fx-band possibly">Possibly AI-assisted</span>{% endif %}
+        <small>{{ r.ai.summary|truncatechars:160 }}</small>{% if who == 'excon' %}<a class="fx-more" href="/documents/{{ r.ai.id }}/">Reading</a>{% endif %}
+        {% elif r.ai_state %}<small class="fx-muted">{{ AI_STATES|get:r.ai_state }}</small>{% endif %}</td>{% endif %}
+    </tr>{% endfor %}</tbody>
+  </table>
+</section>
+{% empty %}<p class="fx-muted">No files{% if f.q or f.direction or f.source or f.type or f.team %} match these filters{% else %} yet{% endif %}.</p>
+{% endfor %}
+{% if more or f.page > 1 %}<nav class="fx-pages">{% if f.page > 1 %}<a href="?{{ f.qs }}&amp;page={{ f.page|add:'-1' }}">← Newer</a>{% endif %}
+  {% if more %}<a href="?{{ f.qs }}&amp;page={{ f.page|add:'1' }}">Older →</a>{% endif %}</nav>{% endif %}

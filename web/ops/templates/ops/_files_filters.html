@@ -1,0 +1,20 @@
+{% comment %}The filters and exports of a Files list (ops/file_index.py): in the URL only.{% endcomment %}
+<form class="fx-filters" method="get">
+  {% if teams %}<select name="team" aria-label="Team"><option value="">All teams</option>{% for t in teams %}<option value="{{ t.id }}"{% if f.team.id == t.id %} selected{% endif %}>{{ t.name }}</option>{% endfor %}</select>{% endif %}
+  <select name="dir" aria-label="Direction"><option value="">Any direction</option>{% for k, name in DIRECTIONS.items %}<option value="{{ k }}"{% if f.direction == k %} selected{% endif %}>{{ name }}</option>{% endfor %}</select>
+  <select name="src" aria-label="Sent by"><option value="">Mail, email and Messenger</option>{% for k, name in SOURCES.items %}<option value="{{ k }}"{% if f.source == k %} selected{% endif %}>{{ name }}</option>{% endfor %}</select>
+  <select name="type" aria-label="Type of file"><option value="">Any type</option>{% for k, name in TYPES.items %}<option value="{{ k }}"{% if f.type == k %} selected{% endif %}>{{ name }}</option>{% endfor %}</select>
+  {% if senders %}<select name="from" aria-label="From"><option value="">Anyone</option>{% for k, name in senders %}<option value="{{ k }}"{% if f.sender == k %} selected{% endif %}>{{ name }}</option>{% endfor %}</select>{% endif %}
+  {% if injects %}<select name="inject" aria-label="Inject"><option value="">Any inject</option>{% for iid, mel in injects %}<option value="{{ iid }}"{% if f.inject == iid %} selected{% endif %}>{{ mel }}</option>{% endfor %}</select>{% endif %}
+  {% if sees_ai %}<select name="ai" aria-label="SIMEX AI"><option value="">Read or not</option>{% for k, name in AI_STATES.items %}<option value="{{ k }}"{% if f.ai == k %} selected{% endif %}>{{ name }}</option>{% endfor %}</select>
+  <select name="band" aria-label="AI-written estimate"><option value="">Any AI estimate</option><option value="likely"{% if f.band == 'likely' %} selected{% endif %}>Likely AI-assisted</option><option value="possibly"{% if f.band == 'possibly' %} selected{% endif %}>Possibly AI-assisted</option><option value="low"{% if f.band == 'low' %} selected{% endif %}>Unlikely</option></select>{% endif %}
+  <label class="fx-date">From <input type="date" name="since" value="{{ f.since|date:'Y-m-d' }}"></label>
+  <label class="fx-date">to <input type="date" name="until" value="{{ f.until|date:'Y-m-d' }}"></label>
+  <input name="q" value="{{ f.q }}" placeholder="Search file names{% if sees_ai %}, summaries{% endif %}, subjects">
+  <label><input type="checkbox" name="injects" value="1"{% if f.injects %} checked{% endif %}> Inject documents</label>
+  <label><input type="checkbox" name="test" value="1"{% if f.test %} checked{% endif %}> Test team</label>
+  <select name="group" aria-label="Group by">{% for k, name in GROUPS.items %}<option value="{{ k }}"{% if f.group == k %} selected{% endif %}>{% if k == 'none' %}{{ name }}{% else %}By {{ name|lower }}{% endif %}</option>{% endfor %}</select>
+  <button class="fx-btn">Filter</button>
+  <span class="fx-exports">Export: <button class="fx-btn" name="format" value="csv" title="A spreadsheet of the files listed (filters kept)">CSV</button>
+    {% if who == 'excon' %}<button class="fx-btn" name="format" value="zip" title="The files listed, in a zip, a folder per team (up to 500 MB)">Zip</button>{% endif %}</span>
+</form>

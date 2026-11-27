@@ -693,8 +693,12 @@ def mark(threads, act, user, name, minutes=None, note="", assignee=None):
         to = next((u for u in assignee_users() if str(u.id) == str(assignee or "")), None)
         if to is None:
             raise DeskError("Choose who on the desk it goes to.")
+    chats = [t for t in threads if t.startswith("chat:")]  # SIMEX Messenger rooms (ops/messenger_desk.py)
     threads = list(Mail.objects.filter(team=None, owner=None, thread__in=threads).order_by()
                    .values_list("thread", flat=True).distinct())
+    if chats:
+        from . import messenger_desk
+        threads += messenger_desk.existing(chats)
     now = timezone.now()
     given = []  # (thread, previous owner id, new owner)
     for t in threads:
@@ -718,13 +722,15 @@ def mark(threads, act, user, name, minutes=None, note="", assignee=None):
             unwatch(t, user)
             continue
         elif act == "done":
-            c.done_upto = (Mail.objects.filter(team=None, owner=None, thread=t, folder="inbox")
+            c.done_upto = (_chat_latest(t) if t.startswith("chat:") else
+                           Mail.objects.filter(team=None, owner=None, thread=t, folder="inbox")
                            .order_by("-id").values_list("id", flat=True).first() or 0)
             c.done_by, c.done_at, c.follow_upto, c.follow_at, c.follow_note = name[:150], now, 0, None, ""
         elif act == "reopen":
             c.done_upto, c.done_by, c.done_at = 0, "", None
         elif act == "follow":
-            c.follow_upto = (Mail.objects.filter(team=None, owner=None, thread=t).exclude(folder="drafts")
+            c.follow_upto = (_chat_latest(t) if t.startswith("chat:") else
+                             Mail.objects.filter(team=None, owner=None, thread=t).exclude(folder="drafts")
                              .order_by("-id").values_list("id", flat=True).first() or 0) or 1
             c.follow_at = now + timedelta(minutes=minutes) if minutes else None
             c.follow_note, c.follow_by, c.follow_user, c.follow_told = (note or "")[:300], name[:150], user, 0
@@ -739,6 +745,13 @@ def mark(threads, act, user, name, minutes=None, note="", assignee=None):
     if given:
         _told_given(given, user, name)
     return len(threads)
+
+
+def _chat_latest(thread):
+    """A SIMEX Messenger room's latest post id (its DeskConversation counts posts, not Mail)."""
+    from .models import Room
+    return Room.objects.filter(pk=int(thread[5:]) if thread[5:].isdigit() else 0).values_list(
+        "last_post_id", flat=True).first() or 0
 
 
 def _told_given(given, user, name):
@@ -765,7 +778,7 @@ def _told_given(given, user, name):
     for u, ts in to_new.values():
         if len(ts) == 1:
             notify([u], f"assign:{ts[0]}:{stamp}", "assign", f"{name} gave you a conversation", what(ts[0]), ts[0],
-                   f"/inbox/desk/t/{ts[0]}/", test(ts), push_=True)
+                   thread_url(ts[0]), test(ts), push_=True)
         else:
             notify([u], f"assign:{len(ts)}x{ts[0]}:{stamp}", "assign", f"{name} gave you {len(ts)} conversations",
                    "; ".join(what(t) for t in ts[:5]) + ("..." if len(ts) > 5 else ""), "", "/inbox/desk/?folder=mine",
@@ -775,7 +788,7 @@ def _told_given(given, user, name):
         if len(xs) == 1:
             t, new = xs[0]
             by = "took it over" if new.id == user.id else f"gave it to {user_name(new)}"
-            notify([u], f"unassign:{t}:{stamp}", "assign", f"{name} {by}", what(t), t, f"/inbox/desk/t/{t}/", test(ts))
+            notify([u], f"unassign:{t}:{stamp}", "assign", f"{name} {by}", what(t), t, thread_url(t), test(ts))
         else:
             notify([u], f"unassign:{len(xs)}x{ts[0]}:{stamp}", "assign", f"{name} moved {len(xs)} of your conversations",
                    "; ".join(f"{what(t)} -> {user_name(n)}" for t, n in xs[:5]), "", "/inbox/desk/?folder=mine", test(ts))
@@ -1171,7 +1184,16 @@ def _about(threads):
             out[m.thread] = (m.subject, m.desk_team, m.is_test)
         elif out[m.thread][1] is None and m.desk_team:
             out[m.thread] = (out[m.thread][0], m.desk_team, out[m.thread][2])
+    chats = [t for t in threads if t.startswith("chat:")]
+    if chats:  # SIMEX Messenger rooms
+        from . import messenger_desk
+        out.update(messenger_desk.about(chats))
     return out
+
+
+def thread_url(t):
+    """Where a desk conversation opens: its mail thread, or a SIMEX Messenger room on the desk."""
+    return f"/chat/desk/r/{t[5:]}/" if t.startswith("chat:") else f"/inbox/desk/t/{t}/"
 
 
 def _told_in(mail, job=None):

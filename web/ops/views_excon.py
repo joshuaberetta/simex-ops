@@ -1969,7 +1969,7 @@ def message_withdraw(request, mid):
 
 
 EDITABLE = ["footer", "subject_prefix", "default_reply_to", "excon_bcc", "test_address", "test_redirect",
-            "grace_minutes", "max_upload_mb", "desk_wait_minutes", "cal_lead"]
+            "grace_minutes", "max_upload_mb", "desk_wait_minutes", "cal_lead", "chat_edit_minutes"]
 
 
 @excon_required
@@ -1986,7 +1986,7 @@ def settings_page(request):
                 if bad:
                     messages.error(request, f"ExCon Bcc: not email addresses: {', '.join(bad)}; not saved.")
                     continue
-            if k in ("grace_minutes", "max_upload_mb", "desk_wait_minutes", "cal_lead"):
+            if k in ("grace_minutes", "max_upload_mb", "desk_wait_minutes", "cal_lead", "chat_edit_minutes"):
                 try:
                     v = str(max(0, int(float(v or (10)))))
                 except ValueError:
@@ -1996,6 +1996,8 @@ def settings_page(request):
         conf.put("personal_mailboxes", "1" if P.get("personal_mailboxes") == "1" else "0")
         conf.put("subject_inject_code", "1" if P.get("subject_inject_code") == "1" else "0")
         conf.put("desk_injects", "1" if P.get("desk_injects") == "1" else "0")
+        for k in ("chat_enabled", "chat_direct", "chat_groups", "chat_personas", "chat_push_preview"):  # SIMEX Messenger
+            conf.put(k, "1" if P.get(k) == "1" else "0")
         audit("settings_save", None, _u(request))
         messages.success(request, "Settings saved.")
         return redirect("/settings/")

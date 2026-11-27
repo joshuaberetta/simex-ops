@@ -1,0 +1,40 @@
+/* Files (ops/file_index.py): the desk's, a team leader's and ExCon's lists of every file. */
+.fx-page { max-width: 1280px; }
+.fx-muted { color: #6b6f76; font-size: 13px; }
+.fx-filters { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 10px 0 14px; font-size: 13px; }
+.fx-filters select, .fx-filters input[name=q], .fx-filters input[type=date] { font: inherit; padding: 4px 6px; border: 1px solid #c7cbd1;
+  border-radius: 6px; background: #fff; }
+.fx-filters input[name=q] { min-width: 200px; }
+.fx-date { display: inline-flex; gap: 4px; align-items: center; }
+.fx-btn { font: inherit; border: 1px solid #c7cbd1; background: #f8f9fa; border-radius: 16px; padding: 4px 12px; cursor: pointer; }
+.fx-btn:hover { background: #eef1f6; }
+.fx-exports { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; }
+.fx-group { margin-bottom: 18px; }
+.fx-gtitle { font-size: 15px; font-weight: 500; margin: 14px 0 6px; }
+.fx-gtitle small { color: #6b6f76; font-weight: 400; margin-left: 6px; }
+.fx-list { width: 100%; border-collapse: collapse; font-size: 13px; }
+.fx-list th { text-align: left; font-weight: 500; color: #555; border-bottom: 1px solid #e3e6eb; padding: 5px 8px; }
+.fx-list td { border-bottom: 1px solid #f0f1f3; padding: 6px 8px; vertical-align: top; }
+.fx-list td small { display: block; color: #6b6f76; font-size: 12px; }
+.fx-c-file { display: flex; gap: 8px; min-width: 240px; }
+.fx-c-file a { color: #0b57d0; text-decoration: none; word-break: break-word; }
+.fx-c-file a:hover, .fx-c-conv a:hover { text-decoration: underline; }
+.fx-c-conv a { color: #1f1f1f; text-decoration: none; }
+.fx-c-when { white-space: nowrap; }
+.fx-type { flex: none; width: 34px; height: 22px; border-radius: 4px; font-size: 10px; font-weight: 700; display: inline-flex;
+  align-items: center; justify-content: center; color: #fff; background: #80868b; letter-spacing: .02em; }
+.fx-t-pdf { background: #d93025; } .fx-t-word { background: #1a73e8; } .fx-t-excel { background: #188038; }
+.fx-t-slides { background: #e37400; } .fx-t-image { background: #9334e6; } .fx-t-text { background: #5f6368; }
+.fx-dir { font-size: 11.5px; border-radius: 10px; padding: 0 7px; background: #eef1f6; color: #444; white-space: nowrap; }
+.fx-d-to_persona .fx-dir { background: #e8f0fe; color: #174ea6; }
+.fx-d-from_persona .fx-dir { background: #e6f4ea; color: #137333; }
+.fx-d-internal .fx-dir { background: #fef7e0; color: #7a4f01; }
+.fx-d-to_team .fx-dir { background: #fce8e6; color: #a50e0e; }
+.fx-pdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; }
+.fx-again { color: #a50e0e; }
+.fx-band { font-size: 11px; border-radius: 10px; padding: 0 6px; white-space: nowrap; }
+.fx-band.likely { background: #fce8e6; color: #a50e0e; } .fx-band.possibly { background: #fef7e0; color: #7a4f01; }
+.fx-more { font-size: 12px; color: #0b57d0; }
+.fx-pages { display: flex; gap: 16px; margin: 10px 0 30px; }
+@media (max-width: 760px) { .fx-list thead { display: none; } .fx-list td { display: block; border: 0; padding: 2px 8px; }
+  .fx-list tr { display: block; border-bottom: 1px solid #e3e6eb; padding: 6px 0; } }

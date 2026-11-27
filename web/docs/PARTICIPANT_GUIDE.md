@@ -59,6 +59,13 @@ SIMEX Mail is your team's mailbox for the exercise. Everything here is **exercis
 - **Reminders:** with alerts on, you get a notification a few minutes before each event on your calendars, and a message at the bottom of SIMEX Mail if it is open. **Upcoming** at the bottom of the left side shows your next events (click the arrow to fold it). The red number on the Calendar tile counts invitations to answer and events about to start.
 - **Create event** (the calendar icon at the top of a conversation) starts an event from that conversation, with the people in it as guests.
 
+## Messenger (chat)
+If ExCon has turned it on, **Messenger** is in the app drawer (the grid of nine dots). Chat with your team, your team leader and the people you deal with in the exercise here, not on WhatsApp or Signal.
+- **Your team's room** has everyone in your team and your team leader. The **pencil** starts a chat with one person, or a **group** with several (give it a name). The people in the exercise (ministries, agencies...) are there too.
+- Tap a message (or hover it on a computer) to **reply** to it, **react**, **edit** it (for a few minutes) or **delete** it. Type `@` to mention someone in a group. The paperclip sends files and photos. One ✓ is sent; ✓✓ means read (blue: everyone has read it).
+- **On a phone:** open Messenger, tap **Share**, then **Add to Home Screen**. It becomes an app of its own beside SIMEX Mail. Open it from there and tap **Turn on alerts**.
+- **ExCon can read everything sent in Messenger**, including edited and deleted messages, and your team leader can read your team's chats.
+
 ## What's new
 The **megaphone** at the top lists what is new in SIMEX Mail. A small star on it means there is something new: click it to read it.
 

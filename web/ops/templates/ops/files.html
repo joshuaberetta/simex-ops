@@ -1,0 +1,9 @@
+{% extends "ops/base.html" %}{% load static %}
+{% block title %}Files · SIMEX ops{% endblock %}
+{% block body %}
+<link rel="stylesheet" href="{% static 'ops/files.css' %}">
+<h1>Files</h1>
+<p class="muted">Every file of the exercise in one list: what the teams attached in SIMEX Mail, sent by email or posted in Messenger, what the personas sent them and the inject documents. A file copied into several mailboxes of one conversation is one row. Grouped by team unless you choose otherwise; each subject opens its conversation. See also SIMEX AI's <a href="/documents/">document readings</a> and the <a href="/notes/">notes on the mail</a>.</p>
+{% include "ops/_files_filters.html" %}
+{% include "ops/_files_rows.html" %}
+{% endblock %}

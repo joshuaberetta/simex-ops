@@ -1,0 +1,22 @@
+{% extends "ops/base.html" %}{% load static %}
+{% block title %}Messenger · SIMEX ops{% endblock %}
+{% block body %}
+<h1>Messenger</h1>
+<p class="muted">Every chat in SIMEX Messenger: each team's room, the direct chats and the groups, read-only, with edited and deleted messages as they were first sent. {% if not on %}<b>Messenger is off</b> (Settings → SIMEX Messenger).{% endif %} Files posted in chats are also in <a href="/files/?src=chat">Files</a>.</p>
+<form class="filters" method="get">
+  <select name="team"><option value="">All teams</option>{% for t in teams %}<option value="{{ t.id }}"{% if team.id == t.id %} selected{% endif %}>{{ t.name }}</option>{% endfor %}</select>
+  <select name="kind"><option value="">Every kind</option><option value="team"{% if kind == 'team' %} selected{% endif %}>Team rooms</option><option value="direct"{% if kind == 'direct' %} selected{% endif %}>Direct chats</option><option value="group"{% if kind == 'group' %} selected{% endif %}>Groups</option></select>
+  <label><input type="checkbox" name="persona" value="1"{% if persona %} checked{% endif %}> with a persona</label>
+  <label><input type="checkbox" name="test" value="1"{% if test %} checked{% endif %}> Test team</label>
+  <input name="q" value="{{ q }}" placeholder="Search the messages">
+  <button class="btn small">Filter</button>
+</form>
+<table class="list">
+  <thead><tr><th>Chat</th><th>Kind</th><th>Team</th><th>Members</th><th>Last message</th></tr></thead>
+  <tbody>{% for r in rows %}
+  <tr><td><a href="/chats/{{ r.id }}/"><b>{{ r.name }}</b></a>{% if r.frozen %} <span class="badge">frozen</span>{% endif %}</td>
+    <td>{{ r.kind }}{% if r.has_persona %} · persona{% endif %}</td><td>{{ r.team_names|default:"—" }}</td><td>{{ r.members }}</td>
+    <td>{% if r.last %}<small>{{ r.last.day }} {{ r.last.t }}</small> {% if r.last.name %}<b>{{ r.last.name }}:</b> {% endif %}{{ r.last.body|truncatechars:90 }}{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="5" class="muted">No chats{% if q or team or kind %} match{% else %} yet{% endif %}.</td></tr>{% endfor %}</tbody>
+</table>
+{% endblock %}

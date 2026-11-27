@@ -255,7 +255,7 @@ class Message(models.Model):
     """One delivery: an email handed to Resend, or a Mail put in an in-app inbox."""
     inject = models.ForeignKey(Inject, null=True, blank=True, on_delete=models.SET_NULL)
     run = models.ForeignKey(TestRun, null=True, blank=True, on_delete=models.SET_NULL)
-    kind = models.CharField(max_length=10)  # live | test | oneoff | reply | followup | leader | desk | login
+    kind = models.CharField(max_length=10)  # live | test | oneoff | reply | followup | leader | desk | login | chat
     channel = models.CharField(max_length=10, default="inapp")
     target = models.CharField(max_length=200, blank=True, default="")
     idem_key = models.CharField(max_length=200, unique=True)
@@ -645,6 +645,7 @@ class PushSubscription(models.Model):
     user_agent = models.CharField(max_length=400, blank=True, default="")
     created_at = models.DateTimeField(default=timezone.now)
     last_ok_at = models.DateTimeField(null=True, blank=True)
+    app = models.CharField(max_length=8, default="mail")  # mail (SIMEX Mail, role plays) | chat (SIMEX Messenger)
 
 
 def file_hash(data):
@@ -851,6 +852,7 @@ class DocumentAnalysis(models.Model):
     mail_file = models.ForeignKey(MailAttachment, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     response_file = models.ForeignKey(ResponseAttachment, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     response = models.ForeignKey(Response, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")  # its covering message
+    post_file = models.ForeignKey("PostAttachment", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")  # SIMEX Messenger
     inject = models.ForeignKey(Inject, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     sent_at = models.DateTimeField(default=timezone.now)  # when the team first sent it
     status = models.CharField(max_length=10, default="queued")  # queued | done | failed | skipped (not readable)
@@ -1431,3 +1433,158 @@ class CalendarSeedItem(models.Model):
 
     class Meta:
         ordering = ["starts_at", "id"]
+
+
+# --- SIMEX Messenger (ops/messenger.py; web/docs/MESSENGER_PLAN.md) --------------------------------
+
+class Room(models.Model):
+    """A chat in SIMEX Messenger: kind "team" (one per team: the team key t:<id> and its leader),
+    "direct" (two keys, one room per pair: direct_key) or "group" (named, admins). Its members are
+    RoomMember rows, by address-book key. team: the one team on the team side (None when it holds
+    no team, or two with team_to_team); teams: every team with a member in it."""
+    kind = models.CharField(max_length=10)  # team | direct | group
+    title = models.CharField(max_length=120, blank=True, default="")
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    teams = models.JSONField(default=list, blank=True)
+    has_persona = models.BooleanField(default=False)  # the persona desk's rooms
+    direct_key = models.CharField(max_length=300, blank=True, default="", db_index=True)
+    created_by = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_by_user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                        related_name="+")
+    created_at = models.DateTimeField(default=timezone.now)
+    last_post_id = models.IntegerField(default=0)
+    last_post_at = models.DateTimeField(null=True, blank=True)
+    is_test = models.BooleanField(default=False)
+    frozen = models.BooleanField(default=False)  # ExCon: nobody can post
+
+    class Meta:
+        indexes = [models.Index(fields=["team", "last_post_id"])]
+
+
+class RoomMember(models.Model):
+    """Who is in a room: key m:<pid> (a member), l:<pid> (a team leader), p:<username> (a persona,
+    played by the persona desk) or t:<team id> (every participant of the team). Posts before
+    joined_post_id are not theirs to read."""
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="members")
+    key = models.CharField(max_length=130)
+    person = models.ForeignKey(Person, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    persona = models.CharField(max_length=120, blank=True, default="")
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    admin = models.BooleanField(default=False)
+    joined_at = models.DateTimeField(default=timezone.now)
+    joined_post_id = models.IntegerField(default=0)
+    left_at = models.DateTimeField(null=True, blank=True)
+    added_by = models.CharField(max_length=150, blank=True, default="")
+
+    class Meta:
+        indexes = [models.Index(fields=["key", "left_at"])]
+
+
+class RoomState(models.Model):
+    """One person's own state of a room: read up to (a Post id), muted, pinned, and when they
+    were last pushed about it (one push per burst)."""
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="states")
+    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="+")
+    upto = models.IntegerField(default=0)
+    read_at = models.DateTimeField(null=True, blank=True)
+    muted = models.BooleanField(default=False)
+    pinned = models.BooleanField(default=False)
+    pushed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = [("room", "person")]
+
+
+class ReadMark(models.Model):
+    """Each time someone's read position in a room moved on: for the reports' time-to-read."""
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="+")
+    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="+")
+    upto = models.IntegerField()
+    at = models.DateTimeField(default=timezone.now)
+
+
+class Post(models.Model):
+    """A message in a room. author: the member or leader who wrote it; for a persona's post,
+    persona (its username) and author_user (the desk or ExCon login, None for an AI persona),
+    with its Message (kind chat). A team's turn to a persona is a Response (channel chat) shared
+    by its posts. Edits keep the earlier text (PostEdit); a deletion keeps the text for ExCon."""
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="posts")
+    author = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    author_user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name="+")
+    persona = models.CharField(max_length=120, blank=True, default="")
+    kind = models.CharField(max_length=8, default="text")  # text | system
+    body = models.TextField(blank=True, default="")
+    reply_to = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    mentions = models.JSONField(default=list, blank=True)
+    response = models.ForeignKey(Response, null=True, blank=True, on_delete=models.SET_NULL, related_name="posts")
+    message = models.ForeignKey(Message, null=True, blank=True, on_delete=models.SET_NULL, related_name="posts")
+    npc = models.BooleanField(default=False)
+    client_key = models.CharField(max_length=40, blank=True, default="")
+    created_at = models.DateTimeField(default=timezone.now)
+    sim_at = models.DateTimeField(null=True, blank=True)
+    edited_at = models.DateTimeField(null=True, blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.CharField(max_length=150, blank=True, default="")
+    is_test = models.BooleanField(default=False)
+
+    class Meta:
+        indexes = [models.Index(fields=["room", "id"])]
+        constraints = [models.UniqueConstraint(fields=["room", "client_key"], condition=~models.Q(client_key=""),
+                                               name="post_client_key")]
+
+    def save(self, *args, **kwargs):
+        if self._state.adding and self.sim_at is None:
+            from . import simclock
+            self.sim_at = simclock.now()
+        super().save(*args, **kwargs)
+
+
+class PostEdit(models.Model):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="edits")
+    body = models.TextField(default="")  # the text before this edit
+    at = models.DateTimeField(default=timezone.now)
+    by = models.CharField(max_length=150, blank=True, default="")
+
+
+class PostReaction(models.Model):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="reactions")
+    key = models.CharField(max_length=130)  # who: m:<pid> | l:<pid> | p:<username>
+    name = models.CharField(max_length=200, default="")
+    emoji = models.CharField(max_length=8)
+    at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        unique_together = [("post", "key")]
+
+
+class PostAttachment(models.Model):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="files")
+    attachment = models.ForeignKey(Attachment, null=True, blank=True, on_delete=models.SET_NULL)  # an inject document
+    filename = models.CharField(max_length=300)
+    content_type = models.CharField(max_length=120, default="application/octet-stream")
+    size = models.IntegerField(default=0)
+    data = models.BinaryField(null=True, blank=True)
+    sha256 = models.CharField(max_length=64, blank=True, default="", db_index=True)
+
+    def save(self, *args, **kwargs):
+        if self.data is not None and not self.sha256:
+            self.sha256 = file_hash(self.data)
+        super().save(*args, **kwargs)
+
+    def content(self):
+        if self.data is not None:
+            return bytes(self.data)
+        return bytes(self.attachment.data) if self.attachment else None
+
+
+class RoomChange(models.Model):
+    """The feed SIMEX Messenger's clients poll: one row per change of a room (a post, an edit or
+    deletion, a reaction, a read, members, the room itself, someone typing). Its id is the
+    clients' cursor, so "anything new?" is one index lookup."""
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="+")
+    kind = models.CharField(max_length=8)  # post | edit | react | read | member | room | typing
+    post_id = models.IntegerField(null=True, blank=True)
+    key = models.CharField(max_length=130, blank=True, default="")  # typing, read: who
+    name = models.CharField(max_length=200, blank=True, default="")
+    at = models.DateTimeField(default=timezone.now)

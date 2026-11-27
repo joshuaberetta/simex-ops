@@ -27,7 +27,7 @@ from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 
 from . import render
-from .models import Mail, Message, NpcProfile, Person, Response, Team
+from .models import Mail, Message, NpcProfile, Person, Post, Response, Team
 
 LIVE_KINDS = ("live", "followup", "reply", "leader", "desk", "tl")
 TEST_KINDS = ("test", "oneoff")
@@ -178,7 +178,8 @@ def _participant_mail(ctx, after_id=None):
 
 
 def _email_replies(ctx, after_id=None):
-    qs = Response.objects.filter(mail__isnull=True, kind="test" if ctx.test else "live", team__isnull=False)
+    qs = (Response.objects.filter(mail__isnull=True, kind="test" if ctx.test else "live", team__isnull=False)
+          .exclude(channel="chat"))  # a chat turn is counted from its posts (_posts)
     if after_id:
         qs = qs.filter(id__gt=after_id)
     out = []
@@ -189,6 +190,40 @@ def _email_replies(ctx, after_id=None):
             continue
         out.append({"id": f"r{r['id']}", "at": _ms(r["received_at"]), "f": frm, "to": [to], "k": "participant",
                     "s": (r["subject"] or "")[:120]})
+    return out
+
+
+def _posts(ctx, after_id=None):
+    """SIMEX Messenger: each post an edge from its author to every other member of the room when
+    it was posted (a team key: the team's node). A persona's post is counted here, never through
+    its Message (kind chat)."""
+    from .models import RoomMember
+    qs = Post.objects.filter(kind="text", room__is_test=ctx.test)
+    if after_id:
+        qs = qs.filter(id__gt=after_id)
+    rows = list(qs.order_by("id").values("id", "room_id", "room__kind", "author_id", "persona", "body", "created_at")[:20000])
+    if not rows:
+        return []
+    mems = {}
+    for rid, key, joined, left, at in (RoomMember.objects.filter(room_id__in={r["room_id"] for r in rows})
+                                       .values_list("room_id", "key", "joined_post_id", "left_at", "joined_at")):
+        mems.setdefault(rid, []).append((key, joined, left))
+    out = []
+    for r in rows:
+        frm = ctx.persona(r["persona"]) if r["persona"] else ctx.person(r["author_id"])
+        if not frm:
+            continue
+        to = set()
+        for key, joined, left in mems.get(r["room_id"], []):
+            if joined >= r["id"] or (left and left < r["created_at"]):
+                continue
+            node = ctx.persona(key[2:]) if key.startswith("p:") else key if key.startswith("t:") else \
+                ctx.person(int(key[2:])) if key[2:].isdigit() else None
+            if node and node != frm:
+                to.add(node)
+        if to:
+            out.append({"id": f"c{r['id']}", "at": _ms(r["created_at"]), "f": frm, "to": sorted(to),
+                        "k": "chat" if r["room__kind"] == "direct" else "group", "s": (r["body"] or "")[:120]})
     return out
 
 
@@ -205,12 +240,13 @@ def sends(kind="live", cursor=None):
             since = datetime.fromtimestamp(int(cursor["t"]) / 1000, tz=dt_tz.utc) - OVERLAP
         except (TypeError, ValueError, OverflowError):
             since = None
-    s_after, r_after = _int(cursor.get("s")), _int(cursor.get("r"))
-    out = _messages(ctx, since) + _participant_mail(ctx, s_after) + _email_replies(ctx, r_after)
+    s_after, r_after, c_after = _int(cursor.get("s")), _int(cursor.get("r")), _int(cursor.get("c"))
+    out = _messages(ctx, since) + _participant_mail(ctx, s_after) + _email_replies(ctx, r_after) + _posts(ctx, c_after)
     out.sort(key=lambda e: (e["at"], e["id"]))
     new_cursor = {"t": _ms(now),
                   "s": max([s_after or 0] + list(Mail.objects.order_by("-id").values_list("id", flat=True)[:1])),
-                  "r": max([r_after or 0] + list(Response.objects.order_by("-id").values_list("id", flat=True)[:1]))}
+                  "r": max([r_after or 0] + list(Response.objects.order_by("-id").values_list("id", flat=True)[:1])),
+                  "c": max([c_after or 0] + list(Post.objects.order_by("-id").values_list("id", flat=True)[:1]))}
     return out, new_cursor
 
 

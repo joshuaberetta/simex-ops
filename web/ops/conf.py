@@ -56,6 +56,14 @@ DEFAULTS = {
     "sim_anchor_real": "",
     "sim_rate": "1",
     "sim_follow": "1",  # a live inject delivered with a later Scenario time moves the clock forward to it
+    # SIMEX Messenger (ops/messenger.py): chat between the teams, their leaders and the personas.
+    "chat_enabled": "0",
+    "chat_direct": "1",  # members' direct chats with each other
+    "chat_groups": "1",  # members may start groups
+    "chat_personas": "1",  # members may start chats with the personas (the persona desk answers)
+    "chat_edit_minutes": "15",
+    "chat_push_preview": "0",  # the start of the text in pushes (else who and where only)
+    "chat_npc": "1",  # AI personas answer in Messenger too (within npc_enabled and npc_scope)
     "reset_at": "",  # Settings → Start afresh (ops/reset.py): received email from before it is not synced back
 }
 CHANNEL_MODES = {"email": "Email (Resend)", "inapp": "SIMEX Mail (in-app inboxes)", "per_inject": "Per inject"}

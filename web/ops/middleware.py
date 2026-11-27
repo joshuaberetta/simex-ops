@@ -22,11 +22,11 @@ class HealthCheck:
 
 class MailHost:
     """With MAIL_URL set, the participants' SIMEX Mail lives on its own host (mail.): that host
-    serves only the mailbox, sign-in and static files, and sends anything else to PUBLIC_URL;
+    serves only the mailbox, SIMEX Messenger (/chat/), sign-in and static files, and sends anything else to PUBLIC_URL;
     PUBLIC_URL sends a participant's own mailbox pages to the mail host. ExCon's "view as team"
     (/inbox/as/) and attachment links (/inbox/file/) stay on PUBLIC_URL. Sessions are shared."""
 
-    MAIL_PATHS = ("/inbox/", "/login/", "/logout/", "/static/")
+    MAIL_PATHS = ("/inbox/", "/chat/", "/login/", "/logout/", "/static/")
     EXCON_PATHS = ("/inbox/as/", "/inbox/file/")
 
     def __init__(self, get_response):
@@ -40,7 +40,7 @@ class MailHost:
             if request.mail_host:
                 if path != "/" and (not path.startswith(self.MAIL_PATHS) or path.startswith("/inbox/as/")):
                     return redirect(settings.PUBLIC_URL.rstrip("/") + request.get_full_path())
-            elif path.startswith("/inbox/") and not path.startswith(self.EXCON_PATHS):
+            elif path.startswith(("/inbox/", "/chat/")) and not path.startswith(self.EXCON_PATHS):
                 return redirect(settings.MAIL_URL + request.get_full_path())
         return self.get_response(request)
 

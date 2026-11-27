@@ -1,0 +1,122 @@
+{% load static ops %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>{% if cv.readonly %}{{ team.name }} chats{% else %}Messenger{% endif %} - SIMEX Messenger</title>
+<link rel="stylesheet" href="{% static 'ops/messenger.css' %}">
+<link rel="stylesheet" href="{% static 'ops/apps.css' %}">
+<link rel="stylesheet" href="{% static 'ops/whatsnew.css' %}">
+<link rel="manifest" href="/chat/manifest.webmanifest">
+<link rel="apple-touch-icon" href="{% static 'ops/chat-180.png' %}">
+<link rel="icon" href="{% static 'ops/chat-192.png' %}">
+<meta name="apple-mobile-web-app-title" content="Messenger">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#0f7b5f">
+<script>
+(function () {  // the home-screen app on iPhone: size to what is visible (the keyboard included)
+  var fit = function () { document.documentElement.style.setProperty("--app-h", (window.visualViewport ? window.visualViewport.height : window.innerHeight) + "px"); };
+  fit(); (window.visualViewport || window).addEventListener("resize", fit);
+})();
+</script>
+</head>
+<body class="mx{% if cv.readonly %} mx-ro{% endif %}" data-mx>
+<header class="mx-top">
+  <a class="mx-logo" href="{{ cv.base }}/" aria-label="SIMEX Messenger"><img src="{% static 'ops/chat-192.png' %}" width="30" height="30" alt=""><span>SIMEX <b>Messenger</b></span></a>
+  <div class="mx-who">{% if cv.desk %}<span class="mx-ro-tag">Persona desk</span> {{ me_name }} · <a href="/inbox/desk/" class="mx-toplink">Desk mail</a>{% elif cv.readonly %}<span class="mx-ro-tag">{% icon "eye" 16 %} {{ team.name }}'s chats, read-only</span>{% else %}{{ me_name }} · {{ team.name }}{% endif %}</div>
+  <div class="mx-top-right">
+    {% if sim.on %}<div class="mx-clock" data-simclock title="{% if sim.both %}Simulation time (what the teams see){% else %}Date and time in the exercise scenario{% endif %}"><b data-sim-time>{{ sim.now|date:"H:i" }}</b><small data-sim-date>{{ sim.now|date:"D j M" }}</small></div>{{ sim.js|json_script:"simex-clock" }}{% endif %}
+    {% if whatsnew.notes %}<div class="gm-dn" data-wn-bell>
+      <button type="button" class="mx-icon-btn" data-wn-toggle title="What's new" aria-label="What's new" aria-expanded="false">{% icon "campaign" 22 %}{% if whatsnew.new %}<span class="wn-dot" data-wn-dot></span>{% endif %}</button>
+      <div class="gm-dn-panel" data-wn-panel hidden><div class="gm-dn-head"><b>What's new</b></div>
+        {% include "ops/_whatsnew.html" with url="/inbox/whatsnew/seen/" toggle="[data-wn-toggle]" %}</div>
+    </div>{% endif %}
+    {% include "ops/mail/_apps.html" %}
+    <button type="button" class="mx-icon-btn" data-alerts title="Alerts on this device" aria-label="Alerts on this device">{% icon "bell" 22 %}</button>
+    <form method="post" action="/logout/" class="mx-signout">{% csrf_token %}<button class="mx-icon-btn" title="Sign out" aria-label="Sign out">{% icon "logout" 22 %}</button></form>
+  </div>
+</header>
+<div class="mx-alerts" data-alerts-bar hidden>
+  <span><b>Don't miss a message.</b> <span data-alerts-text>Turn on alerts to get a notification when someone writes to you.</span></span>
+  <button type="button" class="mx-pill primary" data-alerts-on>Turn on alerts</button>
+  <button type="button" class="mx-pill" data-alerts-later>Not now</button>
+</div>
+<div class="mx-body">
+  <aside class="mx-list" data-list>
+    <div class="mx-list-head">
+      <input type="search" placeholder="Search chats" data-search aria-label="Search chats" autocomplete="off">
+      {% if not cv.readonly %}<button type="button" class="mx-new" data-new title="New chat or group" aria-label="New chat">{% icon "edit" 20 %}</button>{% endif %}
+    </div>
+    <ul class="mx-rooms" data-rooms><li class="mx-empty">Loading…</li></ul>
+    <p class="mx-foot">{% if cv.desk %}Every chat a persona is in. Write as the persona; the teams never see who on the desk wrote. Reading here marks nothing read for the teams.{% elif cv.readonly %}Opening a chat here doesn't mark it read for anyone.{% else %}Messenger is part of the exercise: ExCon, and for your team's chats your team leader, can read everything sent here.{% endif %}
+      <a href="/inbox/help/" target="_blank" rel="noopener">Help</a> · Open source (AGPL-3.0), <a href="{{ SOURCE_URL }}" target="_blank" rel="noopener">source code</a></p>
+  </aside>
+  <main class="mx-room" data-room hidden>
+    <div class="mx-room-head">
+      <button type="button" class="mx-icon-btn mx-back" data-back aria-label="Back to the chats">{% icon "back" 22 %}</button>
+      <span class="mx-av" data-room-av></span>
+      <button type="button" class="mx-room-title" data-info><b data-room-name></b><small data-room-sub></small></button>
+      <button type="button" class="mx-icon-btn" data-info title="Chat info" aria-label="Chat info">{% icon "info" 22 %}</button>
+    </div>
+    {% if cv.desk %}<div class="mx-deskbar" data-deskbar>
+      <span class="mx-deskstate" data-deskstate></span>
+      <button type="button" class="mx-pill sm" data-desk-act="take">Take it</button>
+      <button type="button" class="mx-pill sm" data-desk-act="release" hidden>Release</button>
+      <button type="button" class="mx-pill sm" data-desk-act="done" title="Nothing to answer in what the team wrote so far">No reply needed</button>
+      <button type="button" class="mx-pill sm" data-desk-act="watch" title="Hear of what happens in this chat">Follow</button>
+    </div>{% endif %}
+    <div class="mx-posts" data-posts role="log" aria-live="polite"></div>
+    <div class="mx-typing" data-typing></div>
+    {% if not cv.readonly %}<form class="mx-compose" data-compose>
+      <div class="mx-replying" data-replying hidden><span><b data-replying-name></b><span data-replying-text></span></span><button type="button" class="mx-icon-btn sm" data-reply-cancel aria-label="Cancel the reply">{% icon "close" 18 %}</button></div>
+      <div class="mx-editing" data-editing hidden><span>Editing your message</span><button type="button" class="mx-icon-btn sm" data-edit-cancel aria-label="Cancel the edit">{% icon "close" 18 %}</button></div>
+      <div class="mx-attached" data-attached></div>
+      <div class="mx-mention" data-mention hidden></div>
+      <div class="mx-row">
+        {% if cv.desk %}<select class="mx-as" data-as aria-label="Write as" title="Write as this persona"></select>{% endif %}
+        <label class="mx-icon-btn" title="Attach files or a photo" aria-label="Attach">{% icon "attach" 22 %}<input type="file" multiple hidden data-file></label>
+        <textarea rows="1" placeholder="Message" data-text aria-label="Message" enterkeyhint="send"></textarea>
+        <button class="mx-send" data-send aria-label="Send">{% icon "send" 22 %}</button>
+      </div>
+      <div class="mx-frozen" data-frozen hidden>ExCon has frozen this chat: nobody can write in it.</div>
+    </form>{% endif %}
+  </main>
+  <div class="mx-placeholder" data-placeholder><img src="{% static 'ops/chat-192.png' %}" width="72" height="72" alt=""><p>{% if cv.readonly %}Choose one of {{ team.name }}'s chats to read it.{% else %}Choose a chat, or start one with <b>New chat</b>.{% endif %}</p></div>
+</div>
+
+<dialog class="mx-dialog" data-new-dialog>
+  <form method="dialog" class="mx-dform" data-new-form>
+    <h3>New chat</h3>
+    {% if cv.desk %}<label class="mx-gname">As the persona <select data-new-as></select></label>{% endif %}
+    <input type="search" placeholder="Search people and personas" data-book-search autocomplete="off" aria-label="Search">
+    <ul class="mx-book" data-book><li class="mx-empty">Loading…</li></ul>
+    <label class="mx-gname" data-group-name hidden>Group name <input name="title" maxlength="80" autocomplete="off"></label>
+    <p class="mx-derr" data-new-err hidden></p>
+    <div class="mx-dactions"><span class="mx-muted" data-picked></span><button type="button" class="mx-pill" data-dialog-cancel>Cancel</button><button class="mx-pill primary" data-new-ok disabled>Chat</button></div>
+  </form>
+</dialog>
+<dialog class="mx-dialog" data-info-dialog>
+  <form method="dialog" class="mx-dform">
+    <h3 data-info-title></h3>
+    <ul class="mx-members" data-members></ul>
+    <div class="mx-info-actions" data-info-actions></div>
+    <p class="mx-derr" data-info-err hidden></p>
+    <div class="mx-dactions"><button class="mx-pill" data-dialog-cancel>Close</button></div>
+  </form>
+</dialog>
+<dialog class="mx-dialog" data-notice-dialog>
+  <form method="dialog" class="mx-dform">
+    <h3>Messenger is part of the exercise</h3>
+    <p>Chat with your team, your team leader and the people you deal with in the exercise here, not on WhatsApp or Signal.</p>
+    <p><b>ExCon can read everything sent here, including edited and deleted messages, and your team leader can read your team's chats.</b> SIMEX AI reads them too, to help ExCon follow the exercise.</p>
+    <div class="mx-dactions"><button class="mx-pill primary" value="ok">OK</button></div>
+  </form>
+</dialog>
+<div class="mx-snack" data-snack hidden></div>
+{{ cfg|json_script:"mx-config" }}
+<script src="{% static 'ops/messenger.js' %}"></script>
+<script src="{% static 'ops/apps.js' %}"></script>
+<script src="{% static 'ops/whatsnew.js' %}"></script>
+</body>
+</html>

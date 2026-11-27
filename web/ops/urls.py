@@ -3,8 +3,10 @@ from django.urls import include, path
 from . import views_ai as a
 from . import views_cal_seed as cs
 from . import views_meetings as mt
+from . import views_messenger as msg
 from . import views_calendar as cal
 from . import views_excon as x
+from . import views_files as fv
 from . import views_desk_board as dbx
 from . import views_desk_chat as chat
 from . import views_desk_injects as dinj
@@ -81,6 +83,8 @@ urlpatterns = [
     path("inbox/leaders/<int:as_team>/", include(team_patterns), {"box": "peer"}),
     path("inbox/dashboard/", lead.dashboard),
     path("inbox/notes/", nv.leader_notes),
+    path("inbox/files/", fv.leader_files),
+    path("inbox/files/<str:src>/<int:fid>/", fv.leader_file),
     path("inbox/members/", lead.members),
     path("inbox/personas/", lead.npcs),
     path("inbox/leader/suggest/", lead.suggestion),
@@ -102,6 +106,8 @@ urlpatterns = [
     path("inbox/desk/chat/turn/<int:tid>/", chat.turn),
     path("inbox/desk/dashboard/", p.desk_dashboard),
     path("inbox/desk/notes/", nv.desk_notes),
+    path("inbox/desk/files/", fv.desk_files),
+    path("inbox/desk/files/<str:src>/<int:fid>/", fv.desk_file),
     path("inbox/desk/network/", net.desk_network_page),
     path("inbox/desk/network/data/", net.desk_network_data),
     path("inbox/desk/network/poll/", net.desk_network_poll),
@@ -126,6 +132,42 @@ urlpatterns = [
     path("inbox/rp/slot/<int:sid>/status/", rpp.slot_status),
     path("inbox/rp/file/<int:fid>/", rpp.file_get),
     path("inbox/", include(mail_patterns)),
+    # SIMEX Messenger (views_messenger.py): its own home-screen app, a leader's read-only view of their team's
+    # chats, and ExCon's (/chats/).
+    path("chat/", msg.app),
+    path("chat/sw.js", msg.service_worker),
+    path("chat/manifest.webmanifest", msg.manifest),
+    path("chat/r/<int:rid>/", msg.app_room),
+    path("chat/rooms/", msg.rooms),
+    path("chat/book/", msg.book),
+    path("chat/poll/", msg.poll),
+    path("chat/new/", msg.new_room),
+    path("chat/push/", msg.push_subscribe),
+    path("chat/r/<int:rid>/posts/", msg.posts),
+    path("chat/r/<int:rid>/send/", msg.send),
+    path("chat/r/<int:rid>/read/", msg.read),
+    path("chat/r/<int:rid>/typing/", msg.typing),
+    path("chat/r/<int:rid>/settings/", msg.room_settings),
+    path("chat/p/<int:pid>/edit/", msg.post_action, {"act": "edit"}),
+    path("chat/p/<int:pid>/delete/", msg.post_action, {"act": "delete"}),
+    path("chat/p/<int:pid>/react/", msg.post_action, {"act": "react"}),
+    path("chat/f/<int:fid>/", msg.file_get),
+    path("chat/desk/", msg.desk_app),
+    path("chat/desk/r/<int:rid>/", msg.desk_app_room),
+    path("chat/desk/rooms/", msg.desk_rooms),
+    path("chat/desk/poll/", msg.desk_poll),
+    path("chat/desk/book/", msg.desk_book),
+    path("chat/desk/new/", msg.desk_new),
+    path("chat/desk/r/<int:rid>/posts/", msg.desk_posts),
+    path("chat/desk/r/<int:rid>/send/", msg.desk_send),
+    path("chat/desk/r/<int:rid>/mark/", msg.desk_mark),
+    path("chat/desk/f/<int:fid>/", msg.desk_file),
+    path("chat/team/", msg.team_app),
+    path("chat/team/r/<int:rid>/", msg.team_app_room),
+    path("chat/team/rooms/", msg.team_rooms),
+    path("chat/team/poll/", msg.team_poll),
+    path("chat/team/r/<int:rid>/posts/", msg.team_posts),
+    path("chat/team/f/<int:fid>/", msg.team_file),
     # ExCon
     path("injects/", x.injects),
     path("injects/bulk/", x.injects_bulk),
@@ -189,6 +231,13 @@ urlpatterns = [
     path("inboxes/", x.inboxes),
     path("inboxes/clear/", x.inbox_clear),
     path("notes/", nv.excon_notes),
+    path("files/", fv.excon_files),
+    path("chats/", msg.excon_list),
+    path("chats/<int:rid>/", msg.excon_room),
+    path("chats/<int:rid>/freeze/", msg.excon_freeze),
+    path("chats/p/<int:pid>/delete/", msg.excon_delete),
+    path("chats/f/<int:fid>/", msg.excon_file),
+    path("files/get/<str:src>/<int:fid>/", fv.excon_file),
     path("meetings/", mt.overview),
     path("meetings/v/", mt.version),
     path("meetings/export/<str:fmt>/", mt.export),

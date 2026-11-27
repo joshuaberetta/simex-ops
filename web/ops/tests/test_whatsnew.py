@@ -31,11 +31,11 @@ def test_each_login_gets_its_own_notes(excon):
 def test_a_star_until_the_drawer_is_opened_then_the_notes_are_seen(excon):
     pa = participant("a")
     page = pa.get("/inbox/").content.decode()
-    assert 'data-wn-bell' in page and 'data-wn-new="4"' in page and "data-wn-dot" in page and "Formatting and pictures in your messages" in page
-    r = pa.post("/inbox/whatsnew/seen/", {"key": ["2026-11-list-filters", "2026-11-picture-size", "2026-11-rich-mail", "2026-11-whats-new", "nonsense"]}, headers=FETCH)
+    assert 'data-wn-bell' in page and 'data-wn-new="5"' in page and "data-wn-dot" in page and "Formatting and pictures in your messages" in page
+    r = pa.post("/inbox/whatsnew/seen/", {"key": ["2026-11-messenger", "2026-11-list-filters", "2026-11-picture-size", "2026-11-rich-mail", "2026-11-whats-new", "nonsense"]}, headers=FETCH)
     assert r.json()["ok"]
-    assert set(WhatsNewSeen.objects.values_list("key", flat=True)) == {"2026-11-list-filters", "2026-11-picture-size", "2026-11-rich-mail",
-                                                                     "2026-11-whats-new"}
+    assert set(WhatsNewSeen.objects.values_list("key", flat=True)) == {"2026-11-messenger", "2026-11-list-filters",
+                                                                     "2026-11-picture-size", "2026-11-rich-mail", "2026-11-whats-new"}
     page = pa.get("/inbox/").content.decode()
     assert 'data-wn-new="0"' in page and "Formatting and pictures" in page  # still listed, no longer new
     assert "data-wn-dot" not in page  # no star

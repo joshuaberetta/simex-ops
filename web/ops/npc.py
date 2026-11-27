@@ -197,11 +197,15 @@ def on_response(r):
         if minutes is None:
             return NpcReply.objects.create(npc=p, team_id=r.team_id, response=r, thread_key=key, status="skipped",
                                            note="Its timing drew no answer this time.")
+        if r.channel == "chat":  # SIMEX Messenger: people expect an answer in a chat within a minute or two
+            minutes = CHAT_MINUTES[0] + RNG.random() * (CHAT_MINUTES[1] - CHAT_MINUTES[0])
         due = office_hours(p, timezone.now() + timedelta(minutes=minutes))
         return NpcReply.objects.create(npc=p, team_id=r.team_id, response=r, thread_key=key, due_at=due)
 
 
 # --- persona mail: another persona writes to an AI persona (on the persona desk) -------------------
+
+CHAT_MINUTES = (0.3, 2.0)  # an AI persona's answer in SIMEX Messenger, drawn in this range
 
 PP_AI_TURNS = 3  # AI personas answering each other: at most this many in a row in one conversation
 
@@ -542,6 +546,23 @@ def send(job, body=None, user="npc"):
         job.save()
         return m
     key = f"npc-{job.id}"
+    if job.response_id and job.response.channel == "chat":  # SIMEX Messenger: a post in the room, as the persona
+        from . import messenger_desk
+        from .models import Room
+        room = Room.objects.filter(pk=(job.response.headers or {}).get("room") or 0).first()
+        try:
+            if room is None:
+                raise messenger_desk.PersonaPostError("The chat is gone.")
+            post = messenger_desk.post_as(room, job.npc.sender.local_part, job.body, npc=user == "npc", idem=key,
+                                          user=None)
+        except messenger_desk.PersonaPostError as e:
+            job.status, job.error = "failed", f"Not sent: {e}"[:500]
+            job.save()
+            return None
+        job.message, job.status, job.error = post.message, "sent", None
+        job.note = "" if user == "npc" else f"Sent by {user}."
+        job.save()
+        return post.message
     m = Message.objects.filter(Q(idem_key=key) | Q(idem_key__startswith=f"{key}-r")).order_by("-id").first()
     if m is None or m.status == "failed":  # trying again: a new key, so the provider doesn't replay the failure
         m = delivery.answer(job.response, job.body, user=user, npc=True,
@@ -710,6 +731,9 @@ def write(job):
     parts = [ai.scenario_clock(), f"You are answering {r.team.name}. The conversation, oldest first:",
              conversation_text(r, local), earlier_text(r, local),
              "Write your answer to the team's latest message(s), after your last answer."]
+    if r.channel == "chat":
+        parts.append("This is a chat in SIMEX Messenger, like WhatsApp: answer as you would in a chat, short and "
+                     "direct, a few sentences at most, no greeting line, no sign-off, no subject.")
     content = [context(p), {"type": "text", "text": "\n\n".join(x for x in parts if x)}]
     return ai.call("npc", f"n{job.id}", "deep", ai.system("npc"), content, NPC_SCHEMA, "medium", 4000)
 

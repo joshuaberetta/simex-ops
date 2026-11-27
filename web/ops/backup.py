@@ -21,13 +21,15 @@ MODELS = [Group, get_user_model(), m.Setting, m.Team, m.TeamRole, m.Person, m.Se
           m.KbDocument, m.ReplySuggestion, m.LeaderSuggestion, m.DeskWatch, m.DeskDefault, m.DeskPref,
           m.CalendarSeed, m.CalendarEvent, m.CalendarAttendee, m.CalendarSeedItem,
           m.PushSubscription, m.InjectReview, m.AttachmentImport, m.Notice, m.NoticeState, m.DeskNotice,
-          m.WhatsNewSeen, m.DeskChat, m.DeskChatTurn]
+          m.WhatsNewSeen, m.DeskChat, m.DeskChatTurn,
+          m.Room, m.RoomMember, m.RoomState, m.ReadMark, m.Post, m.PostEdit, m.PostReaction, m.PostAttachment,
+          m.RoomChange]
 
 
 # Rows serialized at a time: few for tables holding files, so a large exercise's backup (hundreds
 # of MB) is streamed out instead of built in memory (the web instance has 1 GB).
 BATCH, FILE_BATCH = 500, 5
-FILE_MODELS = {m.Attachment, m.MessageAttachment, m.MailAttachment, m.ResponseAttachment, m.RolePlayFile}
+FILE_MODELS = {m.Attachment, m.MessageAttachment, m.MailAttachment, m.ResponseAttachment, m.RolePlayFile, m.PostAttachment}
 
 
 def export_stream():

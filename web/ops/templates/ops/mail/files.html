@@ -1,0 +1,13 @@
+{% extends "ops/mail/base.html" %}{% load ops static %}
+{% block title %}Files{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'ops/files.css' %}">{% endblock %}
+{% block search %}<div class="gm-search-space">{% if who == 'desk' %}Persona desk{% else %}{{ team.name }}{% endif %} · Files</div>{% endblock %}
+{% block side %}{% endblock %}
+{% block main %}
+<div class="gm-dash fx-page">
+  <h2>Files</h2>
+  <p class="fx-muted">{% if who == 'desk' %}Every file sent in the exercise: what the teams attached in SIMEX Mail, by email and in Messenger, what the personas sent them and, if you tick it, the inject documents.{% else %}Every file sent in {{ team.name }}'s mail and chats: what your team attached, what the personas sent and, if you tick it, the inject documents, with SIMEX AI's reading of the team's documents.{% endif %} Open a conversation from its subject. Downloading here doesn't count as the team opening it.</p>
+  {% include "ops/_files_filters.html" %}
+  {% include "ops/_files_rows.html" %}
+</div>
+{% endblock %}

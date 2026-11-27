@@ -17,6 +17,17 @@ EVERYONE = {PARTICIPANT, LEADER, DESK, RP, EXCON}
 SHOWN = 8  # notes listed in the drawer (the newest)
 
 ENTRIES = [
+    {"key": "2026-11-messenger", "date": date(2026, 11, 27), "who": {PARTICIPANT, LEADER, DESK, EXCON},
+     "title": "SIMEX Messenger: chat inside the exercise",
+     "body": "**Messenger** in the app drawer is chat, like WhatsApp: your team's room, direct chats, groups, "
+             "replies, reactions, files and photos, with the people in the exercise too. On a phone, add it to "
+             "the home screen: it is an app of its own, with its own alerts. Everything sent there is part of the "
+             "exercise: ExCon, and for a team's chats its leader, can read it. The persona desk answers in its "
+             "**Messenger** tab."},
+    {"key": "2026-11-files", "date": date(2026, 11, 27), "who": {LEADER, DESK, EXCON},
+     "title": "Every file in one list",
+     "body": "The **Files** tab lists every file sent in the exercise: email, SIMEX Mail and Messenger, by team. "
+             "Filter by direction, type, sender or inject, and open the conversation each came from."},
     {"key": "2026-11-db-dump", "date": date(2026, 11, 26), "who": {EXCON},
      "title": "The whole database in one download",
      "body": "**Settings → Database dump** downloads a `pg_dump` of the whole database as it is made, at a speed "

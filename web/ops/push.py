@@ -111,18 +111,19 @@ def _run(fn, args):
     _queue.put((fn, args))
 
 
-def notify_people(person_ids, data):
+def notify_people(person_ids, data, app="mail"):
     """Push data (title, body, url, tag) to these people's devices (role-play reminders,
-    ops/roleplay.py), after the transaction commits."""
+    ops/roleplay.py; app "chat": the devices with SIMEX Messenger, ops/messenger.py), after the
+    transaction commits."""
     if not (enabled() or _sender) or not person_ids:
         return
     ids = list(person_ids)
-    transaction.on_commit(lambda: _run(send_people, (ids, data)))
+    transaction.on_commit(lambda: _run(send_people, (ids, data, app)))
 
 
-def send_people(person_ids, data):
+def send_people(person_ids, data, app="mail"):
     from .models import PushSubscription
-    _send(PushSubscription.objects.filter(person_id__in=person_ids, person__active=True,
+    _send(PushSubscription.objects.filter(person_id__in=person_ids, person__active=True, app=app,
                                           person__user__is_active=True), data)
 
 
@@ -130,7 +131,8 @@ def send_team(team_id, data, author_id=None, owner_id=None, thread=""):
     from .models import PushSubscription
     who = ({"person_id": owner_id} if owner_id else {"person__team_id": team_id, "person__role": "member"}
            if team_id else {"person__role": "desk"})  # no team: the persona desk's mailbox
-    qs = PushSubscription.objects.filter(**who, person__active=True, person__user__is_active=True).exclude(person_id=author_id)
+    qs = (PushSubscription.objects.filter(**who, app="mail", person__active=True, person__user__is_active=True)
+          .exclude(person_id=author_id))
     if not team_id and not owner_id:  # the desk: not those who hear only of their own conversations, but for theirs
         from .desk import quiet_people
         qs = qs.exclude(person_id__in=quiet_people(thread))

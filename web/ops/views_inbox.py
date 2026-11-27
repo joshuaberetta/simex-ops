@@ -115,19 +115,21 @@ def signin_link(request, token):
     ?app=1 is the home-screen app starting: already signed in, or signed out on purpose here,
     it just opens the mailbox."""
     user = signin.user_for(token)
-    app = request.GET.get("app") == "1"
+    chat = request.GET.get("app") == "chat"  # SIMEX Messenger's home-screen app (views_messenger.manifest)
+    app = request.GET.get("app") == "1" or chat
+    home = "/chat/" if chat else "/inbox/"
     if app and (request.user == user or request.COOKIES.get(SIGNED_OUT)):
         user = None
     if not user:
         if not app and not request.user.is_authenticated:
             messages.error(request, "This sign-in code no longer works. Sign in with the username and password "
                                     "on your slip, or ask ExCon for a new slip.")
-        return redirect("/inbox/")
+        return redirect(home)
     if request.user != user:
         request.signin_method = "qr"
         login(request, user, backend=settings.AUTHENTICATION_BACKENDS[0])
         audit("signin_qr", user.username, user.username)
-    resp = redirect(signin.setup_path(user))
+    resp = redirect("/chat/" if chat else signin.setup_path(user))
     resp.delete_cookie(SIGNED_OUT, domain=settings.SESSION_COOKIE_DOMAIN)
     return resp
 
@@ -829,6 +831,7 @@ def desk_tabs(person, current, user=None):
             "prefs": desk.prefs_of(user) if user else None,  # the gear: their own settings on the desk
             "chat": conf.flag("desk_chat"),  # ChatSIMEX, on every desk page
             "notes": True,  # the Notes tab (ops/views_notes.py)
+            "messenger": conf.flag("chat_enabled"),  # SIMEX Messenger's desk console (/chat/desk/)
             "injects": conf.flag("desk_injects")}  # the Injects tab, read-only
 
 
@@ -840,8 +843,9 @@ def apps(v, request):
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated:
         return []
-    from . import roleplay
+    from . import messenger, roleplay
     member, lead, desk_p, rp = participant_of(user), leader_of(user), desk_of(user), rp_of(user)
+    chat_on = messenger.enabled()
 
     def tile(key, name, url, icon, n=0):
         return {"key": key, "name": name, "url": url, "icon": icon, "n": n}
@@ -851,13 +855,19 @@ def apps(v, request):
         tiles.append(tile("mail", f"{member.team.name} inbox", "/inbox/", "mail", _unread(member.team, None)))
         if conf.flag("personal_mailboxes"):
             tiles.append(tile("me", "My mail", "/inbox/me/", "mail_me", _unread(member.team, member)))
-        tiles += [tile("calendar", "Calendar", "/inbox/calendar/", "calendar"), tile("help", "Help", "/inbox/help/", "help")]
+        tiles.append(tile("calendar", "Calendar", "/inbox/calendar/", "calendar"))
+        if chat_on:
+            tiles.append(tile("chat", "Messenger", "/chat/", "chat", messenger.unread_count(member) or 0))
+        tiles.append(tile("help", "Help", "/inbox/help/", "help"))
     elif lead:
         tiles += [tile("mail", "My mail", "/inbox/", "mail", _unread(lead.team, lead)),
                   tile("team", f"{lead.team.name} inbox", "/inbox/team/", "mail_team"),
                   tile("members", "Team members", "/inbox/members/", "people"),
                   tile("calendar", "Calendar", "/inbox/calendar/", "calendar"),
                   tile("dashboard", "Dashboard", "/inbox/dashboard/", "dashboard")]
+        if chat_on:
+            tiles += [tile("chat", "Messenger", "/chat/", "chat", messenger.unread_count(lead) or 0),
+                      tile("team_chat", f"{lead.team.name} chats", "/chat/team/", "chat_team")]
         if roleplay.has_role_plays(lead):
             tiles.append(tile("rp", "Role plays", "/inbox/rp/", "roleplay"))
         tiles.append(tile("help", "Help", "/inbox/help/", "help"))
@@ -868,6 +878,9 @@ def apps(v, request):
                   tile("dashboard", "Dashboard", "/inbox/desk/dashboard/", "dashboard"),
                   tile("network", "Network", "/inbox/desk/network/", "network"),
                   tile("assign", "Assign", "/inbox/desk/assign/", "assign")]
+        if chat_on:
+            from . import messenger_desk
+            tiles.append(tile("chat", "Messenger", "/chat/desk/", "chat", messenger_desk.attention_count()))
         if conf.flag("desk_injects"):
             tiles.append(tile("injects", "Injects", "/inbox/desk/injects/", "injects"))
         if desk_p and roleplay.has_role_plays(desk_p):

@@ -410,6 +410,8 @@ def thread_key(r):
     team (or sender), persona and subject without Re:/Fwd:."""
     if r.channel == "inapp" and r.mail_id and r.mail.thread:
         return f"m:{r.mail.thread}"
+    if r.channel == "chat":  # a team's turn in a SIMEX Messenger room (ops/messenger_desk.py)
+        return f"c:{(r.headers or {}).get('room', '')}"
     who = f"t{r.team_id}" if r.team_id else (r.from_addr or "").lower()
     return f"e:{who}:{r.persona or ''}:{clean_subject(r.subject)}"
 
@@ -419,6 +421,14 @@ def conversation(r):
     (an inject or an earlier answer), the team's messages, ExCon's answers. Each item is
     (kind, at, obj) with kind "inject" | "team" | "answer"."""
     key = thread_key(r)
+    if key.startswith("c:"):  # SIMEX Messenger: the room's turns to the personas and the personas' posts
+        reps = [x for x in Response.objects.filter(channel="chat", team_id=r.team_id).exclude(status="ignored")
+                .select_related("person", "team") if thread_key(x) == key]
+        items = [("team", x.received_at, x) for x in reps]
+        items += [("answer", m.sent_at or m.created_at, m)
+                  for m in Message.objects.filter(kind="chat", thread=f"chat:{key[2:]}").exclude(status="withdrawn")]
+        items.sort(key=lambda it: (it[1], {"team": 1, "answer": 2}[it[0]]))
+        return items
     if key.startswith("m:"):
         reps = list(Response.objects.filter(mail__thread=r.mail.thread, team_id=r.team_id)
                     .select_related("mail", "person", "team", "inject", "message"))
